@@ -263,7 +263,7 @@ export default function Layout({ children, currentPageName }) {
                         className={cn(
                           "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all",
                           darkMode 
-                            ? "text-slate-300 hover:bg-slate-700 hover:text-white"
+                            ? "text-slate-300 hover:bg-[#2d4a6f] hover:text-white"
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                         )}
                       >
@@ -310,7 +310,7 @@ export default function Layout({ children, currentPageName }) {
                         currentPageName === item.page
                           ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25"
                           : darkMode
-                            ? "text-slate-300 hover:bg-slate-700 hover:text-white"
+                            ? "text-slate-300 hover:bg-[#2d4a6f] hover:text-white"
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                       )}
                     >
