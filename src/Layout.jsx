@@ -122,42 +122,65 @@ export default function Layout({ children, currentPageName }) {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] dark-mode-active' : 'bg-slate-50'}`}>
       <style>{`
         :root {
           --primary: 221.2 83.2% 53.3%;
           --primary-foreground: 210 40% 98%;
         }
-        .dark .card, .dark [class*="CardContent"], .dark [class*="Card"] {
-          background-color: #1e293b !important;
-          border-color: #334155 !important;
+        ${darkMode ? `
+        .dark-mode-active [class*="Card"]:not([class*="gradient"]) {
+          background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%) !important;
+          border-color: #2d4a6f !important;
         }
-        .dark .card *, .dark [class*="Card"] * {
+        .dark-mode-active [class*="Card"] * {
           color: #e2e8f0;
         }
-        .dark input, .dark select, .dark textarea {
-          background-color: #1e293b !important;
-          border-color: #475569 !important;
+        .dark-mode-active [class*="Card"] .text-slate-500,
+        .dark-mode-active [class*="Card"] .text-slate-600 {
+          color: #94a3b8 !important;
+        }
+        .dark-mode-active [class*="Card"] .text-slate-900 {
+          color: #f1f5f9 !important;
+        }
+        .dark-mode-active input, 
+        .dark-mode-active select, 
+        .dark-mode-active textarea,
+        .dark-mode-active [class*="SelectTrigger"],
+        .dark-mode-active [class*="Input"] {
+          background-color: #1e3a5f !important;
+          border-color: #3b5998 !important;
           color: #e2e8f0 !important;
         }
-        .dark table {
-          background-color: #1e293b !important;
+        .dark-mode-active table {
+          background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%) !important;
         }
-        .dark th {
-          background-color: #334155 !important;
+        .dark-mode-active th {
+          background-color: #2d4a6f !important;
           color: #e2e8f0 !important;
         }
-        .dark td {
-          border-color: #334155 !important;
+        .dark-mode-active td {
+          border-color: #2d4a6f !important;
           color: #cbd5e1 !important;
         }
-        .dark tr:hover {
-          background-color: #334155 !important;
+        .dark-mode-active tr:hover {
+          background-color: #2d4a6f !important;
         }
+        .dark-mode-active [class*="TabsList"] {
+          background-color: #1e3a5f !important;
+        }
+        .dark-mode-active [class*="TabsTrigger"] {
+          color: #94a3b8 !important;
+        }
+        .dark-mode-active [class*="TabsTrigger"][data-state="active"] {
+          background-color: #2d4a6f !important;
+          color: #fff !important;
+        }
+        ` : ''}
       `}</style>
       
       {/* Mobile Header */}
-      <header className={`lg:hidden fixed top-0 left-0 right-0 h-16 border-b z-50 flex items-center justify-between px-4 transition-colors ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+      <header className={`lg:hidden fixed top-0 left-0 right-0 h-16 border-b z-50 flex items-center justify-between px-4 transition-colors ${darkMode ? 'bg-[#1e3a5f] border-[#2d4a6f]' : 'bg-white border-slate-200'}`}>
         <Button 
           variant="ghost" 
           size="icon"
@@ -166,7 +189,7 @@ export default function Layout({ children, currentPageName }) {
         >
           <Menu className="h-6 w-6" />
         </Button>
-        <div className={`p-1.5 rounded-lg ${darkMode ? 'bg-white' : ''}`}>
+        <div className={`p-1.5 rounded-lg ${darkMode ? 'bg-slate-200' : ''}`}>
           <img 
             src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg" 
             alt="Virtual Construções" 
@@ -194,14 +217,14 @@ export default function Layout({ children, currentPageName }) {
       {/* Sidebar */}
       <aside className={cn(
         "fixed top-0 left-0 h-full w-72 border-r z-50 transition-all duration-300",
-        darkMode ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
+        darkMode ? "bg-gradient-to-b from-[#1e3a5f] to-[#0f172a] border-[#2d4a6f]" : "bg-white border-slate-200",
         "lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`h-20 flex items-center justify-between px-6 border-b ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-            <div className={`p-2 rounded-lg ${darkMode ? 'bg-white' : ''}`}>
+          <div className={`h-20 flex items-center justify-between px-6 border-b ${darkMode ? 'border-[#2d4a6f]' : 'border-slate-100'}`}>
+            <div className={`p-2 rounded-lg ${darkMode ? 'bg-slate-200' : ''}`}>
               <img 
                 src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg" 
                 alt="Virtual Construções" 
@@ -213,7 +236,7 @@ export default function Layout({ children, currentPageName }) {
                 variant="ghost"
                 size="icon"
                 onClick={() => setDarkMode(!darkMode)}
-                className={`hidden lg:flex ${darkMode ? 'text-slate-200 hover:bg-slate-700' : ''}`}
+                className={`hidden lg:flex ${darkMode ? 'text-slate-200 hover:bg-[#2d4a6f]' : ''}`}
               >
                 {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </Button>
@@ -254,7 +277,7 @@ export default function Layout({ children, currentPageName }) {
                         )} />
                       </button>
                       {expandedMenus.includes(item.title) && (
-                        <div className={`ml-4 mt-1 space-y-1 border-l-2 pl-4 ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+                        <div className={`ml-4 mt-1 space-y-1 border-l-2 pl-4 ${darkMode ? 'border-[#3b5998]' : 'border-slate-100'}`}>
                           {item.submenu.map((subitem) => (
                             <Link
                               key={subitem.page}
@@ -267,7 +290,7 @@ export default function Layout({ children, currentPageName }) {
                                     ? "bg-blue-900/50 text-blue-400 font-medium"
                                     : "bg-blue-50 text-blue-600 font-medium"
                                   : darkMode
-                                    ? "text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                                    ? "text-slate-300 hover:bg-[#2d4a6f] hover:text-white"
                                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                               )}
                             >
@@ -302,10 +325,10 @@ export default function Layout({ children, currentPageName }) {
 
           {/* User Section */}
           {user && (
-            <div className={`p-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+            <div className={`p-4 border-t ${darkMode ? 'border-[#2d4a6f]' : 'border-slate-100'}`}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                  <button className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${darkMode ? 'hover:bg-[#2d4a6f]' : 'hover:bg-slate-50'}`}>
                     <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
                       {user.full_name?.[0]?.toUpperCase() || 'U'}
                     </div>
