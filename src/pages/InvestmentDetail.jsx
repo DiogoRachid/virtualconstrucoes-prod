@@ -86,7 +86,7 @@ export default function InvestmentDetail() {
 
   const { data: investment, isLoading } = useQuery({
     queryKey: ['investment', investmentId],
-    queryFn: () => base44.entities.Investment.list({ id: investmentId }).then(res => res[0])
+    queryFn: () => base44.entities.Investment.filter({ id: investmentId }).then(res => res[0])
   });
 
   const { data: transactions = [] } = useQuery({
