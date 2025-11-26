@@ -20,6 +20,9 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import BankAccountDetail from './pages/BankAccountDetail';
 import ProjectDetail from './pages/ProjectDetail';
+import Investments from './pages/Investments';
+import InvestmentForm from './pages/InvestmentForm';
+import InvestmentDetail from './pages/InvestmentDetail';
 import __Layout from './Layout.jsx';
 
 
@@ -46,6 +49,9 @@ export const PAGES = {
     "Settings": Settings,
     "BankAccountDetail": BankAccountDetail,
     "ProjectDetail": ProjectDetail,
+    "Investments": Investments,
+    "InvestmentForm": InvestmentForm,
+    "InvestmentDetail": InvestmentDetail,
 }
 
 export const pagesConfig = {
