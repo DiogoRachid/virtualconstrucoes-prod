@@ -10,6 +10,10 @@ import BankAccounts from './pages/BankAccounts';
 import BankAccountForm from './pages/BankAccountForm';
 import CostCenters from './pages/CostCenters';
 import CostCenterForm from './pages/CostCenterForm';
+import AccountsPayable from './pages/AccountsPayable';
+import AccountPayableForm from './pages/AccountPayableForm';
+import AccountsReceivable from './pages/AccountsReceivable';
+import AccountReceivableForm from './pages/AccountReceivableForm';
 import __Layout from './Layout.jsx';
 
 
@@ -26,6 +30,10 @@ export const PAGES = {
     "BankAccountForm": BankAccountForm,
     "CostCenters": CostCenters,
     "CostCenterForm": CostCenterForm,
+    "AccountsPayable": AccountsPayable,
+    "AccountPayableForm": AccountPayableForm,
+    "AccountsReceivable": AccountsReceivable,
+    "AccountReceivableForm": AccountReceivableForm,
 }
 
 export const pagesConfig = {
