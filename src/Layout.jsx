@@ -131,8 +131,11 @@ export default function Layout({ children, currentPageName }) {
   const getPermissionLabel = (perm) => {
     const labels = {
       'admin': 'Administrador',
-      'analyst': 'Analista Financeiro',
-      'director': 'Diretoria'
+      'analista': 'Analista Financeiro',
+      'diretoria': 'Diretoria',
+      'admin_rh': 'Admin RH',
+      'gestor_obras': 'Gestor de Obras',
+      'colaborador': 'Colaborador'
     };
     return labels[perm] || 'Usuário';
   };
