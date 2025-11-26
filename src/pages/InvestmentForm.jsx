@@ -49,11 +49,16 @@ export default function InvestmentForm() {
     tipo: '',
     ticker: '',
     instituicao: '',
+    moeda: 'BRL',
     quantidade: '',
     preco_medio: '',
+    preco_medio_usd: '',
     valor_investido: '',
+    valor_investido_usd: '',
     cotacao_atual: '',
+    cotacao_atual_usd: '',
     valor_atual: '',
+    valor_atual_usd: '',
     data_aplicacao: '',
     data_vencimento: '',
     taxa_rendimento: '',
@@ -67,6 +72,32 @@ export default function InvestmentForm() {
   });
 
   const [searchingQuote, setSearchingQuote] = useState(false);
+  const [cotacaoDolar, setCotacaoDolar] = useState(5.0);
+  const [loadingDolar, setLoadingDolar] = useState(false);
+
+  // Buscar cotação do dólar ao carregar
+  useEffect(() => {
+    const fetchDolar = async () => {
+      setLoadingDolar(true);
+      try {
+        const response = await base44.integrations.Core.InvokeLLM({
+          prompt: 'Qual a cotação atual do dólar comercial (USD/BRL)?',
+          add_context_from_internet: true,
+          response_json_schema: {
+            type: "object",
+            properties: { dolar: { type: "number" } }
+          }
+        });
+        if (response?.dolar) {
+          setCotacaoDolar(response.dolar);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dólar:', error);
+      }
+      setLoadingDolar(false);
+    };
+    fetchDolar();
+  }, []);
 
   const { data: investment, isLoading } = useQuery({
     queryKey: ['investment', investmentId],
@@ -81,17 +112,26 @@ export default function InvestmentForm() {
 
   useEffect(() => {
     if (investment) {
+      // Detectar moeda baseado nos valores salvos
+      const temValorUSD = investment.valor_investido_usd > 0 || investment.cotacao_atual_usd > 0;
+      const isInternacional = ['renda_variavel_int', 'crypto'].includes(investment.categoria);
+      
       setFormData({
         nome: investment.nome || '',
         categoria: investment.categoria || '',
         tipo: investment.tipo || '',
         ticker: investment.ticker || '',
         instituicao: investment.instituicao || '',
+        moeda: (isInternacional && temValorUSD) ? 'USD' : 'BRL',
         quantidade: investment.quantidade || '',
         preco_medio: investment.preco_medio || '',
+        preco_medio_usd: investment.preco_medio_usd || '',
         valor_investido: investment.valor_investido || '',
+        valor_investido_usd: investment.valor_investido_usd || '',
         cotacao_atual: investment.cotacao_atual || '',
+        cotacao_atual_usd: investment.cotacao_atual_usd || '',
         valor_atual: investment.valor_atual || '',
+        valor_atual_usd: investment.valor_atual_usd || '',
         data_aplicacao: investment.data_aplicacao || '',
         data_vencimento: investment.data_vencimento || '',
         taxa_rendimento: investment.taxa_rendimento || '',
@@ -106,21 +146,50 @@ export default function InvestmentForm() {
     }
   }, [investment]);
 
+  const isUSD = formData.moeda === 'USD';
+  const isInternacional = ['renda_variavel_int', 'crypto'].includes(formData.categoria);
+
   // Calcular valor investido automaticamente
   useEffect(() => {
     if (formData.quantidade && formData.preco_medio) {
       const valor = parseFloat(formData.quantidade) * parseFloat(formData.preco_medio);
-      setFormData(prev => ({ ...prev, valor_investido: valor.toFixed(2) }));
+      if (isUSD && isInternacional) {
+        const valorBRL = valor * cotacaoDolar;
+        setFormData(prev => ({ 
+          ...prev, 
+          valor_investido_usd: valor.toFixed(2),
+          valor_investido: valorBRL.toFixed(2)
+        }));
+      } else {
+        setFormData(prev => ({ ...prev, valor_investido: valor.toFixed(2) }));
+      }
     }
-  }, [formData.quantidade, formData.preco_medio]);
+  }, [formData.quantidade, formData.preco_medio, isUSD, isInternacional, cotacaoDolar]);
 
   // Calcular valor atual automaticamente
   useEffect(() => {
     if (formData.quantidade && formData.cotacao_atual) {
       const valor = parseFloat(formData.quantidade) * parseFloat(formData.cotacao_atual);
-      setFormData(prev => ({ ...prev, valor_atual: valor.toFixed(2) }));
+      if (isUSD && isInternacional) {
+        const valorBRL = valor * cotacaoDolar;
+        setFormData(prev => ({ 
+          ...prev, 
+          valor_atual_usd: valor.toFixed(2),
+          valor_atual: valorBRL.toFixed(2)
+        }));
+      } else {
+        setFormData(prev => ({ ...prev, valor_atual: valor.toFixed(2) }));
+      }
     }
-  }, [formData.quantidade, formData.cotacao_atual]);
+  }, [formData.quantidade, formData.cotacao_atual, isUSD, isInternacional, cotacaoDolar]);
+
+  // Atualizar cotação USD quando muda
+  useEffect(() => {
+    if (isUSD && isInternacional && formData.cotacao_atual) {
+      const cotacaoUSD = parseFloat(formData.cotacao_atual);
+      setFormData(prev => ({ ...prev, cotacao_atual_usd: cotacaoUSD }));
+    }
+  }, [formData.cotacao_atual, isUSD, isInternacional]);
 
   const saveMutation = useMutation({
     mutationFn: (data) => {
@@ -129,17 +198,27 @@ export default function InvestmentForm() {
       const rentabilidadeValor = valorAtual - valorInvestido;
       const rentabilidadePercent = valorInvestido > 0 ? ((valorAtual / valorInvestido) - 1) * 100 : 0;
 
+      const isUSDMoeda = data.moeda === 'USD';
+      const isIntl = ['renda_variavel_int', 'crypto'].includes(data.categoria);
+
       const payload = {
         ...data,
         quantidade: data.quantidade ? parseFloat(data.quantidade) : null,
         preco_medio: data.preco_medio ? parseFloat(data.preco_medio) : null,
+        preco_medio_usd: (isUSDMoeda && isIntl && data.preco_medio) ? parseFloat(data.preco_medio) : null,
         valor_investido: valorInvestido,
+        valor_investido_usd: (isUSDMoeda && isIntl) ? parseFloat(data.valor_investido_usd) || null : null,
         cotacao_atual: data.cotacao_atual ? parseFloat(data.cotacao_atual) : null,
+        cotacao_atual_usd: (isUSDMoeda && isIntl && data.cotacao_atual) ? parseFloat(data.cotacao_atual) : null,
         valor_atual: valorAtual,
+        valor_atual_usd: (isUSDMoeda && isIntl) ? parseFloat(data.valor_atual_usd) || null : null,
         rentabilidade_valor: rentabilidadeValor,
         rentabilidade_percentual: rentabilidadePercent,
         ultima_atualizacao: new Date().toISOString()
       };
+
+      // Remover campo moeda do payload (não existe na entidade)
+      delete payload.moeda;
 
       if (isEdit) {
         return base44.entities.Investment.update(investmentId, payload);
@@ -161,11 +240,13 @@ export default function InvestmentForm() {
   };
 
   const handleCategoryChange = (value) => {
+    const isIntl = ['renda_variavel_int', 'crypto'].includes(value);
     setFormData(prev => ({
       ...prev,
       categoria: value,
       tipo: '',
-      indexador: value === 'renda_fixa' ? 'cdi' : 'nenhum'
+      indexador: value === 'renda_fixa' ? 'cdi' : 'nenhum',
+      moeda: isIntl ? 'USD' : 'BRL'
     }));
   };
 
@@ -214,6 +295,7 @@ export default function InvestmentForm() {
   const tiposDisponiveis = formData.categoria ? TIPOS_POR_CATEGORIA[formData.categoria] || [] : [];
   const isRendaFixa = formData.categoria === 'renda_fixa';
   const needsTicker = ['renda_variavel_br', 'renda_variavel_int', 'crypto', 'fundos'].includes(formData.categoria);
+  const showMoeda = ['renda_variavel_int', 'crypto'].includes(formData.categoria);
 
   return (
     <div>
@@ -320,6 +402,26 @@ export default function InvestmentForm() {
                 />
               </div>
 
+              {showMoeda && (
+                <div>
+                  <Label>Moeda do Ativo</Label>
+                  <Select value={formData.moeda} onValueChange={(v) => handleChange('moeda', v)}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">Dólar (USD)</SelectItem>
+                      <SelectItem value="BRL">Real (BRL)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {formData.moeda === 'USD' && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Cotação do dólar: R$ {cotacaoDolar.toFixed(2)} {loadingDolar && '(atualizando...)'}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label>Conta Bancária Vinculada</Label>
                 <Select value={formData.conta_bancaria_id} onValueChange={handleBankAccountChange}>
@@ -370,7 +472,7 @@ export default function InvestmentForm() {
                   </div>
 
                   <div>
-                    <Label>Preço Médio</Label>
+                    <Label>Preço Médio {isUSD && isInternacional ? '(USD)' : ''}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -378,26 +480,48 @@ export default function InvestmentForm() {
                       onChange={(e) => handleChange('preco_medio', e.target.value)}
                       className="mt-1.5"
                     />
+                    {isUSD && isInternacional && formData.preco_medio && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.preco_medio) * cotacaoDolar)}
+                      </p>
+                    )}
                   </div>
                 </>
               )}
 
               <div>
-                <Label>Valor Investido *</Label>
+                <Label>Valor Investido {isUSD && isInternacional ? '(USD)' : ''} *</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.valor_investido}
-                  onChange={(e) => handleChange('valor_investido', e.target.value)}
+                  value={isUSD && isInternacional ? formData.valor_investido_usd : formData.valor_investido}
+                  onChange={(e) => {
+                    if (isUSD && isInternacional) {
+                      const valorUSD = e.target.value;
+                      const valorBRL = parseFloat(valorUSD || 0) * cotacaoDolar;
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        valor_investido_usd: valorUSD,
+                        valor_investido: valorBRL.toFixed(2)
+                      }));
+                    } else {
+                      handleChange('valor_investido', e.target.value);
+                    }
+                  }}
                   required
                   className="mt-1.5"
                 />
+                {isUSD && isInternacional && formData.valor_investido && (
+                  <p className="text-xs text-emerald-600 mt-1">
+                    ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.valor_investido)}
+                  </p>
+                )}
               </div>
 
               {needsTicker && (
                 <>
                   <div>
-                    <Label>Cotação Atual</Label>
+                    <Label>Cotação Atual {isUSD && isInternacional ? '(USD)' : ''}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -405,17 +529,39 @@ export default function InvestmentForm() {
                       onChange={(e) => handleChange('cotacao_atual', e.target.value)}
                       className="mt-1.5"
                     />
+                    {isUSD && isInternacional && formData.cotacao_atual && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(formData.cotacao_atual) * cotacaoDolar)}
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <Label>Valor Atual</Label>
+                    <Label>Valor Atual {isUSD && isInternacional ? '(USD)' : ''}</Label>
                     <Input
                       type="number"
                       step="0.01"
-                      value={formData.valor_atual}
-                      onChange={(e) => handleChange('valor_atual', e.target.value)}
+                      value={isUSD && isInternacional ? formData.valor_atual_usd : formData.valor_atual}
+                      onChange={(e) => {
+                        if (isUSD && isInternacional) {
+                          const valorUSD = e.target.value;
+                          const valorBRL = parseFloat(valorUSD || 0) * cotacaoDolar;
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            valor_atual_usd: valorUSD,
+                            valor_atual: valorBRL.toFixed(2)
+                          }));
+                        } else {
+                          handleChange('valor_atual', e.target.value);
+                        }
+                      }}
                       className="mt-1.5"
                     />
+                    {isUSD && isInternacional && formData.valor_atual && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.valor_atual)}
+                      </p>
+                    )}
                   </div>
                 </>
               )}
