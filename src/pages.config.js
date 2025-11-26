@@ -14,6 +14,12 @@ import AccountsPayable from './pages/AccountsPayable';
 import AccountPayableForm from './pages/AccountPayableForm';
 import AccountsReceivable from './pages/AccountsReceivable';
 import AccountReceivableForm from './pages/AccountReceivableForm';
+import Transactions from './pages/Transactions';
+import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
+import BankAccountDetail from './pages/BankAccountDetail';
+import ProjectDetail from './pages/ProjectDetail';
 import __Layout from './Layout.jsx';
 
 
@@ -34,6 +40,12 @@ export const PAGES = {
     "AccountPayableForm": AccountPayableForm,
     "AccountsReceivable": AccountsReceivable,
     "AccountReceivableForm": AccountReceivableForm,
+    "Transactions": Transactions,
+    "Dashboard": Dashboard,
+    "Reports": Reports,
+    "Settings": Settings,
+    "BankAccountDetail": BankAccountDetail,
+    "ProjectDetail": ProjectDetail,
 }
 
 export const pagesConfig = {
