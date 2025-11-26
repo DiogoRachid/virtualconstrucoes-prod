@@ -26,7 +26,11 @@ import {
   UsersRound,
   Clock,
   FileSignature,
-  Gift
+  Gift,
+  Shield,
+  Loader2,
+  ShieldX,
+  Mail
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -85,13 +89,83 @@ const menuItems = [
     title: 'Relatórios',
     icon: FileText,
     page: 'Reports'
+  },
+  {
+    title: 'Portal Admin',
+    icon: Shield,
+    page: 'AdminPortal'
   }
 ];
+
+// Loading Screen Component
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <img 
+          src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png"
+          alt="Virtual Construções" 
+          className="h-16 object-contain mx-auto mb-8"
+        />
+        <Loader2 className="h-8 w-8 text-blue-500 animate-spin mx-auto mb-4" />
+        <p className="text-slate-400">Verificando acesso...</p>
+      </div>
+    </div>
+  );
+}
+
+// Access Denied Screen Component
+function AccessDeniedScreen({ userEmail, onLogout }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 text-center border border-white/20 shadow-2xl">
+          <div className="h-20 w-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
+            <ShieldX className="h-10 w-10 text-red-400" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-white mb-2">
+            Acesso Negado
+          </h1>
+          
+          <p className="text-slate-300 mb-6">
+            Você não possui permissão para acessar este sistema. 
+            Entre em contato com o administrador para solicitar acesso.
+          </p>
+
+          {userEmail && (
+            <div className="bg-white/5 rounded-xl p-4 mb-6">
+              <div className="flex items-center justify-center gap-2 text-slate-400">
+                <Mail className="h-4 w-4" />
+                <span className="text-sm">{userEmail}</span>
+              </div>
+            </div>
+          )}
+
+          <Button 
+            onClick={onLogout}
+            variant="outline"
+            className="w-full border-white/20 text-white hover:bg-white/10"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sair e tentar com outra conta
+          </Button>
+        </div>
+
+        <p className="text-center text-slate-500 text-sm mt-6">
+          Virtual Construções - Sistema de Gestão
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState(['Cadastros', 'Financeiro', 'RH']);
   const [user, setUser] = useState(null);
+  const [adminUser, setAdminUser] = useState(null);
+  const [accessStatus, setAccessStatus] = useState('checking'); // 'checking', 'granted', 'denied'
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('darkMode') === 'true';
@@ -109,12 +183,69 @@ export default function Layout({ children, currentPageName }) {
   }, [darkMode]);
 
   useEffect(() => {
-    const loadUser = async () => {
-      const userData = await base44.auth.me();
-      setUser(userData);
+    const checkAccess = async () => {
+      try {
+        const userData = await base44.auth.me();
+        setUser(userData);
+
+        if (!userData?.email) {
+          setAccessStatus('denied');
+          return;
+        }
+
+        // Buscar na entidade AdminUser
+        const adminUsers = await base44.entities.AdminUser.filter({ 
+          email: userData.email,
+          status: 'ativo'
+        });
+
+        if (adminUsers && adminUsers.length > 0) {
+          const admin = adminUsers[0];
+          setAdminUser(admin);
+          
+          // Atualizar último acesso
+          await base44.entities.AdminUser.update(admin.id, {
+            ultimo_acesso: new Date().toISOString()
+          });
+          
+          setAccessStatus('granted');
+        } else {
+          setAccessStatus('denied');
+        }
+      } catch (error) {
+        console.error('Erro ao verificar acesso:', error);
+        setAccessStatus('denied');
+      }
     };
-    loadUser();
+    checkAccess();
   }, []);
+
+  // Função para verificar acesso a módulo específico
+  const hasModuleAccess = (moduleName) => {
+    if (!adminUser) return false;
+    if (adminUser.nivel_acesso === 'super_admin') return true;
+    if (!adminUser.modulos_permitidos || adminUser.modulos_permitidos.length === 0) return true;
+    return adminUser.modulos_permitidos.includes(moduleName);
+  };
+
+  // Filtrar itens do menu baseado nas permissões
+  const getFilteredMenuItems = () => {
+    return menuItems.map(item => {
+      if (item.submenu) {
+        const filteredSubmenu = item.submenu.filter(sub => hasModuleAccess(sub.page));
+        if (filteredSubmenu.length === 0) return null;
+        return { ...item, submenu: filteredSubmenu };
+      }
+      return hasModuleAccess(item.page) ? item : null;
+    }).filter(Boolean);
+  };
+
+  // Mostrar tela de loading enquanto verifica acesso
+  if (accessStatus === 'checking') {
+    return <LoadingScreen />;
+  }
+
+  const filteredMenuItems = getFilteredMenuItems();
 
   const toggleSubmenu = (title) => {
     setExpandedMenus(prev => 
@@ -127,6 +258,11 @@ export default function Layout({ children, currentPageName }) {
   const handleLogout = () => {
     base44.auth.logout();
   };
+
+  // Mover handleLogout antes do return para AccessDeniedScreen
+  if (accessStatus === 'denied') {
+    return <AccessDeniedScreen userEmail={user?.email} onLogout={handleLogout} />;
+  }
 
   const getPermissionLabel = (perm) => {
     const labels = {
@@ -275,7 +411,7 @@ export default function Layout({ children, currentPageName }) {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-6 px-4">
             <div className="space-y-1">
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <div key={item.title}>
                   {item.submenu ? (
                     <>
