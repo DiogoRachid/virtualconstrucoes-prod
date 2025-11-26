@@ -23,6 +23,14 @@ import ProjectDetail from './pages/ProjectDetail';
 import Investments from './pages/Investments';
 import InvestmentForm from './pages/InvestmentForm';
 import InvestmentDetail from './pages/InvestmentDetail';
+import Employees from './pages/Employees';
+import EmployeeForm from './pages/EmployeeForm';
+import EmployeeDetail from './pages/EmployeeDetail';
+import Teams from './pages/Teams';
+import TeamForm from './pages/TeamForm';
+import TeamDetail from './pages/TeamDetail';
+import TimeRecords from './pages/TimeRecords';
+import TimeSheet from './pages/TimeSheet';
 import __Layout from './Layout.jsx';
 
 
@@ -52,6 +60,14 @@ export const PAGES = {
     "Investments": Investments,
     "InvestmentForm": InvestmentForm,
     "InvestmentDetail": InvestmentDetail,
+    "Employees": Employees,
+    "EmployeeForm": EmployeeForm,
+    "EmployeeDetail": EmployeeDetail,
+    "Teams": Teams,
+    "TeamForm": TeamForm,
+    "TeamDetail": TeamDetail,
+    "TimeRecords": TimeRecords,
+    "TimeSheet": TimeSheet,
 }
 
 export const pagesConfig = {
