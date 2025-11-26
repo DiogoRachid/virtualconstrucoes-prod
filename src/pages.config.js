@@ -31,6 +31,11 @@ import TeamForm from './pages/TeamForm';
 import TeamDetail from './pages/TeamDetail';
 import TimeRecords from './pages/TimeRecords';
 import TimeSheet from './pages/TimeSheet';
+import EmployeeContracts from './pages/EmployeeContracts';
+import ContractForm from './pages/ContractForm';
+import Benefits from './pages/Benefits';
+import BenefitAssignment from './pages/BenefitAssignment';
+import HRReports from './pages/HRReports';
 import __Layout from './Layout.jsx';
 
 
@@ -68,6 +73,11 @@ export const PAGES = {
     "TeamDetail": TeamDetail,
     "TimeRecords": TimeRecords,
     "TimeSheet": TimeSheet,
+    "EmployeeContracts": EmployeeContracts,
+    "ContractForm": ContractForm,
+    "Benefits": Benefits,
+    "BenefitAssignment": BenefitAssignment,
+    "HRReports": HRReports,
 }
 
 export const pagesConfig = {
