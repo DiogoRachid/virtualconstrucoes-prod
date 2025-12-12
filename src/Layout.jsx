@@ -52,11 +52,18 @@ const menuItems = [
       { title: 'Clientes', page: 'Clients', icon: Users },
       { title: 'Obras', page: 'Projects', icon: HardHat },
       { title: 'Contas Bancárias', page: 'BankAccounts', icon: Landmark },
-      { title: 'Centros de Custo', page: 'CostCenters', icon: PieChart }
-    ]
-  },
-  {
-    title: 'Financeiro',
+      { title: 'Centros de Custo', page: 'CostCenters', icon: PieChart },
+      { title: 'Insumos', page: 'Inputs', icon: Package },
+      { title: 'Serviços (Composições)', page: 'Services', icon: Layers }
+      ]
+      },
+      {
+      title: 'Orçamentos',
+      icon: Calculator,
+      page: 'Budgets'
+      },
+      {
+      title: 'Financeiro',
     icon: Wallet,
     submenu: [
       { title: 'Contas a Pagar', page: 'AccountsPayable', icon: ArrowDownCircle },
