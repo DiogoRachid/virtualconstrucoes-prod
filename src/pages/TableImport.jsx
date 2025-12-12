@@ -478,8 +478,6 @@ export default function TableImport() {
       setPreviewData([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
-
-    };
     reader.onerror = () => {
        toast.error('Erro ao ler o arquivo.');
        setProcessing(false);
