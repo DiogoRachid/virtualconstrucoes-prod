@@ -77,6 +77,9 @@ export default function Services() {
     quantidade: 1,
     tipo_custo: 'MATERIAL'
   });
+  
+  // Busca para o item da composição
+  const [itemSearch, setItemSearch] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -195,6 +198,7 @@ export default function Services() {
     });
     setCompositions([]);
     setNewItem({ tipo_item: 'INSUMO', item_id: '', quantidade: 1, tipo_custo: 'MATERIAL' });
+    setItemSearch('');
   };
 
   // Funções de Cálculo e Composição
@@ -422,6 +426,15 @@ export default function Services() {
 
                 <div className="flex-1 min-w-[200px]">
                   <Label>Item</Label>
+                  <div className="relative mb-1">
+                    <Search className="absolute left-2 top-2.5 h-3 w-3 text-slate-400" />
+                    <Input 
+                      placeholder="Buscar por nome ou código..." 
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
+                      className="pl-7 h-8 text-xs mb-1"
+                    />
+                  </div>
                   <Select
                     value={newItem.item_id}
                     onValueChange={(v) => setNewItem(prev => ({ ...prev, item_id: v }))}
@@ -429,16 +442,27 @@ export default function Services() {
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px]">
                       {newItem.tipo_item === 'INSUMO' ? (
-                        inputs.map(i => (
-                          <SelectItem key={i.id} value={i.id}>
-                            {i.codigo} - {i.descricao} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.valor_referencia)})
-                          </SelectItem>
-                        ))
+                        inputs
+                          .filter(i => 
+                            !itemSearch || 
+                            i.codigo.toLowerCase().includes(itemSearch.toLowerCase()) || 
+                            i.descricao.toLowerCase().includes(itemSearch.toLowerCase())
+                          )
+                          .map(i => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.codigo} - {i.descricao} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.valor_referencia)})
+                            </SelectItem>
+                          ))
                       ) : (
                         services
                           .filter(s => s.id !== editingService?.id) // Evitar referência circular direta
+                          .filter(s => 
+                            !itemSearch || 
+                            s.codigo.toLowerCase().includes(itemSearch.toLowerCase()) || 
+                            s.descricao.toLowerCase().includes(itemSearch.toLowerCase())
+                          )
                           .map(s => (
                             <SelectItem key={s.id} value={s.id}>
                               {s.codigo} - {s.descricao} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.custo_total)})
