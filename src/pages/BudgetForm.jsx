@@ -9,7 +9,7 @@ import {
   Trash2,
   FileText,
   PieChart as PieChartIcon,
-  Download,
+  Printer,
   Loader2,
   Calculator,
   RefreshCw,
@@ -18,6 +18,7 @@ import {
   ChevronRight,
   FolderPlus
 } from 'lucide-react';
+import { printBudget } from '@/components/budgets/BudgetPrinter';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -315,180 +316,17 @@ export default function BudgetForm() {
   };
 
   const handleExportPDF = () => {
-    const logoUrl = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
-    const projectName = projects.find(p => p.id === header.obra_id)?.nome || 'N/A';
-    const costCenterName = costCenters.find(c => c.id === header.centro_custo_id)?.nome || '';
-    const dateStr = format(new Date(), 'dd/MM/yyyy');
-    
-    // Sort stages
-    const sortedStages = [...stages].sort((a, b) => a.ordem - b.ordem);
-    
-    // Helper to format currency
-    const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
-    let htmlBody = '';
-
-    // Loop Stages
-    sortedStages.forEach(stage => {
-      const stageItems = items.filter(i => i.stage_id === (stage.id || stage.tempId));
-      if (stageItems.length === 0) return;
-
-      const stageTotal = calculateTotals(stageItems).final;
-
-      htmlBody += `
-        <div class="stage-header">
-          <span>${stage.ordem}. ${stage.nome}</span>
-          <span>${fmt(stageTotal)}</span>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 10%">Código</th>
-              <th style="width: 40%">Descrição</th>
-              <th style="width: 10%">Unid</th>
-              <th style="width: 10%; text-align: right">Qtd</th>
-              <th style="width: 15%; text-align: right">Unitário</th>
-              <th style="width: 15%; text-align: right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-      stageItems.forEach(item => {
-        htmlBody += `
-          <tr>
-            <td>${item.codigo || ''}</td>
-            <td>${item.descricao || ''}</td>
-            <td style="text-align: center">${item.unidade || ''}</td>
-            <td style="text-align: right">${item.quantidade}</td>
-            <td style="text-align: right">${fmt(item.custo_com_bdi_unitario)}</td>
-            <td style="text-align: right">${fmt(item.subtotal)}</td>
-          </tr>
-        `;
-      });
-
-      htmlBody += `
-          </tbody>
-        </table>
-      `;
+    printBudget(null, {
+      header: {
+        ...header,
+        obra_nome: projects.find(p => p.id === header.obra_id)?.nome,
+        centro_custo_nome: costCenters.find(c => c.id === header.centro_custo_id)?.nome
+      },
+      stages,
+      items,
+      project: projects.find(p => p.id === header.obra_id),
+      costCenter: costCenters.find(c => c.id === header.centro_custo_id)
     });
-
-    // Uncategorized
-    const uncategorizedItems = items.filter(i => !i.stage_id);
-    if (uncategorizedItems.length > 0) {
-      const stageTotal = calculateTotals(uncategorizedItems).final;
-      htmlBody += `
-        <div class="stage-header">
-          <span>Itens sem Etapa</span>
-          <span>${fmt(stageTotal)}</span>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 10%">Código</th>
-              <th style="width: 40%">Descrição</th>
-              <th style="width: 10%">Unid</th>
-              <th style="width: 10%; text-align: right">Qtd</th>
-              <th style="width: 15%; text-align: right">Unitário</th>
-              <th style="width: 15%; text-align: right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      uncategorizedItems.forEach(item => {
-        htmlBody += `
-          <tr>
-            <td>${item.codigo || ''}</td>
-            <td>${item.descricao || ''}</td>
-            <td style="text-align: center">${item.unidade || ''}</td>
-            <td style="text-align: right">${item.quantidade}</td>
-            <td style="text-align: right">${fmt(item.custo_com_bdi_unitario)}</td>
-            <td style="text-align: right">${fmt(item.subtotal)}</td>
-          </tr>
-        `;
-      });
-      htmlBody += `</tbody></table>`;
-    }
-
-    // Totals Section
-    const totalsHtml = `
-      <div class="totals-section">
-        <div class="total-row">
-          <span>Custo Direto:</span>
-          <span>${fmt(globalTotals.direto)}</span>
-        </div>
-        <div class="total-row">
-          <span>BDI Total:</span>
-          <span>${fmt(globalBDI)}</span>
-        </div>
-        <div class="total-row final">
-          <span>VALOR TOTAL DA OBRA:</span>
-          <span>${fmt(globalTotals.final)}</span>
-        </div>
-      </div>
-    `;
-
-    const fullHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Orçamento - ${header.descricao}</title>
-        <style>
-          @page { margin: 15mm; size: A4; }
-          body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10px; color: #333; line-height: 1.4; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-          .logo { height: 50px; }
-          .company-info { text-align: right; }
-          .company-name { font-size: 14px; font-weight: bold; text-transform: uppercase; }
-          .project-info { margin-bottom: 5px; }
-          
-          .stage-header { background-color: #f1f5f9; padding: 5px 10px; font-weight: bold; font-size: 11px; border-bottom: 1px solid #cbd5e1; margin-top: 15px; display: flex; justify-content: space-between; }
-          
-          table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
-          th { background-color: #fff; border-bottom: 1px solid #000; padding: 4px; text-align: left; font-weight: bold; }
-          td { border-bottom: 1px solid #e2e8f0; padding: 4px; }
-          tr:last-child td { border-bottom: none; }
-          
-          .totals-section { margin-top: 30px; page-break-inside: avoid; width: 300px; margin-left: auto; }
-          .total-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0; }
-          .total-row.final { font-weight: bold; font-size: 12px; border-top: 2px solid #333; border-bottom: none; margin-top: 5px; padding-top: 10px; }
-          
-          @media print {
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <img src="${logoUrl}" class="logo" alt="Logo" />
-          <div class="company-info">
-            <div class="company-name">Virtual Construções</div>
-            <div class="project-info">
-              <div><strong>Obra:</strong> ${projectName}</div>
-              <div><strong>Orçamento:</strong> ${header.descricao}</div>
-              <div>Data: ${dateStr} | Versão: ${header.versao}</div>
-            </div>
-          </div>
-        </div>
-        
-        ${htmlBody}
-        
-        ${totalsHtml}
-        
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `;
-
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(fullHtml);
-      win.document.close();
-    } else {
-      toast.error('Permita popups para visualizar o PDF.');
-    }
   };
 
   // Rendering Helpers
@@ -650,7 +488,7 @@ export default function BudgetForm() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExportPDF}>
-            <Download className="h-4 w-4 mr-2" /> Imprimir / PDF
+            <Printer className="h-4 w-4 mr-2" /> Imprimir / PDF
           </Button>
           <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
