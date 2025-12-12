@@ -36,6 +36,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { format } from 'date-fns';
 
+// Helper for batch processing to avoid rate limits
+const processBatches = async (items, batchSize, fn) => {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.all(batch.map(fn));
+  }
+};
+
 export default function TableImport() {
   const [file, setFile] = useState(null);
   const [config, setConfig] = useState({
@@ -177,8 +185,8 @@ export default function TableImport() {
       setProgress('Processando registros...');
       
       if (config.tipo === 'INSUMOS') {
-        const batchCreate = [];
-        const batchUpdate = [];
+        const toCreate = [];
+        const toUpdate = [];
 
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i];
@@ -210,7 +218,7 @@ export default function TableImport() {
           const existing = inputsMap.get(codigo);
           const data = {
             codigo,
-            descricao: descricao.slice(0, 500), // Limit length just in case
+            descricao: descricao.slice(0, 500), 
             unidade: unidade || 'UN',
             valor_referencia: valor,
             fonte: config.origem,
@@ -218,19 +226,31 @@ export default function TableImport() {
           };
 
           if (existing) {
-            // Only update if changed (optional optimization, but we update to set date/fonte)
-            // We'll update individually later or batch
-            // Base44 SDK doesn't have bulkUpdate yet, so we loop await.
-            // To speed up, we can use parallel promises in chunks.
-            await base44.entities.Input.update(existing.id, data);
-            updated++;
+            toUpdate.push({ id: existing.id, data });
           } else {
-            await base44.entities.Input.create(data);
-            inserted++;
+            toCreate.push(data);
           }
           processed++;
-          
-          if (i % 50 === 0) setProgress(`Processando insumos... ${i}/${lines.length}`);
+        }
+
+        // Bulk Insert
+        if (toCreate.length > 0) {
+          setProgress(`Criando ${toCreate.length} novos insumos...`);
+          for (let i = 0; i < toCreate.length; i += 100) {
+            const chunk = toCreate.slice(i, i + 100);
+            await base44.entities.Input.bulkCreate(chunk);
+            inserted += chunk.length;
+            setProgress(`Criando insumos... ${Math.min(i + 100, toCreate.length)}/${toCreate.length}`);
+          }
+        }
+
+        // Batch Update
+        if (toUpdate.length > 0) {
+          setProgress(`Atualizando ${toUpdate.length} insumos existentes...`);
+          await processBatches(toUpdate, 20, async (item) => {
+            await base44.entities.Input.update(item.id, item.data);
+            updated++;
+          });
         }
       } 
       else if (config.tipo === 'COMPOSICOES') {
@@ -275,9 +295,10 @@ export default function TableImport() {
         const serviceCodes = Object.keys(serviceGroups);
         let count = 0;
         
-        for (const codServ of serviceCodes) {
+        // Batch process services to respect rate limits
+        await processBatches(serviceCodes, 5, async (codServ) => {
           count++;
-          setProgress(`Processando serviços... ${count}/${serviceCodes.length}`);
+          if (count % 10 === 0) setProgress(`Processando serviços... ${count}/${serviceCodes.length}`);
           
           const group = serviceGroups[codServ];
           let service = servicesMap.get(codServ);
@@ -296,7 +317,6 @@ export default function TableImport() {
             servicesMap.set(codServ, service);
             inserted++;
           } else {
-            // Update details if needed
              await base44.entities.Service.update(service.id, {
                 descricao: group.descricao,
                 unidade: group.unidade,
@@ -306,36 +326,35 @@ export default function TableImport() {
           }
 
           // 2. Process Items
-          // Delete existing compositions for this service (Clean Slate strategy)
+          // Clean existing items
           const oldComps = await base44.entities.ServiceComposition.filter({ servico_id: service.id });
-          await Promise.all(oldComps.map(c => base44.entities.ServiceComposition.delete(c.id)));
+          if (oldComps.length > 0) {
+             // Batch delete in chunks of 20
+             await processBatches(oldComps, 20, async (c) => base44.entities.ServiceComposition.delete(c.id));
+          }
 
           let totalMat = 0;
           let totalMO = 0;
+          const compsToCreate = [];
 
           for (const item of group.items) {
-            // Find component (Input or Service?)
-            // Assumption: Items in composition are usually Inputs (SINAPI/TCPO logic usually flattens or points to inputs)
-            // But they can be other Services (Auxiliary).
-            // Logic: Try to find Input first. If not, check Service. If neither, create Input placeholder.
-            
             let itemId;
             let itemType = 'INSUMO';
             let itemCost = item.custoUnit;
 
-            const input = inputsMap.get(item.codItem);
+            let input = inputsMap.get(item.codItem);
             if (input) {
               itemId = input.id;
               if (itemCost === 0) itemCost = input.valor_referencia;
             } else {
-              // Try service?
+              // Try service
               const subService = servicesMap.get(item.codItem);
               if (subService) {
                 itemId = subService.id;
                 itemType = 'SERVICO';
                 if (itemCost === 0) itemCost = subService.custo_total;
               } else {
-                // Create missing Input placeholder
+                // Create missing Input placeholder (immediately to reuse ID)
                 const newInput = await base44.entities.Input.create({
                   codigo: item.codItem,
                   descricao: `ITEM IMPORTADO ${item.codItem}`,
@@ -346,13 +365,11 @@ export default function TableImport() {
                 });
                 inputsMap.set(item.codItem, newInput);
                 itemId = newInput.id;
+                input = newInput;
                 logEntries.push(`Aviso: Item ${item.codItem} não existia e foi criado automaticamente.`);
               }
             }
             
-            // Determine type cost (Material vs MO)
-            // If explicit in file, use it. Else infer from input/service?
-            // Simple logic: if type contains "MAO" or "MO" -> MO, else MATERIAL
             let costType = 'MATERIAL';
             if (item.tipo && (item.tipo.toUpperCase().includes('MAO') || item.tipo.toUpperCase().includes('MO') || item.tipo.toUpperCase().includes('HORA'))) {
                costType = 'MAO_DE_OBRA';
@@ -360,7 +377,7 @@ export default function TableImport() {
 
             const totalItem = item.quantidade * itemCost;
             
-            await base44.entities.ServiceComposition.create({
+            compsToCreate.push({
               servico_id: service.id,
               tipo_item: itemType,
               item_id: itemId,
@@ -375,6 +392,10 @@ export default function TableImport() {
             if (costType === 'MATERIAL') totalMat += totalItem;
             else totalMO += totalItem;
           }
+          
+          if (compsToCreate.length > 0) {
+             await base44.entities.ServiceComposition.bulkCreate(compsToCreate);
+          }
 
           // 3. Update Service Totals
           await base44.entities.Service.update(service.id, {
@@ -383,7 +404,7 @@ export default function TableImport() {
             custo_total: totalMat + totalMO
           });
           processed++;
-        }
+        });
       }
 
       // Update Budgets if requested
