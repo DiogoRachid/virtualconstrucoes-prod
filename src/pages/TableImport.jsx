@@ -55,7 +55,8 @@ export default function TableImport() {
   const [config, setConfig] = useState({
     origem: 'SINAPI',
     tipo: 'INSUMOS', // INSUMOS or COMPOSICOES
-    updateBudgets: false
+    updateBudgets: false,
+    data_base: '09/2025'
   });
   const [previewData, setPreviewData] = useState([]);
   const [headers, setHeaders] = useState([]);
@@ -228,6 +229,7 @@ export default function TableImport() {
             unidade: unidade || 'UN',
             valor_referencia: valor,
             fonte: config.origem,
+            data_base: config.data_base,
             data_atualizacao: new Date().toISOString()
           };
 
@@ -319,7 +321,8 @@ export default function TableImport() {
               fonte: config.origem,
               custo_material: 0,
               custo_mao_obra: 0,
-              custo_total: 0
+              custo_total: 0,
+              data_base: config.data_base
             });
             servicesMap.set(codServ, service);
             inserted++;
@@ -347,6 +350,15 @@ export default function TableImport() {
           let totalMO = 0;
           const compsToCreate = [];
 
+          // Logic for calculating oldest data_base
+          let oldestDate = null;
+          const parseDate = (str) => {
+            if (!str) return null;
+            const parts = str.split('/');
+            if (parts.length !== 2) return null;
+            return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1, 1);
+          };
+
           for (const item of group.items) {
             let itemId;
             let itemType = 'INSUMO';
@@ -356,6 +368,11 @@ export default function TableImport() {
             if (input) {
               itemId = input.id;
               if (itemCost === 0) itemCost = input.valor_referencia;
+              
+              if (input.data_base) {
+                 const d = parseDate(input.data_base);
+                 if (d && (!oldestDate || d < oldestDate)) oldestDate = d;
+              }
             } else {
               // Try service
               const subService = servicesMap.get(item.codItem);
@@ -371,6 +388,7 @@ export default function TableImport() {
                   unidade: 'UN',
                   valor_referencia: itemCost,
                   fonte: config.origem,
+                  data_base: config.data_base,
                   data_atualizacao: new Date().toISOString()
                 });
                 inputsMap.set(item.codItem, newInput);
@@ -408,10 +426,18 @@ export default function TableImport() {
           }
 
           // 3. Update Service Totals
+          let finalDataBase = config.data_base;
+          if (oldestDate) {
+             const m = String(oldestDate.getMonth() + 1).padStart(2, '0');
+             const y = oldestDate.getFullYear();
+             finalDataBase = `${m}/${y}`;
+          }
+
           await base44.entities.Service.update(service.id, {
             custo_material: totalMat,
             custo_mao_obra: totalMO,
-            custo_total: totalMat + totalMO
+            custo_total: totalMat + totalMO,
+            data_base: finalDataBase
           });
           processed++;
         });
@@ -591,6 +617,16 @@ export default function TableImport() {
                     <SelectItem value="COMPOSICOES">Composições de Serviço</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>Data Base (MM/AAAA)</Label>
+                <Input
+                  value={config.data_base}
+                  onChange={(e) => setConfig(prev => ({...prev, data_base: e.target.value}))}
+                  disabled={processing}
+                  placeholder="Ex: 09/2025"
+                />
               </div>
 
               {config.tipo === 'COMPOSICOES' && (

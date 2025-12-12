@@ -110,7 +110,8 @@ export default function Inputs() {
       descricao: '',
       unidade: '',
       valor_referencia: '',
-      fonte: 'SINAPI'
+      fonte: 'SINAPI',
+      data_base: '09/2025'
     });
     setEditingItem(null);
   };
@@ -122,7 +123,8 @@ export default function Inputs() {
       descricao: item.descricao,
       unidade: item.unidade,
       valor_referencia: item.valor_referencia,
-      fonte: item.fonte
+      fonte: item.fonte,
+      data_base: item.data_base || '09/2025'
     });
     setShowDialog(true);
   };
@@ -146,6 +148,7 @@ export default function Inputs() {
       cellClassName: 'text-right',
       render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_referencia)
     },
+    { header: 'Data Base', accessor: 'data_base', className: 'w-24' },
     { header: 'Fonte', accessor: 'fonte', className: 'w-32' },
     { 
       header: 'Atualização', 
@@ -241,6 +244,14 @@ export default function Inputs() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div>
+               <Label>Data Base (MM/AAAA)</Label>
+               <Input
+                  value={formData.data_base}
+                  onChange={(e) => setFormData(prev => ({ ...prev, data_base: e.target.value }))}
+                  placeholder="Ex: 09/2025"
+               />
             </div>
             <div>
               <Label>Descrição *</Label>
