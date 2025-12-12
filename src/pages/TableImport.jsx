@@ -83,7 +83,7 @@ export default function TableImport() {
       if (['COD_ITEM', 'CODIGO_ITEM', 'CODIGO INSUMO'].some(x => h.includes(x))) return 'codigo_item';
       if (['QTD', 'QUANTIDADE', 'COEFICIENTE'].some(x => h.includes(x))) return 'quantidade';
       // Custo unitário removido da importação de serviços/composições
-      if (['TIPO', 'TIPO_ITEM'].some(x => h.includes(x))) return 'tipo_item'; // Material/Mão de Obra
+      if (['UNIDADE_ITEM', 'UND_ITEM', 'UNID_ITEM', 'UN_ITEM'].some(x => h.includes(x))) return 'unidade_item';
     }
     return null;
   };
@@ -290,7 +290,7 @@ export default function TableImport() {
           serviceGroups[codServ].items.push({
             codItem: cols[mappedColumns['codigo_item']],
             quantidade,
-            tipo: mappedColumns['tipo_item'] ? cols[mappedColumns['tipo_item']] : 'MATERIAL'
+            unidade: mappedColumns['unidade_item'] ? cols[mappedColumns['unidade_item']] : ''
           });
         }
 
@@ -380,7 +380,7 @@ export default function TableImport() {
                 const newInput = await base44.entities.Input.create({
                   codigo: item.codItem,
                   descricao: `ITEM IMPORTADO ${item.codItem}`,
-                  unidade: 'UN',
+                  unidade: item.unidade || 'UN',
                   valor_referencia: 0, 
                   fonte: config.origem,
                   data_base: config.data_base,
@@ -393,8 +393,10 @@ export default function TableImport() {
               }
             }
             
+            // Determine Cost Type based on Unit (since Type column was removed)
             let costType = 'MATERIAL';
-            if (item.tipo && (item.tipo.toUpperCase().includes('MAO') || item.tipo.toUpperCase().includes('MO') || item.tipo.toUpperCase().includes('HORA'))) {
+            const unitToCheck = (item.unidade || (input ? input.unidade : 'UN')).toUpperCase();
+            if (unitToCheck.includes('H') || unitToCheck.includes('HORA')) {
                costType = 'MAO_DE_OBRA';
             }
 
@@ -406,7 +408,7 @@ export default function TableImport() {
               tipo_item: itemType,
               item_id: itemId,
               item_nome: input ? input.descricao : (itemType === 'SERVICO' ? 'Serviço Auxiliar' : 'Item'),
-              unidade: input ? input.unidade : 'UN',
+              unidade: item.unidade || (input ? input.unidade : 'UN'),
               quantidade: item.quantidade,
               custo_unitario: itemCost,
               custo_total_item: totalItem,
@@ -546,7 +548,7 @@ export default function TableImport() {
   // Manual Mapping
   const getRequiredFields = () => config.tipo === 'INSUMOS' 
     ? ['codigo', 'descricao', 'valor_referencia', 'unidade'] 
-    : ['codigo_servico', 'descricao_servico', 'unidade_servico', 'codigo_item', 'quantidade', 'tipo_item'];
+    : ['codigo_servico', 'descricao_servico', 'unidade_servico', 'codigo_item', 'quantidade', 'unidade_item'];
 
   const handleMapChange = (field, colIndex) => {
      setMappedColumns(prev => ({...prev, [field]: parseInt(colIndex)}));
