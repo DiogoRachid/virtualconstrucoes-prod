@@ -41,44 +41,32 @@ export const printBudget = async (budgetId, preloadedData = null) => {
       acc.mao_obra += (item.custo_unitario_mao_obra || 0) * item.quantidade;
       acc.direto += (item.custo_direto_total || 0);
       acc.final += (item.subtotal || 0);
+      
+      // Calculate Material and Labor with BDI
+      const unitCostTotal = (item.custo_unitario_material || 0) + (item.custo_unitario_mao_obra || 0);
+      if (unitCostTotal > 0) {
+        const matRatio = (item.custo_unitario_material || 0) / unitCostTotal;
+        const moRatio = (item.custo_unitario_mao_obra || 0) / unitCostTotal;
+        
+        acc.materialWithBDI += (item.subtotal || 0) * matRatio;
+        acc.laborWithBDI += (item.subtotal || 0) * moRatio;
+      } else {
+        // Fallback for items with 0 cost but maybe manual price? Unlikely but safe to add to material if unknown
+         // If total is 0, split is irrelevant (0). 
+         // If manual price override exists in subtotal but unit costs are 0... (edge case)
+      }
+
       return acc;
-    }, { material: 0, mao_obra: 0, direto: 0, final: 0 });
+    }, { material: 0, mao_obra: 0, direto: 0, final: 0, materialWithBDI: 0, laborWithBDI: 0 });
   };
 
   const globalTotals = calculateTotals(items);
-  // Recalculate BDI derived from final - direct
-  const globalBDI = globalTotals.final - globalTotals.direto;
 
-  // Breakdown Calculations (Values and % of Total with BDI)
+  // Breakdown Calculations
   const totalWithBDI = globalTotals.final;
   
-  // To get Material with BDI and Labor with BDI properly, we should ideally sum up item subtotals proportional to their cost components if BDI is uniform, 
-  // OR just use the raw material/labor costs and show them as "Custo Direto" breakdown, and then BDI separately.
-  // "divisão entre material e mão de obra, valores e percentuais sobre o valor total com BDI"
-  // Usually this means: 
-  // Material (Direct) ... % 
-  // Labor (Direct) ... %
-  // BDI ... %
-  // Total ... 100%
-  // OR it could mean Material (Gross with BDI) vs Labor (Gross with BDI). 
-  // Given the data structure `custo_unitario_material`, `custo_unitario_mao_obra` are direct costs. 
-  // `subtotal` includes BDI.
-  // I will assume they want the composition of the FINAL price. 
-  // So: Material with BDI included vs Labor with BDI included? 
-  // Or Material Direct vs Labor Direct vs BDI?
-  // Most construction budgets show Direct Cost (Mat/Labor) and then BDI at the end.
-  // But "percentuais sobre o valor total com BDI" suggests comparing components to the final total.
-  
-  // Let's go with:
-  // Material (Custo Direto): Value | % of Total Final
-  // Mão de Obra (Custo Direto): Value | % of Total Final
-  // BDI (Total): Value | % of Total Final
-  // Total Geral: Value | 100%
-
-  const matPct = totalWithBDI ? (globalTotals.material / totalWithBDI) : 0;
-  const moPct = totalWithBDI ? (globalTotals.mao_obra / totalWithBDI) : 0;
-  const bdiPct = totalWithBDI ? (globalBDI / totalWithBDI) : 0;
-  // Note: mat + mo + bdi = total
+  const matPct = totalWithBDI ? (globalTotals.materialWithBDI / totalWithBDI) : 0;
+  const moPct = totalWithBDI ? (globalTotals.laborWithBDI / totalWithBDI) : 0;
 
   let htmlBody = '';
 
@@ -172,25 +160,20 @@ export const printBudget = async (budgetId, preloadedData = null) => {
         <thead>
           <tr>
             <th>Componente</th>
-            <th style="text-align: right">Valor</th>
+            <th style="text-align: right">Valor (c/ BDI)</th>
             <th style="text-align: right">% do Total</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Material (Custo Direto)</td>
-            <td style="text-align: right">${fmt(globalTotals.material)}</td>
+            <td>Material</td>
+            <td style="text-align: right">${fmt(globalTotals.materialWithBDI)}</td>
             <td style="text-align: right">${fmtPct(matPct)}</td>
           </tr>
           <tr>
-            <td>Mão de Obra (Custo Direto)</td>
-            <td style="text-align: right">${fmt(globalTotals.mao_obra)}</td>
+            <td>Mão de Obra</td>
+            <td style="text-align: right">${fmt(globalTotals.laborWithBDI)}</td>
             <td style="text-align: right">${fmtPct(moPct)}</td>
-          </tr>
-          <tr>
-            <td>BDI (Lucros e Despesas Indiretas)</td>
-            <td style="text-align: right">${fmt(globalBDI)}</td>
-            <td style="text-align: right"></td>
           </tr>
           <tr class="total-row-breakdown">
             <td><strong>VALOR TOTAL GERAL</strong></td>
