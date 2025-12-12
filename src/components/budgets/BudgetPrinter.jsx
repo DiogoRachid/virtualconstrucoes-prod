@@ -190,7 +190,7 @@ export const printBudget = async (budgetId, preloadedData = null) => {
           <tr>
             <td>BDI (Lucros e Despesas Indiretas)</td>
             <td style="text-align: right">${fmt(globalBDI)}</td>
-            <td style="text-align: right">${fmtPct(bdiPct)}</td>
+            <td style="text-align: right"></td>
           </tr>
           <tr class="total-row-breakdown">
             <td><strong>VALOR TOTAL GERAL</strong></td>
