@@ -62,6 +62,7 @@ export default function Services() {
     descricao: '',
     unidade: '',
     fonte: 'PROPRIA',
+    data_base: '',
     observacao: ''
   });
 
@@ -173,6 +174,7 @@ export default function Services() {
       descricao: service.descricao,
       unidade: service.unidade,
       fonte: service.fonte,
+      data_base: service.data_base || '',
       observacao: service.observacao
     });
     setCompositions([]); 
@@ -187,6 +189,7 @@ export default function Services() {
       descricao: '',
       unidade: '',
       fonte: 'PROPRIA',
+      data_base: '',
       observacao: ''
     });
     setCompositions([]);
@@ -268,8 +271,9 @@ export default function Services() {
     { header: 'Código', accessor: 'codigo', className: 'w-24' },
     { header: 'Descrição', accessor: 'descricao' },
     { header: 'Unidade', accessor: 'unidade', className: 'w-16' },
+    { header: 'Data Base', accessor: 'data_base', className: 'w-24 text-xs' },
     { 
-      header: 'Material', 
+      header: 'Material',
       accessor: 'custo_material',
       className: 'text-right',
       render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.custo_material)
@@ -373,6 +377,14 @@ export default function Services() {
                   value={serviceForm.unidade}
                   onChange={(e) => setServiceForm(prev => ({ ...prev, unidade: e.target.value }))}
                   placeholder="Ex: M2"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <Label>Data Base</Label>
+                <Input
+                  value={serviceForm.data_base}
+                  onChange={(e) => setServiceForm(prev => ({ ...prev, data_base: e.target.value }))}
+                  placeholder="MM/AAAA"
                 />
               </div>
             </div>
