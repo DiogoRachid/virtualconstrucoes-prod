@@ -41,8 +41,8 @@ const processBatches = async (items, batchSize, fn) => {
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     await Promise.all(batch.map(fn));
-    // Add a small delay between batches
-    if (i + batchSize < items.length) await new Promise(r => setTimeout(r, 200)); 
+    // Add a significant delay between batches
+    if (i + batchSize < items.length) await new Promise(r => setTimeout(r, 1000)); 
   }
 };
 
@@ -238,18 +238,19 @@ export default function TableImport() {
         // Bulk Insert
         if (toCreate.length > 0) {
           setProgress(`Criando ${toCreate.length} novos insumos...`);
-          for (let i = 0; i < toCreate.length; i += 100) {
-            const chunk = toCreate.slice(i, i + 100);
+          for (let i = 0; i < toCreate.length; i += 50) {
+            const chunk = toCreate.slice(i, i + 50);
             await base44.entities.Input.bulkCreate(chunk);
             inserted += chunk.length;
-            setProgress(`Criando insumos... ${Math.min(i + 100, toCreate.length)}/${toCreate.length}`);
+            setProgress(`Criando insumos... ${Math.min(i + 50, toCreate.length)}/${toCreate.length}`);
+            await new Promise(r => setTimeout(r, 500));
           }
         }
 
         // Batch Update
         if (toUpdate.length > 0) {
           setProgress(`Atualizando ${toUpdate.length} insumos existentes...`);
-          await processBatches(toUpdate, 10, async (item) => {
+          await processBatches(toUpdate, 5, async (item) => {
             await base44.entities.Input.update(item.id, item.data);
             updated++;
           });
@@ -331,8 +332,8 @@ export default function TableImport() {
           // Clean existing items
           const oldComps = await base44.entities.ServiceComposition.filter({ servico_id: service.id });
           if (oldComps.length > 0) {
-             // Batch delete in chunks of 10
-             await processBatches(oldComps, 10, async (c) => base44.entities.ServiceComposition.delete(c.id));
+             // Batch delete in chunks of 5
+             await processBatches(oldComps, 5, async (c) => base44.entities.ServiceComposition.delete(c.id));
           }
 
           let totalMat = 0;
