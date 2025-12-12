@@ -85,6 +85,7 @@ export default function ServiceEditor() {
   const [applyToBudgets, setApplyToBudgets] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Queries
   const { data: inputs = [] } = useQuery({ queryKey: ['inputs'], queryFn: () => base44.entities.Input.list() });
@@ -379,19 +380,31 @@ export default function ServiceEditor() {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar por nome ou código..." />
+                      <Command shouldFilter={false}>
+                        <CommandInput 
+                          placeholder="Buscar por nome ou código..." 
+                          value={searchQuery}
+                          onValueChange={setSearchQuery}
+                        />
                         <CommandList>
                           <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
                           <CommandGroup>
                             {newItem.tipo_item === 'INSUMO'
-                              ? inputs.slice(0, 100).map((item) => (
+                              ? inputs
+                                  .filter(item => 
+                                    !searchQuery || 
+                                    item.codigo?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                    item.descricao?.toLowerCase().includes(searchQuery.toLowerCase())
+                                  )
+                                  .slice(0, 50)
+                                  .map((item) => (
                                   <CommandItem
                                     key={item.id}
                                     value={`${item.codigo} ${item.descricao}`}
                                     onSelect={() => {
                                       setNewItem(prev => ({ ...prev, item_id: item.id }));
                                       setOpenCombobox(false);
+                                      setSearchQuery('');
                                     }}
                                   >
                                     <Check
@@ -410,7 +423,12 @@ export default function ServiceEditor() {
                                 ))
                               : allServices
                                   .filter(s => s.id !== serviceId)
-                                  .slice(0, 100)
+                                  .filter(item => 
+                                    !searchQuery || 
+                                    item.codigo?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                    item.descricao?.toLowerCase().includes(searchQuery.toLowerCase())
+                                  )
+                                  .slice(0, 50)
                                   .map((item) => (
                                     <CommandItem
                                       key={item.id}
@@ -418,6 +436,7 @@ export default function ServiceEditor() {
                                       onSelect={() => {
                                         setNewItem(prev => ({ ...prev, item_id: item.id }));
                                         setOpenCombobox(false);
+                                        setSearchQuery('');
                                       }}
                                     >
                                       <Check
