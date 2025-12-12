@@ -297,7 +297,7 @@ export default function Services() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleEdit(row)}>
+            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`ServiceEditor?id=${row.id}`)}>
               <Pencil className="h-4 w-4 mr-2" />
               Editar / Composição
             </DropdownMenuItem>
@@ -318,7 +318,7 @@ export default function Services() {
         subtitle="Banco de serviços para orçamentos"
         icon={Layers}
         actionLabel="Novo Serviço"
-        onAction={() => { resetForm(); setShowDialog(true); }}
+        onAction={() => window.location.href = createPageUrl('ServiceEditor')}
       />
 
       <SearchFilter
@@ -337,7 +337,7 @@ export default function Services() {
             title="Nenhum serviço cadastrado"
             description="Crie composições de serviços utilizando insumos."
             actionLabel="Novo Serviço"
-            onAction={() => { resetForm(); setShowDialog(true); }}
+            onAction={() => window.location.href = createPageUrl('ServiceEditor')}
           />
         }
       />
