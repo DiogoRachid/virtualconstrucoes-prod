@@ -11,8 +11,23 @@ import {
   Trash2,
   AlertTriangle,
   Search,
-  Check
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +84,7 @@ export default function ServiceEditor() {
   });
   const [applyToBudgets, setApplyToBudgets] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [openCombobox, setOpenCombobox] = useState(false);
 
   // Queries
   const { data: inputs = [] } = useQuery({ queryKey: ['inputs'], queryFn: () => base44.entities.Input.list() });
@@ -142,6 +158,7 @@ export default function ServiceEditor() {
 
     setCompositions([...compositions, newComp]);
     setNewItem(prev => ({ ...prev, item_id: '', quantidade: 1 }));
+    setOpenCombobox(false);
     toast.success('Item adicionado');
   };
 
@@ -342,18 +359,86 @@ export default function ServiceEditor() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1 min-w-[250px]">
+                <div className="flex-1 min-w-[300px]">
                   <Label className="text-xs mb-1">Buscar Item</Label>
-                  <Select value={newItem.item_id} onValueChange={v => setNewItem({...newItem, item_id: v})}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      {(newItem.tipo_item === 'INSUMO' ? inputs : allServices).slice(0, 100).map(i => (
-                        <SelectItem key={i.id} value={i.id}>
-                          {i.codigo} - {i.descricao?.slice(0, 50)} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newItem.tipo_item === 'INSUMO' ? i.valor_referencia : i.custo_total)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCombobox}
+                        className="w-full justify-between font-normal truncate h-9"
+                      >
+                        {newItem.item_id
+                          ? (newItem.tipo_item === 'INSUMO' 
+                              ? inputs.find((i) => i.id === newItem.item_id)
+                              : allServices.find((s) => s.id === newItem.item_id)
+                            )?.descricao || "Selecione o item..."
+                          : "Selecione o item..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar por nome ou código..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {newItem.tipo_item === 'INSUMO'
+                              ? inputs.slice(0, 100).map((item) => (
+                                  <CommandItem
+                                    key={item.id}
+                                    value={`${item.codigo} ${item.descricao}`}
+                                    onSelect={() => {
+                                      setNewItem(prev => ({ ...prev, item_id: item.id }));
+                                      setOpenCombobox(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        newItem.item_id === item.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{item.descricao}</span>
+                                      <span className="text-xs text-slate-500">
+                                        {item.codigo} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor_referencia)}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))
+                              : allServices
+                                  .filter(s => s.id !== serviceId)
+                                  .slice(0, 100)
+                                  .map((item) => (
+                                    <CommandItem
+                                      key={item.id}
+                                      value={`${item.codigo} ${item.descricao}`}
+                                      onSelect={() => {
+                                        setNewItem(prev => ({ ...prev, item_id: item.id }));
+                                        setOpenCombobox(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          newItem.item_id === item.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{item.descricao}</span>
+                                        <span className="text-xs text-slate-500">
+                                          {item.codigo} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.custo_total)}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="w-24">
                   <Label className="text-xs mb-1">Qtd</Label>
