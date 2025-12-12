@@ -39,6 +39,7 @@ import HRReports from './pages/HRReports';
 import Inputs from './pages/Inputs';
 import Services from './pages/Services';
 import Budgets from './pages/Budgets';
+import BudgetForm from './pages/BudgetForm';
 import __Layout from './Layout.jsx';
 
 
@@ -84,6 +85,7 @@ export const PAGES = {
     "Inputs": Inputs,
     "Services": Services,
     "Budgets": Budgets,
+    "BudgetForm": BudgetForm,
 }
 
 export const pagesConfig = {
