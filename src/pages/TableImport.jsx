@@ -133,13 +133,15 @@ export default function TableImport() {
       : ['codigo_servico', 'codigo_item', 'quantidade'];
     
     const missing = requiredFields.filter(f => mappedColumns[f] === undefined);
-    
+
     if (missing.length > 0) {
-      toast.error(`Colunas obrigatórias não identificadas: ${missing.join(', ')}`);
-      return;
+    toast.error(`Colunas obrigatórias não identificadas: ${missing.join(', ')}. Por favor, mapeie manualmente.`);
+    return;
     }
 
     setProcessing(true);
+    try {
+
     setProgress('Iniciando importação... Isso pode levar alguns minutos.');
     const logEntries = [];
     let processed = 0;
@@ -477,7 +479,26 @@ export default function TableImport() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    };
+    reader.onerror = () => {
+       toast.error('Erro ao ler o arquivo.');
+       setProcessing(false);
+    };
     reader.readAsText(file, 'ISO-8859-1');
+    } catch (error) {
+       console.error(error);
+       toast.error('Erro ao iniciar importação: ' + error.message);
+       setProcessing(false);
+    }
+  };
+
+  // Manual Mapping
+  const getRequiredFields = () => config.tipo === 'INSUMOS' 
+    ? ['codigo', 'descricao', 'valor_referencia', 'unidade'] 
+    : ['codigo_servico', 'descricao_servico', 'unidade_servico', 'codigo_item', 'quantidade', 'custo_unitario', 'tipo_item'];
+
+  const handleMapChange = (field, colIndex) => {
+     setMappedColumns(prev => ({...prev, [field]: parseInt(colIndex)}));
   };
 
   return (
@@ -603,14 +624,32 @@ export default function TableImport() {
                   <CheckCircle className="h-4 w-4 text-blue-600" />
                   <AlertTitle>Mapeamento Automático</AlertTitle>
                   <AlertDescription className="text-xs text-blue-700 mt-1">
-                    O sistema identificou as seguintes colunas automaticamente:
-                    <ul className="list-disc ml-4 mt-1 grid grid-cols-2 gap-1">
-                      {Object.entries(mappedColumns).map(([key, val]) => (
-                        <li key={key}><b>{key}</b>: Coluna {val + 1} ({headers[val]})</li>
-                      ))}
-                    </ul>
+                    Verifique se todas as colunas foram mapeadas corretamente. Caso contrário, ajuste manualmente abaixo.
                   </AlertDescription>
                 </Alert>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border">
+                  {getRequiredFields().map(field => (
+                     <div key={field}>
+                        <Label className="text-xs font-semibold uppercase text-slate-500 mb-1 block">
+                           {field.replace('_', ' ')} {['codigo','descricao','valor_referencia','codigo_servico','codigo_item','quantidade'].includes(field) && '*'}
+                        </Label>
+                        <Select 
+                           value={mappedColumns[field] !== undefined ? String(mappedColumns[field]) : ''}
+                           onValueChange={(v) => handleMapChange(field, v)}
+                        >
+                           <SelectTrigger className="h-8 text-xs bg-white">
+                              <SelectValue placeholder="Selecione a coluna..." />
+                           </SelectTrigger>
+                           <SelectContent>
+                              {headers.map((h, i) => (
+                                 <SelectItem key={i} value={String(i)}>{i + 1}: {h}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  ))}
+                </div>
 
                 <div className="border rounded-lg overflow-x-auto">
                   <Table>
