@@ -29,7 +29,8 @@ import {
   Gift,
   Package,
   Layers,
-  Calculator
+  Calculator,
+  UploadCloud
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +58,8 @@ const menuItems = [
       { title: 'Contas Bancárias', page: 'BankAccounts', icon: Landmark },
       { title: 'Centros de Custo', page: 'CostCenters', icon: PieChart },
       { title: 'Insumos', page: 'Inputs', icon: Package },
-      { title: 'Serviços (Composições)', page: 'Services', icon: Layers }
+      { title: 'Serviços (Composições)', page: 'Services', icon: Layers },
+      { title: 'Importação Tabelas', page: 'TableImport', icon: UploadCloud }
       ]
       },
       {

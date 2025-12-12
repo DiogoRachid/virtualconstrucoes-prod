@@ -40,6 +40,7 @@ import Inputs from './pages/Inputs';
 import Services from './pages/Services';
 import Budgets from './pages/Budgets';
 import BudgetForm from './pages/BudgetForm';
+import TableImport from './pages/TableImport';
 import __Layout from './Layout.jsx';
 
 
@@ -86,6 +87,7 @@ export const PAGES = {
     "Services": Services,
     "Budgets": Budgets,
     "BudgetForm": BudgetForm,
+    "TableImport": TableImport,
 }
 
 export const pagesConfig = {
