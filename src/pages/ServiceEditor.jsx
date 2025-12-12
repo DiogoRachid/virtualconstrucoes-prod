@@ -54,6 +54,7 @@ export default function ServiceEditor() {
     descricao: '',
     unidade: 'UN',
     fonte: 'PROPRIA',
+    data_base: '',
     custo_material: 0,
     custo_mao_obra: 0,
     custo_total: 0
@@ -298,7 +299,15 @@ export default function ServiceEditor() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="md:col-span-3 flex items-center pt-6 space-x-2">
+                <div>
+                  <Label>Data Base</Label>
+                  <Input 
+                    value={service.data_base || ''} 
+                    onChange={e => setService({...service, data_base: e.target.value})} 
+                    placeholder="MM/AAAA"
+                  />
+                </div>
+                <div className="md:col-span-2 flex items-center pt-6 space-x-2">
                   <Checkbox 
                     id="budgets" 
                     checked={applyToBudgets} 
