@@ -499,7 +499,7 @@ export default function ServiceEditor() {
                 <TableBody>
                   {compositions.map((comp, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="text-xs font-medium text-slate-500">{comp.tipo_item}</TableCell>
+                      <TableCell className="text-xs font-medium text-slate-500">{comp.tipo_item === 'INSUMO' ? 'Insumo' : 'Serviço Auxiliar'}</TableCell>
                       <TableCell className="text-sm">
                         <div className="font-medium">
                           {(() => {
