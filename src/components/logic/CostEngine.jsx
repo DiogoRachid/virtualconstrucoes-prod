@@ -5,15 +5,40 @@ export const fetchAll = async (entityName) => {
   let allData = [];
   let page = 0;
   const limit = 1000;
+  const CONCURRENCY = 5;
+
   while (true) {
-    // Use 'created_date' for stable sorting to avoid pagination gaps/dups
-    const data = await base44.entities[entityName].list('created_date', limit, page * limit);
-    if (!data || data.length === 0) break;
-    allData = [...allData, ...data];
-    if (data.length < limit) break;
-    page++;
+    const promises = [];
+    for (let i = 0; i < CONCURRENCY; i++) {
+      promises.push(
+        base44.entities[entityName].list('created_date', limit, (page + i) * limit)
+          .catch(e => []) // Fail safe
+      );
+    }
+    
+    const results = await Promise.all(promises);
+    let stop = false;
+    
+    for (const chunk of results) {
+      if (chunk && chunk.length > 0) {
+        allData.push(...chunk);
+        if (chunk.length < limit) stop = true;
+      } else {
+        stop = true;
+      }
+    }
+
+    if (stop) break;
+    page += CONCURRENCY;
   }
-  return allData;
+  
+  // Deduplicate by ID
+  const seen = new Set();
+  return allData.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 };
 
 // --- Helper: Build Maps ---
@@ -226,8 +251,7 @@ export const recalculateCosts = async (
 // --- Logic 3: Execute Batch Updates ---
 export const executeUpdates = async (updates, onProgress) => {
   const { serviceUpdates, compUpdates } = updates;
-  // Optimized batch size and delay for better speed while respecting limits
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 20; // Increased batch size
   let processed = 0;
   const total = serviceUpdates.length + compUpdates.length;
 
@@ -241,8 +265,8 @@ export const executeUpdates = async (updates, onProgress) => {
        }
        processed += batch.length;
        if (onProgress) onProgress(processed, total);
-       // Moderate delay: 100ms
-       await new Promise(r => setTimeout(r, 100)); 
+       // Balanced delay: 150ms
+       await new Promise(r => setTimeout(r, 150)); 
     }
   };
 

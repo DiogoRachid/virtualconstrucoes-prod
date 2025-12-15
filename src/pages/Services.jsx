@@ -209,6 +209,10 @@ export default function Services() {
 
     try {
       // Use CostEngine
+      setUpdateProgress('Carregando dados (pode demorar alguns segundos)...');
+      // Yield to let UI update
+      await new Promise(r => setTimeout(r, 100));
+      
       const result = await CostEngine.recalculateCosts(updateDataBase, updateMode);
 
       if (result.errors.length > 0) {
