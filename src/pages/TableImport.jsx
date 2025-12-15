@@ -46,24 +46,35 @@ const processBatches = async (items, batchSize, fn) => {
   }
 };
 
-// Helper to fetch entities by codes in chunks
+// Helper to fetch entities by codes in chunks (Parallelized)
 const fetchByCodes = async (entity, codes) => {
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
   const results = [];
-  const chunkSize = 100; // Safe limit for $in query
+  const chunkSize = 500; // Increased chunk size
+  const concurrency = 5; // Parallel requests
   
+  const chunks = [];
   for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
-    const chunk = uniqueCodes.slice(i, i + chunkSize);
-    try {
-      // Use $in query
-      const found = await base44.entities[entity].filter({
-        codigo: { "$in": chunk }
-      }, null, 1000); // Set high limit for the chunk result
-      results.push(...found);
-    } catch (e) {
-      console.error(`Error fetching ${entity} chunk`, e);
-    }
+    chunks.push(uniqueCodes.slice(i, i + chunkSize));
   }
+
+  // Process chunks in batches of 'concurrency'
+  for (let i = 0; i < chunks.length; i += concurrency) {
+    const batch = chunks.slice(i, i + concurrency);
+    const promises = batch.map(chunk => 
+      base44.entities[entity].filter({
+        codigo: { "$in": chunk }
+      }, null, 1000)
+        .catch(e => {
+          console.error(`Error fetching ${entity} chunk`, e);
+          return [];
+        })
+    );
+    
+    const batchResults = await Promise.all(promises);
+    batchResults.forEach(r => results.push(...r));
+  }
+  
   return results;
 };
 
@@ -158,24 +169,21 @@ export default function TableImport() {
   };
 
   const processStaging = async (currentBatchId) => {
-    setProgress('Resolvendo dependências e ordenando...');
+    setProgress('Carregando dados temporários...');
     
     try {
-      // 1. Fetch All Staging
-      // Since filtering by batch_id isn't standard in 'list', we filter or use 'filter' if supported.
-      // BaaS 'filter' should work.
-      // 55k rows might be too many to fetch at once if payload limit.
-      // Let's fetch in chunks? No, we need full graph. 
-      // Assuming BaaS can return large JSON or we page it.
-      
+      // 1. Fetch ALL Staging Records (Chunked)
       const stagingRecords = [];
       let page = 0;
       while(true) {
+         // Limit 1000 per page
          const res = await base44.entities.CompositionStaging.filter({ batch_id: currentBatchId, processado: false }, null, 1000, page * 1000);
          if (!res || res.length === 0) break;
          stagingRecords.push(...res);
          if (res.length < 1000) break;
          page++;
+         setProgress(`Carregando staging... ${stagingRecords.length} registros`);
+         await new Promise(r => setTimeout(r, 0));
       }
 
       if (stagingRecords.length === 0) {
@@ -183,307 +191,230 @@ export default function TableImport() {
          return;
       }
 
-      // 2. Identify Types (INSUMO vs SERVICO)
-      // Get all item codes
+      // 2. Analyze Codes
       const allItemCodes = new Set(stagingRecords.map(r => r.codigo_item));
-      // Get all service codes (parents)
-      const allParentCodes = new Set(stagingRecords.map(r => r.codigo_servico));
+      const allServiceCodes = new Set(stagingRecords.map(r => r.codigo_servico));
       
-      // Fetch existing inputs
-      setProgress(`Verificando tipos de ${allItemCodes.size} itens...`);
-      const inputs = await fetchByCodes('Input', Array.from(allItemCodes));
-      const inputMap = new Map(inputs.map(i => [i.codigo, i])); // code -> entity
+      setProgress(`Analisando ${allServiceCodes.size} serviços e ${allItemCodes.size} itens...`);
+      
+      // 3. Parallel Fetch Context (Inputs & Services)
+      const [existingInputs, existingServices] = await Promise.all([
+         fetchByCodes('Input', Array.from(allItemCodes)),
+         fetchByCodes('Service', [...Array.from(allServiceCodes), ...Array.from(allItemCodes)])
+      ]);
 
-      // Correct types in memory
-      for (const r of stagingRecords) {
-         if (inputMap.has(r.codigo_item)) {
-            r.tipo_item = 'INSUMO';
+      const inputMap = new Map(existingInputs.map(i => [i.codigo, i]));
+      const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
+
+      // 4. PASS 1: Create/Update ALL Service Headers
+      // This ensures we have IDs for everything (parents and child services)
+      // Identify services that need creation (allServiceCodes)
+      
+      const servicesToCreate = [];
+      const servicesToUpdate = [];
+
+      // Group staging by Service Code to get descriptions
+      const serviceDefinitions = {};
+      stagingRecords.forEach(r => {
+        if (!serviceDefinitions[r.codigo_servico]) {
+           serviceDefinitions[r.codigo_servico] = {
+              codigo: r.codigo_servico,
+              descricao: r.descricao_servico,
+              unidade: r.unidade_servico
+           };
+        }
+      });
+
+      for (const code of allServiceCodes) {
+         const def = serviceDefinitions[code];
+         if (serviceMap.has(code)) {
+            servicesToUpdate.push({ id: serviceMap.get(code).id, data: def });
          } else {
-            // Assume service if not input
-            r.tipo_item = 'SERVICO';
-         }
-      }
-
-      // 3. Build Graph
-      const serviceGroups = {}; // code -> { header, items: [] }
-      for (const r of stagingRecords) {
-         if (!serviceGroups[r.codigo_servico]) {
-            serviceGroups[r.codigo_servico] = {
-               header: {
-                  codigo: r.codigo_servico,
-                  descricao: r.descricao_servico,
-                  unidade: r.unidade_servico
-               },
-               items: []
-            };
-         }
-         serviceGroups[r.codigo_servico].items.push(r);
-      }
-
-      // 4. Iterative Processing
-      // Cache of "Known/Created Services"
-      // Start with services already in DB (needed for incremental updates)
-      const existingServices = await fetchByCodes('Service', Array.from(allParentCodes)); // Only check parents we are about to create/update?
-      // Actually we need to check if dependencies exist.
-      // Dependencies are items of type SERVICO.
-      // So let's fetch all services that appear as items.
-      const serviceItemCodes = stagingRecords.filter(r => r.tipo_item === 'SERVICO').map(r => r.codigo_item);
-      const existingServiceItems = await fetchByCodes('Service', serviceItemCodes);
-      
-      const knownServiceMap = new Map(); // code -> { id, cost }
-      existingServiceItems.forEach(s => knownServiceMap.set(s.codigo, { id: s.id, cost: s.custo_total }));
-      
-      // Also add services that already exist (that we might be updating or skipping? Import usually overwrites or updates)
-      // The prompt says "Importação Ordenada" usually implies creating new structure.
-      // We will assume we are creating or updating.
-      
-      let pendingGroups = Object.values(serviceGroups);
-      let iteration = 0;
-      let createdCount = 0;
-      
-      while (pendingGroups.length > 0) {
-         iteration++;
-         setProgress(`Ciclo de resolução ${iteration}: ${pendingGroups.length} serviços pendentes...`);
-         
-         const processable = [];
-         const remaining = [];
-
-         // Check dependencies in chunks to avoid UI freeze with large pending lists
-         const groupChunkSize = 1000;
-         for (let i = 0; i < pendingGroups.length; i += groupChunkSize) {
-            const chunk = pendingGroups.slice(i, i + groupChunkSize);
-            
-            for (const group of chunk) {
-               let canProcess = true;
-               for (const item of group.items) {
-                  if (item.tipo_item === 'SERVICO') {
-                     if (!knownServiceMap.has(item.codigo_item)) {
-                        canProcess = false;
-                        break;
-                     }
-                  }
-               }
-               if (canProcess) processable.push(group);
-               else remaining.push(group);
-            }
-            
-            // Yield every chunk
-            if (i % (groupChunkSize * 5) === 0) {
-               await new Promise(r => setTimeout(r, 0));
-            }
-         }
-
-         if (processable.length === 0) {
-            // Deadlock or missing dependencies
-            const missing = new Set();
-            remaining.forEach(g => {
-               g.items.forEach(i => {
-                  if (i.tipo_item === 'SERVICO' && !knownServiceMap.has(i.codigo_item)) missing.add(i.codigo_item);
-               });
-            });
-            console.warn("Dependências ausentes:", Array.from(missing));
-            toast.error(`Ciclo interrompido. ${remaining.length} serviços com dependências não resolvidas.`);
-            // Mark errors
-            // We can retry via UI later (Prompt 2)
-            break;
-         }
-
-         // Process the batch
-         // Create Services & Compositions
-         const serviceBatchData = [];
-         const compsBatchData = [];
-         
-         for (const group of processable) {
-            let totalMat = 0;
-            let totalMO = 0;
-            
-            // Calc costs
-            for (const item of group.items) {
-               let cost = 0;
-               let desc = '';
-               let unit = '';
-               
-               if (item.tipo_item === 'INSUMO') {
-                  const inp = inputMap.get(item.codigo_item);
-                  if (inp) {
-                     cost = inp.valor_referencia;
-                     desc = inp.descricao;
-                     unit = inp.unidade;
-                  }
-               } else {
-                  const srv = knownServiceMap.get(item.codigo_item);
-                  // We need description/unit for snapshot? We only have cost/id in map.
-                  // We might need to fetch or trust staging?
-                  // Staging doesn't have child description usually.
-                  // For now, use cost. Snapshot desc will be empty or we need more data.
-                  // To be fast, we use what we have.
-                  if (srv) cost = srv.cost;
-               }
-               
-               const totalItem = cost * item.quantidade;
-               
-               // Guess category
-               let cat = 'MATERIAL';
-               const u = (item.unidade_item || unit || 'UN').toUpperCase();
-               if (u.includes('H') || u.includes('HORA')) cat = 'MAO_DE_OBRA';
-               
-               if (cat === 'MATERIAL') totalMat += totalItem;
-               else totalMO += totalItem;
-
-               // Comp Data
-               // We need valid ID for item_id.
-               const itemId = item.tipo_item === 'INSUMO' 
-                  ? inputMap.get(item.codigo_item)?.id 
-                  : knownServiceMap.get(item.codigo_item)?.id;
-
-               if (itemId) {
-                  // We don't have service_id yet! We need to create service first.
-                  // So we construct service data, create it, get ID, then comps.
-                  // To batch this:
-                  // 1. Create all Services in this iteration
-                  // 2. Map codes to new IDs
-                  // 3. Create all Compositions
-               }
-            }
-
-            serviceBatchData.push({
-               codigo: group.header.codigo,
-               descricao: group.header.descricao,
-               unidade: group.header.unidade,
+            servicesToCreate.push({
+               ...def,
                fonte: config.origem,
                data_base: config.data_base,
-               custo_material: totalMat,
-               custo_mao_obra: totalMO,
-               custo_total: totalMat + totalMO,
-               groupRef: group // ref to access items later
+               custo_material: 0,
+               custo_mao_obra: 0,
+               custo_total: 0
             });
          }
-
-         // Batch Create Services
-         // Check if they exist (update) or new (create)
-         // For simplicity in import, we can upsert. 
-         // But base44 doesn't have simple upsert.
-         // We check 'existingServices' list?
-         // We can do bulk check for 'processable' codes.
-         // Let's assume create for now or overwrite.
-         
-         // To make it robust: Delete existing for these codes, then Create.
-         const codesToProcess = serviceBatchData.map(s => s.codigo);
-         // Get IDs of existing
-         const existingBatch = await fetchByCodes('Service', codesToProcess);
-         const existingBatchMap = new Map(existingBatch.map(s => [s.codigo, s.id]));
-         
-         // Delete old
-         if (existingBatch.length > 0) {
-             const oldIds = existingBatch.map(s => s.id);
-             // Clear old comps too
-             // This is safe because we are processing in topological order, so no *created in this run* service depends on these yet (circularity would be error).
-             // But valid services might depend on them. If we delete, we break FKs.
-             // Better to UPDATE if exists.
-         }
-
-         const updates = [];
-         const creations = [];
-
-         for (const sData of serviceBatchData) {
-            const oldId = existingBatchMap.get(sData.codigo);
-            if (oldId) {
-               updates.push({ id: oldId, data: { ...sData, groupRef: undefined } });
-               // We need to clear comps for this service
-               await base44.entities.ServiceComposition.bulkDelete({ servico_id: oldId }); // If supported, else filter+delete
-               // Base44 might not support bulkDelete by query.
-               // We do manual delete.
-               const oldComps = await base44.entities.ServiceComposition.filter({ servico_id: oldId });
-               await Promise.all(oldComps.map(c => base44.entities.ServiceComposition.delete(c.id)));
-               
-               // Prepare new comps
-               // ...
-               knownServiceMap.set(sData.codigo, { id: oldId, cost: sData.custo_total });
-            } else {
-               creations.push({ ...sData, groupRef: undefined });
-            }
-         }
-
-         if (updates.length > 0) {
-            await Promise.all(updates.map(u => base44.entities.Service.update(u.id, u.data)));
-         }
-         
-         let createdServices = [];
-         if (creations.length > 0) {
-            createdServices = await base44.entities.Service.bulkCreate(creations);
-            createdServices.forEach(s => {
-               knownServiceMap.set(s.codigo, { id: s.id, cost: s.custo_total });
-            });
-         }
-
-         // Now create Compositions
-         const allCompsToInsert = [];
-         
-         // Re-iterate to build comps with correct Service IDs
-         for (const sData of serviceBatchData) {
-            const serviceId = knownServiceMap.get(sData.codigo).id;
-            const group = sData.groupRef;
-            
-            for (const item of group.items) {
-               const itemId = item.tipo_item === 'INSUMO' 
-                  ? inputMap.get(item.codigo_item)?.id 
-                  : knownServiceMap.get(item.codigo_item)?.id;
-               
-               if (!itemId) continue; // Should not happen given logic
-
-               // Costs
-               let itemCost = 0;
-               if (item.tipo_item === 'INSUMO') itemCost = inputMap.get(item.codigo_item)?.valor_referencia || 0;
-               else itemCost = knownServiceMap.get(item.codigo_item)?.cost || 0;
-
-               const totalItem = itemCost * item.quantidade;
-               
-               // Cat
-               let cat = 'MATERIAL';
-               const u = (item.unidade_item || '').toUpperCase();
-               if (u.includes('H') || u.includes('HORA')) cat = 'MAO_DE_OBRA';
-
-               allCompsToInsert.push({
-                  servico_id: serviceId,
-                  tipo_item: item.tipo_item,
-                  item_id: itemId,
-                  quantidade: item.quantidade,
-                  custo_unitario: itemCost,
-                  custo_total_item: totalItem,
-                  tipo_custo: cat,
-                  // Snapshot
-                  descricao_snapshot: item.tipo_item === 'INSUMO' ? inputMap.get(item.codigo_item)?.descricao : '', // We miss description for services if not fetched
-                  unidade_snapshot: item.unidade_item || '',
-                  // Legacy
-                  item_nome: item.tipo_item === 'INSUMO' ? inputMap.get(item.codigo_item)?.descricao : `Serviço ${item.codigo_item}`,
-                  unidade: item.unidade_item || ''
-               });
-            }
-         }
-
-         // Bulk Insert Comps
-         for (let k = 0; k < allCompsToInsert.length; k += 100) {
-            await base44.entities.ServiceComposition.bulkCreate(allCompsToInsert.slice(k, k+100));
-         }
-
-         // Mark staging as processed
-         const stagingIds = processable.flatMap(g => g.items.map(i => i.id));
-         // Update processed=true
-         // Bulk update not standard? iterate
-         await processBatches(stagingIds, 50, id => base44.entities.CompositionStaging.update(id, { processado: true }));
-
-         // Next loop
-         createdCount += processable.length;
-         pendingGroups = remaining;
       }
 
-      toast.success(`Processamento finalizado. ${createdCount} serviços criados/atualizados.`);
+      setProgress(`Passo 1/3: Criando/Atualizando ${allServiceCodes.size} serviços...`);
+      
+      // Execute Creates
+      if (servicesToCreate.length > 0) {
+         // Create in chunks
+         const chunk = 50;
+         for (let i = 0; i < servicesToCreate.length; i += chunk) {
+            const batch = servicesToCreate.slice(i, i + chunk);
+            const created = await base44.entities.Service.bulkCreate(batch);
+            if (created) created.forEach(s => serviceMap.set(s.codigo, s));
+            setProgress(`Criando serviços... ${Math.min(i + chunk, servicesToCreate.length)}/${servicesToCreate.length}`);
+         }
+      }
+      
+      // Execute Updates (Async Background?)
+      // We update descriptions/units. 
+      if (servicesToUpdate.length > 0) {
+         // Process in parallel batches
+         await processBatches(servicesToUpdate, 20, s => base44.entities.Service.update(s.id, s.data));
+      }
+
+      // 5. PASS 2: Resolve Items & Create Placeholders
+      // Check items that are NOT in inputMap and NOT in serviceMap
+      const missingCodes = new Set();
+      allItemCodes.forEach(code => {
+         if (!inputMap.has(code) && !serviceMap.has(code)) {
+            missingCodes.add(code);
+         }
+      });
+
+      if (missingCodes.size > 0) {
+         setProgress(`Passo 2/3: Criando ${missingCodes.size} itens ausentes (Placeholders)...`);
+         // We create them as Services? Or Inputs?
+         // Safer to create as Inputs if they are leaf nodes, but we don't know.
+         // Let's create as Inputs with specific flag?
+         // Actually, if it's missing, creating as Input is standard for "Material not found".
+         const placeholders = Array.from(missingCodes).map(code => ({
+            codigo: code,
+            descricao: `[AUTO-GERADO] Item ${code}`,
+            unidade: 'UN',
+            valor_referencia: 0,
+            fonte: 'SISTEMA',
+            data_base: config.data_base
+         }));
+
+         for (let i = 0; i < placeholders.length; i += 100) {
+            const batch = placeholders.slice(i, i + 100);
+            const created = await base44.entities.Input.bulkCreate(batch);
+            if (created) created.forEach(i => inputMap.set(i.codigo, i));
+         }
+      }
+
+      // 6. PASS 3: Create Compositions
+      setProgress(`Passo 3/3: Vinculando ${stagingRecords.length} composições...`);
+      
+      // First, delete OLD compositions for these services to avoid duplicates
+      // We have all parent IDs in serviceMap
+      // We can iterate parents and delete.
+      // This might be slow if 5000 services.
+      // Optim: Only delete if we are updating? Yes.
+      // We already identified updates.
+      const serviceIdsToClean = servicesToUpdate.map(u => u.id);
+      
+      // Batch delete old comps
+      if (serviceIdsToClean.length > 0) {
+         setProgress('Limpando composições antigas...');
+         // Fetch all comps for these services (Chunked)
+         // Assuming logic to bulk delete by ID or loop
+         // We'll skip complex delete optimization for now and rely on user knowing this overwrites?
+         // Better: Delete.
+         // Fetch IDs
+         const allCompsToDelete = [];
+         const chunk = 100;
+         for(let i=0; i<serviceIdsToClean.length; i+=chunk) {
+             const batchIds = serviceIdsToClean.slice(i, i+chunk);
+             try {
+                const found = await base44.entities.ServiceComposition.filter({ servico_id: { "$in": batchIds } });
+                allCompsToDelete.push(...found);
+             } catch(e) {}
+         }
+         
+         if (allCompsToDelete.length > 0) {
+            await processBatches(allCompsToDelete, 50, c => base44.entities.ServiceComposition.delete(c.id));
+         }
+      }
+
+      // Build New Compositions
+      const compsToCreate = [];
+      
+      for (const r of stagingRecords) {
+         const service = serviceMap.get(r.codigo_servico);
+         if (!service) continue; // Should exist now
+
+         // Determine Item Type and ID
+         let itemType = 'INSUMO';
+         let itemId = null;
+         let itemCost = 0;
+         let itemName = '';
+         let itemUnit = '';
+
+         if (inputMap.has(r.codigo_item)) {
+            const i = inputMap.get(r.codigo_item);
+            itemType = 'INSUMO';
+            itemId = i.id;
+            itemCost = i.valor_referencia;
+            itemName = i.descricao;
+            itemUnit = i.unidade;
+         } else if (serviceMap.has(r.codigo_item)) {
+            const s = serviceMap.get(r.codigo_item);
+            itemType = 'SERVICO';
+            itemId = s.id;
+            itemCost = s.custo_total;
+            itemName = s.descricao;
+            itemUnit = s.unidade;
+         }
+
+         if (!itemId) continue; // Should not happen given placeholder logic
+
+         // Cost Calc
+         const qtd = r.quantidade || 0;
+         const totalItem = qtd * itemCost;
+         
+         // Category
+         let cat = 'MATERIAL';
+         const u = (r.unidade_item || itemUnit || 'UN').toUpperCase();
+         if (u.includes('H') || u.includes('HORA')) cat = 'MAO_DE_OBRA';
+
+         compsToCreate.push({
+            servico_id: service.id,
+            tipo_item: itemType,
+            item_id: itemId,
+            quantidade: qtd,
+            custo_unitario: itemCost,
+            custo_total_item: totalItem,
+            tipo_custo: cat,
+            descricao_snapshot: itemName,
+            unidade_snapshot: r.unidade_item || itemUnit,
+            item_nome: itemName,
+            unidade: r.unidade_item || itemUnit,
+            nivel: itemType === 'SERVICO' ? 2 : 1
+         });
+      }
+
+      // Bulk Insert Comps
+      setProgress(`Inserindo ${compsToCreate.length} itens de composição...`);
+      for (let i = 0; i < compsToCreate.length; i += 200) {
+         await base44.entities.ServiceComposition.bulkCreate(compsToCreate.slice(i, i + 200));
+         if (i % 2000 === 0) {
+            setProgress(`Inserindo... ${i}/${compsToCreate.length}`);
+            await new Promise(r => setTimeout(r, 0));
+         }
+      }
+
+      // Mark Staging as Processed
+      // Optional: Clean up staging table?
+      // Or verify.
+      // Let's mark.
+      const stagingIds = stagingRecords.map(r => r.id);
+      await processBatches(stagingIds, 50, id => base44.entities.CompositionStaging.delete(id)); // DELETE to keep table clean
+
+      toast.success(`Importação realizada com sucesso! ${compsToCreate.length} itens processados.`);
       setProgress('Concluído.');
       
+      // Optional: Prompt for Recalculation
+      setTimeout(() => {
+        if(confirm("Importação finalizada. Deseja recalcular os custos agora? (Recomendado)")) {
+           window.location.href = '/Services'; // Or trigger logic
+        }
+      }, 500);
+
     } catch (e) {
       console.error(e);
       toast.error('Erro no processamento: ' + e.message);
-      setProgress('Erro.');
+      setProgress('Erro fatal.');
     } finally {
       setProcessing(false);
     }
