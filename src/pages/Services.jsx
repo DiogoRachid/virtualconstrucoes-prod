@@ -74,6 +74,12 @@ export default function Services() {
   const [deleteId, setDeleteId] = useState(null);
   const [editingService, setEditingService] = useState(null);
   
+  // Update Costs State
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [updateDataBase, setUpdateDataBase] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState('');
+
   // Estado para o formulário de serviço
   const [serviceForm, setServiceForm] = useState({
     codigo: '',
