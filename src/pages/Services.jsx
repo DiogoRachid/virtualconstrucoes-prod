@@ -828,6 +828,48 @@ export default function Services() {
         title="Excluir Serviço"
         description="Tem certeza que deseja excluir este serviço?"
       />
+
+      {/* Update Costs Dialog */}
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atualizar Custos e Composições</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+             <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg text-amber-800 text-sm">
+                <p className="font-bold flex items-center gap-2">
+                   Atenção
+                </p>
+                <p className="mt-1">
+                   Esta ação irá recalcular o custo total de TODOS os serviços baseando-se nos valores atuais dos insumos cadastrados.
+                   A data base dos serviços será atualizada para a data informada abaixo.
+                </p>
+             </div>
+
+             <div>
+               <Label>Nova Data Base (MM/AAAA)</Label>
+               <Input 
+                 value={updateDataBase} 
+                 onChange={e => setUpdateDataBase(e.target.value)} 
+                 placeholder="Ex: 09/2025" 
+               />
+             </div>
+
+             {isUpdating && (
+               <div className="bg-slate-50 p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                  <Loader2 className="h-8 w-8 text-blue-600 animate-spin mb-2" />
+                  <p className="text-sm font-medium text-blue-800">{updateProgress}</p>
+               </div>
+             )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)} disabled={isUpdating}>Cancelar</Button>
+            <Button onClick={executeUpdateCosts} disabled={isUpdating || !updateDataBase} className="bg-blue-600">
+               {isUpdating ? 'Atualizando...' : 'Confirmar Atualização'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
