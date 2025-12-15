@@ -527,13 +527,27 @@ export default function Services() {
 
   return (
     <div>
-      <PageHeader
-        title="Serviços e Composições"
-        subtitle="Banco de serviços para orçamentos"
-        icon={Layers}
-        actionLabel="Novo Serviço"
-        onAction={() => window.location.href = createPageUrl('ServiceEditor')}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
+             <Layers className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Serviços e Composições</h1>
+            <p className="text-slate-500">Banco de serviços para orçamentos</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+           <Button variant="outline" onClick={() => setShowUpdateDialog(true)}>
+             <RefreshCw className="h-4 w-4 mr-2" />
+             Atualizar Custos
+           </Button>
+           <Button onClick={() => window.location.href = createPageUrl('ServiceEditor')} className="bg-blue-600 hover:bg-blue-700">
+             <Plus className="h-4 w-4 mr-2" />
+             Novo Serviço
+           </Button>
+        </div>
+      </div>
 
       <SearchFilter
         searchValue={search}
