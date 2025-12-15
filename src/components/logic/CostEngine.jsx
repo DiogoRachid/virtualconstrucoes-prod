@@ -6,7 +6,8 @@ export const fetchAll = async (entityName) => {
   let page = 0;
   const limit = 1000;
   while (true) {
-    const data = await base44.entities[entityName].list(null, limit, page * limit);
+    // Use 'created_date' for stable sorting to avoid pagination gaps/dups
+    const data = await base44.entities[entityName].list('created_date', limit, page * limit);
     if (!data || data.length === 0) break;
     allData = [...allData, ...data];
     if (data.length < limit) break;
@@ -225,19 +226,23 @@ export const recalculateCosts = async (
 // --- Logic 3: Execute Batch Updates ---
 export const executeUpdates = async (updates, onProgress) => {
   const { serviceUpdates, compUpdates } = updates;
-  // Reduced batch size to prevent Rate Limits
-  const BATCH_SIZE = 5;
+  // Optimized batch size and delay for better speed while respecting limits
+  const BATCH_SIZE = 10;
   let processed = 0;
   const total = serviceUpdates.length + compUpdates.length;
 
   const processBatch = async (items, entityName) => {
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
        const batch = items.slice(i, i + BATCH_SIZE);
-       await Promise.all(batch.map(item => base44.entities[entityName].update(item.id, item.data)));
+       try {
+         await Promise.all(batch.map(item => base44.entities[entityName].update(item.id, item.data)));
+       } catch (err) {
+         console.error(`Error updating batch in ${entityName}`, err);
+       }
        processed += batch.length;
        if (onProgress) onProgress(processed, total);
-       // Increased delay to prevent Rate Limits
-       await new Promise(r => setTimeout(r, 200)); 
+       // Moderate delay: 100ms
+       await new Promise(r => setTimeout(r, 100)); 
     }
   };
 

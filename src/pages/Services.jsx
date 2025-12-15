@@ -79,7 +79,7 @@ export default function Services() {
   
   // Update Costs State
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-  const [updateDataBase, setUpdateDataBase] = useState('');
+  const [updateDataBase, setUpdateDataBase] = useState('09/2025');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState('');
   const [updateMode, setUpdateMode] = useState('VALUES_AND_DESC'); // VALUES_ONLY, VALUES_AND_DESC
