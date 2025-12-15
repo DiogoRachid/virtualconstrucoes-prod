@@ -407,22 +407,17 @@ export default function TableImport() {
                       itemCost = input.valor_referencia;
                       itemName = input.descricao;
                    } else {
-                      let sub = subServicesMap.get(item.codItem);
+                      // Try to find in sub-services (DB) OR in the current services map (which includes newly created services in this batch)
+                      let sub = subServicesMap.get(item.codItem) || servicesMap.get(item.codItem);
+                      
                       if (sub) {
                          itemId = sub.id;
                          itemType = 'SERVICO';
                          itemCost = sub.custo_total;
                          itemName = sub.descricao;
                       } else {
-                         // Missing item -> Create Placeholder Input?
-                         // To avoid async creation inside this loop, we should have detected missing items before.
-                         // But simple fallback:
-                         // We skip or log?
-                         // Let's create a placeholder object to CREATE later? 
-                         // No, we need ID.
-                         // For 55k lines, this edge case is painful.
-                         // Let's Log and Skip to keep it fast.
-                         logEntries.push(`Item ${item.codItem} não encontrado para o serviço ${code}`);
+                         // Missing item -> Log and Skip
+                         logEntries.push(`Item ${item.codItem} não encontrado (nem insumo nem serviço) para o serviço ${code}`);
                          continue;
                       }
                    }
