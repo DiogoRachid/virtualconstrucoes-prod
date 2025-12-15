@@ -222,11 +222,12 @@ export default function Services() {
 
     for (const comp of comps) {
       let unitCost = 0;
+      const type = comp.tipo_item?.toUpperCase();
       
-      if (comp.tipo_item === 'INSUMO') {
+      if (type === 'INSUMO') {
         const input = inputMap.get(comp.item_id);
         unitCost = input ? (input.valor_referencia || 0) : 0;
-      } else if (comp.tipo_item === 'SERVICO') {
+      } else {
         // Recursively calculate sub-service cost
         const subServiceCost = calculateCostRecursive(comp.item_id, inputMap, serviceMap, compMap, visited, computedCosts);
         unitCost = subServiceCost.total;
@@ -320,7 +321,9 @@ export default function Services() {
         const comps = compMap.get(service.id) || [];
         for (const comp of comps) {
           let newUnitCost = 0;
-          if (comp.tipo_item === 'INSUMO') {
+          const type = comp.tipo_item?.toUpperCase();
+
+          if (type === 'INSUMO') {
             const input = inputMap.get(comp.item_id);
             newUnitCost = input ? (input.valor_referencia || 0) : 0;
           } else {
@@ -841,7 +844,7 @@ export default function Services() {
                    Atenção
                 </p>
                 <p className="mt-1">
-                   Esta ação irá recalcular o custo total de TODOS os serviços baseando-se nos valores atuais dos insumos cadastrados.
+                   Esta ação irá recalcular recursivamente o custo total de TODOS os serviços e suas composições (insumos e sub-serviços).
                    A data base dos serviços será atualizada para a data informada abaixo.
                 </p>
              </div>
