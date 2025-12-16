@@ -194,7 +194,9 @@ export default function TableImport() {
       ]);
 
       const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
+      const serviceIdMap = new Map(existingServices.map(s => [s.id, s]));
       const inputMap = new Map(existingInputs.map(i => [i.codigo, { id: i.id, un: i.unidade, val: i.valor_unitario }]));
+      const inputIdMap = new Map(existingInputs.map(i => [i.id, { un: i.unidade, val: i.valor_unitario }]));
 
       // Helper for UI yielding
       const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -360,7 +362,7 @@ export default function TableImport() {
       // Reduced batch size for links
       for (let i = 0; i < totalLinks; i += 200) {
           const chunk = linksToCreate.slice(i, i + 200);
-          const percent = 50 + Math.floor((i/totalLinks) * 40); // 50% -> 90%
+          const percent = 50 + Math.floor((i/totalLinks) * 30); // 50% -> 80%
           setProgress({ 
              message: `Salvando vínculos ${i + chunk.length}/${totalLinks}...`, 
              percent 
@@ -375,7 +377,105 @@ export default function TableImport() {
           }
       }
 
-      // --- PHASE 3: CLEANUP ---
+      // --- PHASE 3: CALCULATE COSTS (Iterative) ---
+      setProgress({ message: 'Calculando custos (Iteração 1/5)...', percent: 80 });
+      
+      // Group links by parent for fast lookup
+      const linksByParent = new Map();
+      for (const link of linksToCreate) {
+         if (!linksByParent.has(link.servico_id)) linksByParent.set(link.servico_id, []);
+         linksByParent.get(link.servico_id).push(link);
+      }
+      
+      const parentIds = Array.from(linksByParent.keys());
+      const localCosts = new Map(); // id -> { mat, mo, total }
+      
+      // Initialize local costs for new services (or use existing if available)
+      for (const pid of parentIds) {
+         const existing = serviceIdMap.get(pid);
+         localCosts.set(pid, { 
+            mat: existing?.custo_material || 0, 
+            mo: existing?.custo_mao_obra || 0, 
+            total: existing?.custo_total || 0 
+         });
+      }
+
+      // Run 5 passes to propagate costs bottom-up (handling depth ~5)
+      for (let pass = 1; pass <= 5; pass++) {
+         setProgress({ message: `Calculando custos (Iteração ${pass}/5)...`, percent: 80 + (pass * 2) });
+         await yieldToMain();
+
+         let changed = false;
+         for (const pid of parentIds) {
+            let mat = 0;
+            let mo = 0;
+            const links = linksByParent.get(pid);
+
+            for (const link of links) {
+               const qty = link.quantidade || 0;
+               if (link.tipo_item === 'INSUMO') {
+                  const inp = inputIdMap.get(link.item_id);
+                  const cost = (inp?.val || 0) * qty;
+                  if (link.categoria === 'MAO_OBRA') mo += cost;
+                  else mat += cost;
+               } else {
+                  // Service
+                  const childCost = localCosts.get(link.item_id) || { 
+                     mat: serviceIdMap.get(link.item_id)?.custo_material || 0,
+                     mo: serviceIdMap.get(link.item_id)?.custo_mao_obra || 0,
+                     total: serviceIdMap.get(link.item_id)?.custo_total || 0
+                  };
+                  
+                  // If child has 0 total, we can't split, so assign based on fallback or just 0
+                  if (childCost.total > 0) {
+                     const totalLinkCost = childCost.total * qty;
+                     const matRatio = childCost.mat / childCost.total;
+                     const moRatio = childCost.mo / childCost.total;
+                     mat += totalLinkCost * matRatio;
+                     mo += totalLinkCost * moRatio;
+                  } else {
+                     // Fallback: if child cost is 0, we can't do anything in this pass
+                  }
+               }
+            }
+            
+            const total = mat + mo;
+            const prev = localCosts.get(pid);
+            if (Math.abs(prev.total - total) > 0.001) {
+               localCosts.set(pid, { mat, mo, total });
+               changed = true;
+            }
+         }
+         
+         if (!changed) break; // Optimized exit
+      }
+
+      // Save calculated costs
+      const updates = [];
+      for (const [pid, costs] of localCosts.entries()) {
+         if (costs.total > 0) { // Only update if we calculated something
+            updates.push({
+               id: pid,
+               data: {
+                  custo_material: costs.mat,
+                  custo_mao_obra: costs.mo,
+                  custo_total: costs.total
+               }
+            });
+         }
+      }
+
+      if (updates.length > 0) {
+         const totalUpd = updates.length;
+         for (let i = 0; i < totalUpd; i += 100) {
+             const chunk = updates.slice(i, i + 100);
+             setProgress({ message: `Salvando custos calculados ${i}/${totalUpd}...`, percent: 90 });
+             await yieldToMain();
+             await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
+         }
+      }
+
+      // --- PHASE 4: CLEANUP ---
       setProgress({ message: 'Limpando dados temporários...', percent: 95 });
       const stagingIds = staging.map(s => s.id);
       for(let i=0; i<stagingIds.length; i+=1000) {
