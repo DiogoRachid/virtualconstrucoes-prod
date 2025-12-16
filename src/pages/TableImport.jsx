@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { UploadCloud, Save, Loader2, Clipboard, AlertCircle, CheckCircle } from 'lucide-react';
+import { UploadCloud, Loader2, Clipboard, AlertCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,6 @@ export default function TableImport() {
   const [pasteData, setPasteData] = useState('');
   const fileInputRef = useRef(null);
 
-  // Helper: Detect Labor vs Material
   const detectCategory = (unit) => {
     if (!unit) return 'MATERIAL';
     const u = unit.toUpperCase().trim();
@@ -35,19 +34,18 @@ export default function TableImport() {
     
     try {
       const lines = textData.split('\n');
-      const separator = lines[0].includes(';') ? ';' : '\t'; // Auto-detect tab or semicolon (common in copy-paste)
+      const separator = lines[0].includes(';') ? ';' : '\t';
       
       setProgress(`Iniciando processamento de ${lines.length} linhas...`);
 
       if (mode === 'INSUMO') {
-        // Format: CODIGO | DESCRICAO | UNIDADE | VALOR | (Opcional: DATA_BASE)
+        const BATCH_SIZE = 1000;
         let processed = 0;
-        const updates = [];
-        const creates = [];
-
-        // Pre-fetch check map
         const allInputs = await Engine.fetchAll('Input');
         const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
+
+        const updates = [];
+        const creates = [];
 
         for (const line of lines) {
           if (!line.trim()) continue;
@@ -80,28 +78,27 @@ export default function TableImport() {
           processed++;
         }
 
-        // Execute Batch
         if (creates.length > 0) {
            setProgress(`Criando ${creates.length} novos insumos...`);
-           // Batch create 100
            for (let i = 0; i < creates.length; i += 100) {
              await base44.entities.Input.bulkCreate(creates.slice(i, i + 100));
+             setProgress(`Criando insumos: ${Math.min(i + 100, creates.length)}/${creates.length}`);
            }
         }
         if (updates.length > 0) {
            setProgress(`Atualizando ${updates.length} insumos existentes...`);
-           // Can't bulk update easily, do optimized parallel
            const chunks = [];
-           for (let i=0; i<updates.length; i+=20) chunks.push(updates.slice(i, i+20));
+           for (let i=0; i<updates.length; i+=50) chunks.push(updates.slice(i, i+50));
+           let updatedCount = 0;
            for (const chunk of chunks) {
               await Promise.all(chunk.map(u => base44.entities.Input.update(u.id, u.data)));
+              updatedCount += chunk.length;
+              setProgress(`Atualizando insumos: ${updatedCount}/${updates.length}`);
            }
         }
         toast.success(`${processed} insumos processados!`);
       } 
       else if (mode === 'COMPOSICAO') {
-        // Format: COD_PAI | DESC_PAI | UN_PAI | COD_FILHO | QTD
-        // Stubs logic implemented
         const batchId = Date.now().toString();
         const staging = [];
         
@@ -109,10 +106,10 @@ export default function TableImport() {
         for (const line of lines) {
           if (!line.trim()) continue;
           const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
-          if (cols.length < 4) continue; // Need at least Parent + Child
+          if (cols.length < 4) continue;
 
           const codPai = cols[0];
-          const descPai = cols[1]; // Optional, uses Stub if empty
+          const descPai = cols[1];
           const unPai = cols[2] || 'UN';
           const codFilho = cols[3];
           const qtdStr = cols[4];
@@ -130,160 +127,153 @@ export default function TableImport() {
           });
         }
 
-        // 1. Insert Staging
         setProgress(`Carregando ${staging.length} itens para memória temporária...`);
-        for (let i=0; i<staging.length; i+=200) {
-           await base44.entities.CompositionStaging.bulkCreate(staging.slice(i, i+200));
+        for (let i=0; i<staging.length; i+=500) {
+           await base44.entities.CompositionStaging.bulkCreate(staging.slice(i, i+500));
+           setProgress(`Upload: ${Math.min(i+500, staging.length)}/${staging.length}`);
         }
 
-        // 2. Resolve Parents (Create Stubs if needed)
-        setProgress('Verificando Serviços (Pais)...');
+        // BATCH PROCESS PARENTS (5000 parents at a time)
         const distinctParents = [...new Set(staging.map(s => s.codigo_pai))];
+        const PARENT_BATCH_SIZE = 5000;
         
-        // CRITICAL: Fetch ALL services (using Engine.fetchAll) to ensure we match everything
-        setProgress('Carregando todos os serviços existentes...');
+        // Load Maps once (Optimized)
+        setProgress('Carregando dados existentes...');
         const allServices = await Engine.fetchAll('Service');
         const serviceMap = new Map(allServices.map(s => [s.codigo, s]));
+        const allInputs = await Engine.fetchAll('Input');
+        const inputMap = new Map(allInputs.map(i => [i.codigo, { id: i.id, un: i.unidade }]));
 
-        const newServices = [];
-        const updatesServices = [];
+        for (let batchIdx = 0; batchIdx < distinctParents.length; batchIdx += PARENT_BATCH_SIZE) {
+           const currentParents = distinctParents.slice(batchIdx, batchIdx + PARENT_BATCH_SIZE);
+           setProgress(`Processando lote de serviços ${batchIdx + 1} a ${Math.min(batchIdx + PARENT_BATCH_SIZE, distinctParents.length)} de ${distinctParents.length}...`);
 
-        for (const pCode of distinctParents) {
-           const sample = staging.find(s => s.codigo_pai === pCode);
-           const existing = serviceMap.get(pCode);
+           // 1. Create/Update Services (Parents)
+           const newServices = [];
+           const updatesServices = [];
+
+           for (const pCode of currentParents) {
+              const sample = staging.find(s => s.codigo_pai === pCode);
+              const existing = serviceMap.get(pCode);
+              
+              if (!existing) {
+                newServices.push({
+                  codigo: pCode,
+                  descricao: sample.descricao_pai || `[TEMP] Serviço ${pCode}`,
+                  unidade: sample.unidade_pai,
+                  ativo: true
+                });
+              } else {
+                if (existing.descricao.startsWith('[TEMP]') && sample.descricao_pai && !sample.descricao_pai.startsWith('[TEMP]')) {
+                  updatesServices.push({ id: existing.id, data: { descricao: sample.descricao_pai, unidade: sample.unidade_pai } });
+                }
+              }
+           }
+
+           if (newServices.length > 0) {
+             for (let i=0; i<newServices.length; i+=100) {
+                const created = await base44.entities.Service.bulkCreate(newServices.slice(i, i+100));
+                // Update local map
+                created?.forEach(c => serviceMap.set(c.codigo, c));
+             }
+           }
+           if (updatesServices.length > 0) {
+             const chunks = [];
+             for (let i=0; i<updatesServices.length; i+=50) chunks.push(updatesServices.slice(i, i+50));
+             for (const chunk of chunks) {
+                await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
+             }
+           }
+
+           // 2. Resolve Children Stubs
+           const relevantStaging = staging.filter(s => currentParents.includes(s.codigo_pai));
+           const missingChildrenCodes = new Set();
            
-           if (!existing) {
-             newServices.push({
-               codigo: pCode,
-               descricao: sample.descricao_pai || `[TEMP] Serviço ${pCode}`,
-               unidade: sample.unidade_pai,
-               ativo: true
-             });
-           } else {
-             // Update logic: If existing is TEMP and we have better desc
-             if (existing.descricao.startsWith('[TEMP]') && sample.descricao_pai && !sample.descricao_pai.startsWith('[TEMP]')) {
-               updatesServices.push({ id: existing.id, data: { descricao: sample.descricao_pai, unidade: sample.unidade_pai } });
+           for (const item of relevantStaging) {
+              if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
+                 missingChildrenCodes.add(item.codigo_item);
+              }
+           }
+
+           if (missingChildrenCodes.size > 0) {
+              const childrenStubs = Array.from(missingChildrenCodes).map(c => ({
+                 codigo: c,
+                 descricao: `[TEMP] Sub-Serviço ${c}`,
+                 unidade: 'UN',
+                 ativo: true
+              }));
+              for (let i=0; i<childrenStubs.length; i+=100) {
+                const created = await base44.entities.Service.bulkCreate(childrenStubs.slice(i, i+100));
+                created?.forEach(c => serviceMap.set(c.codigo, c));
+              }
+           }
+
+           // 3. Create Links
+           const linksToCreate = [];
+           for (const item of relevantStaging) {
+              const parent = serviceMap.get(item.codigo_pai);
+              if (!parent) continue;
+
+              let childId = null;
+              let type = 'SERVICO';
+              let category = 'MATERIAL';
+
+              if (inputMap.has(item.codigo_item)) {
+                 const inp = inputMap.get(item.codigo_item);
+                 childId = inp.id;
+                 type = 'INSUMO';
+                 category = detectCategory(inp.un);
+              } else if (serviceMap.has(item.codigo_item)) {
+                 const svc = serviceMap.get(item.codigo_item);
+                 childId = svc.id;
+                 type = 'SERVICO';
+                 // Inherit category from sub-service? 
+                 // Usually sub-service is mixed, but if it has a specific unit like 'H', it's labor.
+                 // Otherwise default MATERIAL, Engine splits cost.
+                 category = detectCategory(svc.unidade);
+              }
+
+              if (childId) {
+                linksToCreate.push({
+                  servico_id: parent.id,
+                  tipo_item: type,
+                  item_id: childId,
+                  quantidade: item.quantidade,
+                  categoria: category,
+                  ordem: 0,
+                  custo_unitario_snapshot: 0,
+                  custo_total_item: 0
+                });
+              }
+           }
+
+           // Bulk Create Links (Chunked)
+           if (linksToCreate.length > 0) {
+             for (let i=0; i<linksToCreate.length; i+=200) {
+                await base44.entities.ServiceItem.bulkCreate(linksToCreate.slice(i, i+200));
              }
            }
         }
 
-        if (newServices.length > 0) {
-          setProgress(`Criando ${newServices.length} stubs de serviços...`);
-          for (let i=0; i<newServices.length; i+=100) {
-             await base44.entities.Service.bulkCreate(newServices.slice(i, i+100));
-          }
-        }
-        if (updatesServices.length > 0) {
-          setProgress(`Atualizando ${updatesServices.length} definições de serviços...`);
-          const chunks = [];
-          for (let i=0; i<updatesServices.length; i+=20) chunks.push(updatesServices.slice(i, i+20));
-          for (const chunk of chunks) {
-             await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
-          }
-        }
-
-        // Refresh Map
-        setProgress('Recarregando mapas de dados...');
-        const allServicesRefreshed = await Engine.fetchAll('Service');
-        const serviceMapRefreshed = new Map(allServicesRefreshed.map(s => [s.codigo, s.id]));
-        
-        const allInputs = await Engine.fetchAll('Input');
-        const inputMap = new Map(allInputs.map(i => [i.codigo, { id: i.id, un: i.unidade }]));
-
-        // 3. Resolve Children & Links
-        setProgress('Vinculando itens e criando stubs de filhos...');
-        const stagingItems = await base44.entities.CompositionStaging.filter({ batch_id: batchId });
-        
-        // Check for missing children stubs (Recursive Stubbing)
-        const missingChildrenCodes = new Set();
-        for (const item of stagingItems) {
-           if (!inputMap.has(item.codigo_item) && !serviceMapRefreshed.has(item.codigo_item)) {
-              missingChildrenCodes.add(item.codigo_item);
-           }
-        }
-
-        if (missingChildrenCodes.size > 0) {
-           setProgress(`Criando ${missingChildrenCodes.size} stubs para serviços filhos...`);
-           const childrenStubs = Array.from(missingChildrenCodes).map(c => ({
-              codigo: c,
-              descricao: `[TEMP] Sub-Serviço ${c}`,
-              unidade: 'UN',
-              ativo: true
-           }));
-           for (let i=0; i<childrenStubs.length; i+=100) {
-             const created = await base44.entities.Service.bulkCreate(childrenStubs.slice(i, i+100));
-             created?.forEach(c => serviceMapRefreshed.set(c.codigo, c.id));
-           }
-        }
-
-        // Create Links
-        const linksToCreate = [];
-        
-        for (const item of stagingItems) {
-           const parentId = serviceMapRefreshed.get(item.codigo_pai);
-           if (!parentId) continue;
-
-           let childId = null;
-           let type = 'SERVICO';
-           let category = 'MATERIAL'; // default
-
-           // Try Input
-           if (inputMap.has(item.codigo_item)) {
-              const inp = inputMap.get(item.codigo_item);
-              childId = inp.id;
-              type = 'INSUMO';
-              category = detectCategory(inp.un);
-           } 
-           // Try Service
-           else if (serviceMapRefreshed.has(item.codigo_item)) {
-              childId = serviceMapRefreshed.get(item.codigo_item);
-              type = 'SERVICO';
-              // Category for service link usually doesn't matter as engine handles split, 
-              // but we can default to MATERIAL
-           }
-
-           if (childId) {
-             // Check duplication? For performance we skip check or trust the input is clean unique pairs
-             // Better: we assume this is a bulk import of clean data. 
-             // OR we delete existing links for these parents? 
-             // "Copia e cola para ser rápido" -> Assume add/merge. 
-             // Let's just push. Engine handles uniqueness? No.
-             // We should check. But check 55k items is slow.
-             // Optimization: Fetch all items for these parents?
-             // Let's just create. If error, catch.
-             linksToCreate.push({
-               servico_id: parentId,
-               tipo_item: type,
-               item_id: childId,
-               quantidade: item.quantidade,
-               categoria: category,
-               ordem: 0,
-               custo_unitario_snapshot: 0,
-               custo_total_item: 0
-             });
-           }
-        }
-
-        setProgress(`Salvando ${linksToCreate.length} vínculos de composição...`);
-        // Bulk Create Links
-        for (let i=0; i<linksToCreate.length; i+=200) {
-           await base44.entities.ServiceItem.bulkCreate(linksToCreate.slice(i, i+200));
-        }
-
         // Cleanup Staging
-        const stagingIds = stagingItems.map(s => s.id);
-        for(let i=0; i<stagingIds.length; i+=200) {
-           await base44.entities.CompositionStaging.delete(stagingIds.slice(i, i+200)); // assumes bulk delete support or iterate
+        const stagingIds = staging.map(s => s.id);
+        for(let i=0; i<stagingIds.length; i+=500) {
+           await base44.entities.CompositionStaging.delete(stagingIds.slice(i, i+500));
+           setProgress(`Limpando temporários: ${Math.min(i+500, stagingIds.length)}/${stagingIds.length}`);
         }
 
         toast.success("Composições importadas! Iniciando recálculo...");
         
-        // Trigger Recalculation
-        setProgress('Recalculando custos...');
-        const uniqueParentsIds = [...new Set(linksToCreate.map(l => l.servico_id))];
-        for (let i=0; i<uniqueParentsIds.length; i++) {
-           await Engine.recalculateService(uniqueParentsIds[i]);
-           if (i % 50 === 0) setProgress(`Recalculando ${i}/${uniqueParentsIds.length}...`);
+        // Recalculate (Optimized: only affected parents)
+        // Since we might have chains, we should recalculate all OR do topological sort.
+        // For simplicity and correctness with inheritance: recalculate ALL imported parents.
+        // We'll process them in batches too.
+        
+        const parentIdsToRecalc = [...new Set(staging.map(s => serviceMap.get(s.codigo_pai)?.id).filter(Boolean))];
+        
+        for (let i=0; i<parentIdsToRecalc.length; i++) {
+           await Engine.recalculateService(parentIdsToRecalc[i]);
+           if (i % 50 === 0) setProgress(`Recalculando custos: ${i}/${parentIdsToRecalc.length}...`);
         }
 
       }
@@ -303,7 +293,6 @@ export default function TableImport() {
   const handleFileRead = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
     const reader = new FileReader();
     reader.onload = (ev) => processImport(ev.target.result);
     reader.readAsText(file);
@@ -359,14 +348,14 @@ export default function TableImport() {
                        <span>Área de Transferência</span>
                        <span className="text-xs text-slate-500 font-normal">
                           {mode === 'INSUMO' 
-                            ? 'Colunas: CÓDIGO | DESCRIÇÃO | UNIDADE | VALOR' 
+                            ? 'Colunas: CÓDIGO | DESCRIÇÃO | UNIDADE | VALOR | DATA_BASE' 
                             : 'Colunas: COD_PAI | DESC_PAI | UN_PAI | COD_FILHO | QTD'}
                        </span>
                     </Label>
                     <Textarea 
                        className="min-h-[300px] font-mono text-xs" 
                        placeholder={mode === 'INSUMO' 
-                          ? "Ex:\n101\tCIMENTO PORTLAND\tKG\t0,95\n102\tPEDREIRO\tH\t25,00" 
+                          ? "Ex:\n101\tCIMENTO PORTLAND\tKG\t0,95\t09/2025\n102\tPEDREIRO\tH\t25,00\t09/2025" 
                           : "Ex:\n9001\tPAREDE 15CM\tM2\t101\t10.5\n9001\tPAREDE 15CM\tM2\t102\t2.0"}
                        value={pasteData}
                        onChange={e => setPasteData(e.target.value)}

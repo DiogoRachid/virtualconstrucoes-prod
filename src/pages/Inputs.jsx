@@ -87,6 +87,7 @@ export default function Inputs() {
       className: 'text-right',
       render: r => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor_unitario)
     },
+    { header: 'Data Base', accessor: 'data_base', className: 'w-24 text-xs' },
     { header: 'Fonte', accessor: 'fonte', className: 'w-24 text-xs' },
     {
       header: '',
@@ -143,6 +144,10 @@ export default function Inputs() {
                <div>
                 <Label>Valor Unit.</Label>
                 <Input type="number" value={form.valor_unitario} onChange={e => setForm({...form, valor_unitario: parseFloat(e.target.value)})} />
+              </div>
+              <div>
+                <Label>Data Base</Label>
+                <Input value={form.data_base} onChange={e => setForm({...form, data_base: e.target.value})} placeholder="MM/AAAA" />
               </div>
                <div>
                 <Label>Fonte</Label>
