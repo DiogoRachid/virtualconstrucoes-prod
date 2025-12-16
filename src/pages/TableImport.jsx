@@ -133,9 +133,9 @@ export default function TableImport() {
            setProgress(`Upload: ${Math.min(i+500, staging.length)}/${staging.length}`);
         }
 
-        // BATCH PROCESS PARENTS (5000 parents at a time)
+        // BATCH PROCESS PARENTS
         const distinctParents = [...new Set(staging.map(s => s.codigo_pai))];
-        const PARENT_BATCH_SIZE = 5000;
+        const PARENT_BATCH_SIZE = 2000; // Reduced for safety
         
         // Load Maps once (Optimized)
         setProgress('Carregando dados existentes...');
@@ -145,7 +145,12 @@ export default function TableImport() {
         const inputMap = new Map(allInputs.map(i => [i.codigo, { id: i.id, un: i.unidade }]));
 
         for (let batchIdx = 0; batchIdx < distinctParents.length; batchIdx += PARENT_BATCH_SIZE) {
+           // YIELD TO UI
+           await new Promise(r => setTimeout(r, 0));
+
            const currentParents = distinctParents.slice(batchIdx, batchIdx + PARENT_BATCH_SIZE);
+           const currentParentsSet = new Set(currentParents); // Optim: O(1) lookup
+           
            setProgress(`Processando lote de serviços ${batchIdx + 1} a ${Math.min(batchIdx + PARENT_BATCH_SIZE, distinctParents.length)} de ${distinctParents.length}...`);
 
            // 1. Create/Update Services (Parents)
@@ -173,7 +178,6 @@ export default function TableImport() {
            if (newServices.length > 0) {
              for (let i=0; i<newServices.length; i+=100) {
                 const created = await base44.entities.Service.bulkCreate(newServices.slice(i, i+100));
-                // Update local map
                 created?.forEach(c => serviceMap.set(c.codigo, c));
              }
            }
@@ -186,9 +190,10 @@ export default function TableImport() {
            }
 
            // 2. Resolve Children Stubs
-           const relevantStaging = staging.filter(s => currentParents.includes(s.codigo_pai));
-           const missingChildrenCodes = new Set();
+           // Optim: Use Set for filtering to avoid O(N*M)
+           const relevantStaging = staging.filter(s => currentParentsSet.has(s.codigo_pai));
            
+           const missingChildrenCodes = new Set();
            for (const item of relevantStaging) {
               if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
                  missingChildrenCodes.add(item.codigo_item);
@@ -227,9 +232,6 @@ export default function TableImport() {
                  const svc = serviceMap.get(item.codigo_item);
                  childId = svc.id;
                  type = 'SERVICO';
-                 // Inherit category from sub-service? 
-                 // Usually sub-service is mixed, but if it has a specific unit like 'H', it's labor.
-                 // Otherwise default MATERIAL, Engine splits cost.
                  category = detectCategory(svc.unidade);
               }
 
@@ -247,38 +249,47 @@ export default function TableImport() {
               }
            }
 
-           // Bulk Create Links (Chunked)
            if (linksToCreate.length > 0) {
              for (let i=0; i<linksToCreate.length; i+=200) {
                 await base44.entities.ServiceItem.bulkCreate(linksToCreate.slice(i, i+200));
+                // YIELD to avoid freeze
+                if (i % 1000 === 0) await new Promise(r => setTimeout(r, 0));
              }
            }
         }
 
         // Cleanup Staging
+        setProgress('Limpando dados temporários...');
         const stagingIds = staging.map(s => s.id);
         for(let i=0; i<stagingIds.length; i+=500) {
            await base44.entities.CompositionStaging.delete(stagingIds.slice(i, i+500));
-           setProgress(`Limpando temporários: ${Math.min(i+500, stagingIds.length)}/${stagingIds.length}`);
+           if (i % 2000 === 0) {
+             setProgress(`Limpando temporários: ${Math.min(i+500, stagingIds.length)}/${stagingIds.length}`);
+             await new Promise(r => setTimeout(r, 0));
+           }
         }
-
-        toast.success("Composições importadas! Iniciando recálculo...");
         
-        // Recalculate (Optimized: only affected parents)
-        // Since we might have chains, we should recalculate all OR do topological sort.
-        // For simplicity and correctness with inheritance: recalculate ALL imported parents.
-        // We'll process them in batches too.
-        
+        // Recalculate
+        setProgress('Recalculando custos (isso pode demorar)...');
+        // Re-fetch service list to get accurate IDs of parents if any were missing (though map handles it)
         const parentIdsToRecalc = [...new Set(staging.map(s => serviceMap.get(s.codigo_pai)?.id).filter(Boolean))];
         
         for (let i=0; i<parentIdsToRecalc.length; i++) {
            await Engine.recalculateService(parentIdsToRecalc[i]);
-           if (i % 50 === 0) setProgress(`Recalculando custos: ${i}/${parentIdsToRecalc.length}...`);
+           if (i % 50 === 0) {
+             setProgress(`Recalculando custos: ${i}/${parentIdsToRecalc.length}...`);
+             await new Promise(r => setTimeout(r, 0));
+           }
         }
 
+        // Explicit Success Message via Alert/Dialog needed? 
+        // Toast might be missed. Let's rely on setProgress('Concluído!') and maybe delay the close.
       }
       
-      setProgress('Concluído!');
+      setProgress('Concluído com sucesso!');
+      await new Promise(r => setTimeout(r, 1000)); // Show success for 1s
+      
+      toast.success("Processo finalizado com sucesso!");
       setPasteData('');
       if(fileInputRef.current) fileInputRef.current.value = '';
 
