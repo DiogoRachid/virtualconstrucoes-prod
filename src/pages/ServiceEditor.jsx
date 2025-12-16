@@ -232,7 +232,7 @@ export default function ServiceEditor() {
                 </div>
                 <div className="col-span-1">
                   <Label>Data Base</Label>
-                  <Input value={service.data_base || ''} readOnly className="bg-slate-50" placeholder="Calculado automaticamente" />
+                  <Input value={service.data_base || ''} readOnly className="bg-slate-50" placeholder="Definir via tabela global" />
                 </div>
                 <div className="col-span-2">
                   <Label>Descrição</Label>
