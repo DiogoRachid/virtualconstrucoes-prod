@@ -196,63 +196,82 @@ export default function TableImport() {
       const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
       const inputMap = new Map(existingInputs.map(i => [i.codigo, { id: i.id, un: i.unidade }]));
 
+      // Helper for UI yielding
+      const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+
       // --- PHASE 1: IDENTIFY & CREATE ALL MISSING SERVICES ---
-      setProgress({ message: 'Identificando serviços faltantes...', percent: 20 });
+      setProgress({ message: 'Identificando serviços faltantes (isso pode levar um tempo)...', percent: 20 });
       
       const distinctServiceCodes = new Set();
-      const parentCodes = new Set();
+      const parentMeta = new Map(); // code -> { desc, un }
       
-      // 1.1 Collect all potential Service codes (Parents AND Children that aren't inputs)
-      for (const row of staging) {
-         parentCodes.add(row.codigo_pai);
-         distinctServiceCodes.add(row.codigo_pai);
+      // 1.1 Collect all potential Service codes (Processed in chunks to avoid freezing)
+      const STAGING_CHUNK_SIZE = 2000;
+      for (let i = 0; i < staging.length; i += STAGING_CHUNK_SIZE) {
+         const chunk = staging.slice(i, i + STAGING_CHUNK_SIZE);
          
-         // Check child: if not input, assume service
-         if (!inputMap.has(row.codigo_item)) {
-            distinctServiceCodes.add(row.codigo_item);
+         for (const row of chunk) {
+             distinctServiceCodes.add(row.codigo_pai);
+             
+             // Capture metadata for parent if new
+             if (!parentMeta.has(row.codigo_pai)) {
+                parentMeta.set(row.codigo_pai, { d: row.descricao_pai, u: row.unidade_pai });
+             }
+
+             // Check child: if not input, assume service
+             if (!inputMap.has(row.codigo_item)) {
+                distinctServiceCodes.add(row.codigo_item);
+             }
          }
+         // Yield every chunk
+         await yieldToMain();
       }
 
       // 1.2 Diff against existing
       const servicesToCreate = [];
+      const codesArr = Array.from(distinctServiceCodes);
       
-      // We also need to capture description/units for parents from staging if they don't exist
-      const parentMeta = new Map(); // code -> { desc, un }
-      for (const row of staging) {
-         if (!parentMeta.has(row.codigo_pai)) {
-            parentMeta.set(row.codigo_pai, { d: row.descricao_pai, u: row.unidade_pai });
+      for (let i = 0; i < codesArr.length; i += 1000) {
+         const chunk = codesArr.slice(i, i + 1000);
+         for (const code of chunk) {
+            if (!serviceMap.has(code)) {
+               const meta = parentMeta.get(code);
+               servicesToCreate.push({
+                  codigo: code,
+                  descricao: meta?.d || `[IMPORTADO] Serviço ${code}`,
+                  unidade: meta?.u || 'UN',
+                  ativo: true
+               });
+            }
          }
-      }
-
-      for (const code of distinctServiceCodes) {
-         if (!serviceMap.has(code)) {
-             const meta = parentMeta.get(code);
-             servicesToCreate.push({
-                codigo: code,
-                descricao: meta?.d || `[IMPORTADO] Serviço ${code}`,
-                unidade: meta?.u || 'UN',
-                ativo: true
-             });
-         }
+         await yieldToMain();
       }
 
       // 1.3 Bulk Create Missing Services
       if (servicesToCreate.length > 0) {
          const total = servicesToCreate.length;
-         for (let i = 0; i < total; i += 500) {
-             const chunk = servicesToCreate.slice(i, i + 500);
+         // Reduced batch size to 200 for better reliability
+         for (let i = 0; i < total; i += 200) {
+             const chunk = servicesToCreate.slice(i, i + 200);
              const percent = 20 + Math.floor((i/total) * 30); // 20% -> 50%
              setProgress({ 
                 message: `Criando ${i + chunk.length}/${total} novos serviços...`, 
                 percent 
              });
              
-             // Yield
-             await new Promise(r => setTimeout(r, 0));
+             await yieldToMain();
              
-             const created = await base44.entities.Service.bulkCreate(chunk);
-             if (created && Array.isArray(created)) {
-                created.forEach(c => serviceMap.set(c.codigo, c));
+             try {
+                const created = await base44.entities.Service.bulkCreate(chunk);
+                if (created && Array.isArray(created)) {
+                   created.forEach(c => serviceMap.set(c.codigo, c));
+                } else {
+                   // Fallback logic if response is weird
+                   console.warn('Bulk create response invalid, continuing...');
+                }
+             } catch (err) {
+                console.error('Error creating service chunk', err);
+                // Continue to next chunk instead of crashing
              }
          }
       }
@@ -261,56 +280,64 @@ export default function TableImport() {
       setProgress({ message: 'Preparando vínculos de composição...', percent: 50 });
       
       const linksToCreate = [];
-      const totalStaging = staging.length;
       
-      for (let i = 0; i < totalStaging; i++) {
-         const row = staging[i];
-         const parent = serviceMap.get(row.codigo_pai);
+      for (let i = 0; i < staging.length; i += 2000) {
+         const chunk = staging.slice(i, i + 2000);
          
-         if (!parent) continue; // Should not happen
+         for (const row of chunk) {
+             const parent = serviceMap.get(row.codigo_pai);
+             if (!parent) continue;
 
-         let childId = null;
-         let type = 'SERVICO';
-         let category = 'MATERIAL';
+             let childId = null;
+             let type = 'SERVICO';
+             let category = 'MATERIAL';
 
-         if (inputMap.has(row.codigo_item)) {
-            const inp = inputMap.get(row.codigo_item);
-            childId = inp.id;
-            type = 'INSUMO';
-            category = detectCategory(inp.un);
-         } else if (serviceMap.has(row.codigo_item)) {
-            const svc = serviceMap.get(row.codigo_item);
-            childId = svc.id;
-            type = 'SERVICO';
-            category = detectCategory(svc.unidade);
+             if (inputMap.has(row.codigo_item)) {
+                const inp = inputMap.get(row.codigo_item);
+                childId = inp.id;
+                type = 'INSUMO';
+                category = detectCategory(inp.un);
+             } else if (serviceMap.has(row.codigo_item)) {
+                const svc = serviceMap.get(row.codigo_item);
+                childId = svc.id;
+                type = 'SERVICO';
+                category = detectCategory(svc.unidade);
+             }
+
+             if (childId) {
+                linksToCreate.push({
+                   servico_id: parent.id,
+                   tipo_item: type,
+                   item_id: childId,
+                   quantidade: row.quantidade,
+                   categoria: category,
+                   ordem: 0,
+                   custo_unitario_snapshot: 0,
+                   custo_total_item: 0
+                });
+             }
          }
-
-         if (childId) {
-            linksToCreate.push({
-               servico_id: parent.id,
-               tipo_item: type,
-               item_id: childId,
-               quantidade: row.quantidade,
-               categoria: category,
-               ordem: 0,
-               custo_unitario_snapshot: 0,
-               custo_total_item: 0
-            });
-         }
+         await yieldToMain();
       }
 
       // 2.1 Bulk Create Links
       const totalLinks = linksToCreate.length;
-      for (let i = 0; i < totalLinks; i += 500) {
-          const chunk = linksToCreate.slice(i, i + 500);
+      // Reduced batch size for links
+      for (let i = 0; i < totalLinks; i += 200) {
+          const chunk = linksToCreate.slice(i, i + 200);
           const percent = 50 + Math.floor((i/totalLinks) * 40); // 50% -> 90%
           setProgress({ 
              message: `Salvando vínculos ${i + chunk.length}/${totalLinks}...`, 
              percent 
           });
           
-          await new Promise(r => setTimeout(r, 0)); // Yield UI
-          await base44.entities.ServiceItem.bulkCreate(chunk);
+          await yieldToMain();
+          try {
+             await base44.entities.ServiceItem.bulkCreate(chunk);
+          } catch (err) {
+             console.error('Error creating link chunk', err);
+             // Continue
+          }
       }
 
       // --- PHASE 3: CLEANUP ---
