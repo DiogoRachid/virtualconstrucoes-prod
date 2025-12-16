@@ -86,10 +86,15 @@ export const recalculateService = async (serviceId) => {
 
     // Atualizar item se mudou
     if (item.custo_unitario_snapshot !== unitCost || item.custo_total_item !== totalItem) {
-      await base44.entities.ServiceItem.update(item.id, {
-        custo_unitario_snapshot: unitCost,
-        custo_total_item: totalItem
-      });
+      try {
+        await base44.entities.ServiceItem.update(item.id, {
+          custo_unitario_snapshot: unitCost,
+          custo_total_item: totalItem
+        });
+      } catch (e) {
+        // Ignorar se o item foi deletado
+        console.warn('Falha ao atualizar item de serviço', item.id, e);
+      }
     }
 
     if (item.tipo_item === 'SERVICO') {
