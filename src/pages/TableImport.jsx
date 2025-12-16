@@ -500,7 +500,28 @@ export default function TableImport() {
          }
       }
 
-      // --- PHASE 4: CLEANUP ---
+      // --- PHASE 4: CASCADE UPDATES ---
+      // Trigger updateDependents for all updated services to ensure parents (existing compositions) get updated costs
+      if (updates.length > 0) {
+         const totalCasc = updates.length;
+         // Process in smaller chunks to report progress and avoid timeout
+         for (let i = 0; i < totalCasc; i += 20) { 
+            const chunk = updates.slice(i, i + 20);
+            const percent = 90 + Math.floor((i/totalCasc) * 5); // 90-95%
+            setProgress({ message: `Atualizando dependentes externos ${i}/${totalCasc}...`, percent });
+            await yieldToMain();
+            
+            for (const u of chunk) {
+               try {
+                  await Engine.updateDependents('SERVICO', u.id);
+               } catch (err) {
+                  console.warn(`Falha ao atualizar dependentes de ${u.id}`, err);
+               }
+            }
+         }
+      }
+
+      // --- PHASE 5: CLEANUP ---
       setProgress({ message: 'Limpando dados temporários...', percent: 95 });
       const stagingIds = staging.map(s => s.id);
       for(let i=0; i<stagingIds.length; i+=1000) {
