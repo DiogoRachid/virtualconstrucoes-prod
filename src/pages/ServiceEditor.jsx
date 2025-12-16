@@ -92,6 +92,11 @@ export default function ServiceEditor() {
     if (!serviceId) return toast.error("Salve o serviço antes de adicionar itens");
     if (!newItem.id) return;
 
+    // Verificar Duplicidade
+    if (items.some(i => i.item_id === newItem.id && i.tipo_item === newItem.type)) {
+      return toast.error("Este item já existe na composição.");
+    }
+
     // PROMPT 4: BLOQUEIO CIRCULAR
     if (newItem.type === 'SERVICO') {
       const hasCycle = await Engine.checkCircularDependency(serviceId, newItem.id);
