@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Package, Plus, Pencil, Trash2, MoreHorizontal } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, MoreHorizontal, Calendar, Loader2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchFilter from '@/components/shared/SearchFilter';
 import DataTable from '@/components/shared/DataTable';
@@ -31,6 +31,9 @@ export default function Inputs() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
+  const [bulkDate, setBulkDate] = useState('');
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   
   const [form, setForm] = useState({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' });
 
@@ -75,6 +78,35 @@ export default function Inputs() {
     if(confirm('Excluir insumo?')) {
       await base44.entities.Input.delete(id);
       refetch();
+    }
+  };
+
+  const handleBulkUpdate = async () => {
+    if (!bulkDate) return toast.error("Informe a data");
+    if (!confirm(`Atualizar a Data Base de TODOS os insumos para ${bulkDate}?`)) return;
+
+    setBulkUpdating(true);
+    try {
+       const allInputs = await Engine.fetchAll('Input');
+       const total = allInputs.length;
+       const updates = allInputs.map(i => ({
+          id: i.id,
+          data: { data_base: bulkDate }
+       }));
+
+       for (let i = 0; i < total; i += 100) {
+          const chunk = updates.slice(i, i + 100);
+          await Promise.all(chunk.map(u => base44.entities.Input.update(u.id, u.data)));
+       }
+
+       toast.success(`${total} insumos atualizados.`);
+       setOpenBulk(false);
+       refetch();
+    } catch (e) {
+       toast.error("Erro ao atualizar em massa");
+       console.error(e);
+    } finally {
+       setBulkUpdating(false);
     }
   };
 
@@ -126,7 +158,13 @@ export default function Inputs() {
         actionLabel="Novo Insumo"
         onAction={() => { setEditing(null); setForm({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' }); setOpen(true); }}
       />
-      <SearchFilter searchValue={search} onSearchChange={setSearch} placeholder="Buscar insumo..." />
+      
+      <div className="flex justify-between items-center mb-4">
+         <SearchFilter searchValue={search} onSearchChange={setSearch} placeholder="Buscar insumo..." />
+         <Button variant="outline" onClick={() => setOpenBulk(true)}>
+            <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
+         </Button>
+      </div>
       <DataTable columns={columns} data={filtered} isLoading={isLoading} />
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -174,6 +212,29 @@ export default function Inputs() {
           </div>
           <DialogFooter>
             <Button onClick={handleSave}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openBulk} onOpenChange={setOpenBulk}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Atualização em Massa</DialogTitle></DialogHeader>
+          <div className="py-4 space-y-4">
+             <p className="text-sm text-slate-500">
+                Isso alterará a Data Base de <strong>TODOS</strong> os insumos cadastrados.
+                Essa ação não pode ser desfeita.
+             </p>
+             <div>
+                <Label>Nova Data Base (MM/AAAA)</Label>
+                <Input value={bulkDate} onChange={e => setBulkDate(e.target.value)} placeholder="Ex: 10/2025" />
+             </div>
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setOpenBulk(false)} disabled={bulkUpdating}>Cancelar</Button>
+             <Button onClick={handleBulkUpdate} disabled={bulkUpdating}>
+                {bulkUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {bulkUpdating ? 'Atualizando...' : 'Confirmar Atualização'}
+             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
