@@ -173,7 +173,7 @@ export default function TableImport() {
   };
 
 
-  // 3. Step 2: Process Staging (The Core Request)
+  // 3. Step 2: Process Staging (Optimized)
   const handleProcessStaging = async () => {
     setLoading(true);
     setProgress({ message: 'Carregando dados da tabela temporária...', percent: 5, current: 0, total: 0 });
@@ -186,11 +186,24 @@ export default function TableImport() {
         return;
       }
 
-      // 1. Prepare Data
-      const distinctParents = [...new Set(staging.map(s => s.codigo_pai))];
-      const PARENT_BATCH_SIZE = 2000;
+      // 1. Prepare Data & Indexes
+      setProgress({ message: 'Organizando dados...', percent: 10 });
       
-      setProgress({ message: 'Carregando banco de dados atual...', percent: 10 });
+      // Group Staging by Parent Code (O(N))
+      const stagingByParent = new Map();
+      const distinctParents = [];
+      
+      for (const item of staging) {
+        if (!stagingByParent.has(item.codigo_pai)) {
+           stagingByParent.set(item.codigo_pai, []);
+           distinctParents.push(item.codigo_pai);
+        }
+        stagingByParent.get(item.codigo_pai).push(item);
+      }
+
+      const PARENT_BATCH_SIZE = 500; // Smaller batch for smoother UI
+      
+      setProgress({ message: 'Carregando banco de dados atual...', percent: 15 });
       const allServices = await Engine.fetchAll('Service');
       const serviceMap = new Map(allServices.map(s => [s.codigo, s]));
       const allInputs = await Engine.fetchAll('Input');
@@ -200,14 +213,12 @@ export default function TableImport() {
       const totalBatches = Math.ceil(distinctParents.length / PARENT_BATCH_SIZE);
       
       for (let batchIdx = 0; batchIdx < distinctParents.length; batchIdx += PARENT_BATCH_SIZE) {
-         // Yield
-         await new Promise(r => setTimeout(r, 0));
+         // Force Yield
+         await new Promise(r => setTimeout(r, 10));
 
          const currentParents = distinctParents.slice(batchIdx, batchIdx + PARENT_BATCH_SIZE);
-         const currentParentsSet = new Set(currentParents);
-         
          const currentBatchNum = Math.floor(batchIdx / PARENT_BATCH_SIZE) + 1;
-         const percent = 10 + Math.round((currentBatchNum / totalBatches) * 80); // 10% to 90%
+         const percent = 15 + Math.round((currentBatchNum / totalBatches) * 80); // 15% to 95%
          
          setProgress({ 
             message: `Processando lote ${currentBatchNum}/${totalBatches} (${currentParents.length} serviços)...`, 
@@ -219,14 +230,17 @@ export default function TableImport() {
          const updatesServices = [];
 
          for (const pCode of currentParents) {
-            const sample = staging.find(s => s.codigo_pai === pCode);
+            const items = stagingByParent.get(pCode);
+            if (!items || items.length === 0) continue;
+            
+            const sample = items[0];
             const existing = serviceMap.get(pCode);
             
             if (!existing) {
               newServices.push({
                 codigo: pCode,
                 descricao: sample.descricao_pai || `[TEMP] Serviço ${pCode}`,
-                unidade: sample.unidade_pai,
+                unidade: sample.unidade_pai || 'UN',
                 ativo: true
               });
             } else {
@@ -238,26 +252,56 @@ export default function TableImport() {
          }
 
          if (newServices.length > 0) {
-            for (let i=0; i<newServices.length; i+=100) {
-               const created = await base44.entities.Service.bulkCreate(newServices.slice(i, i+100));
-               created?.forEach(c => serviceMap.set(c.codigo, c));
-            }
+            try {
+               // Chunks of 100
+               for (let i=0; i<newServices.length; i+=100) {
+                  const created = await base44.entities.Service.bulkCreate(newServices.slice(i, i+100));
+                  created?.forEach(c => serviceMap.set(c.codigo, c));
+               }
+            } catch (e) { console.error("Error creating services", e); }
          }
          if (updatesServices.length > 0) {
-            for (let i=0; i<updatesServices.length; i+=50) {
-               await Promise.all(updatesServices.slice(i, i+50).map(u => base44.entities.Service.update(u.id, u.data)));
-            }
+            try {
+               // Parallel chunks of 50
+               const chunks = [];
+               for (let i=0; i<updatesServices.length; i+=50) chunks.push(updatesServices.slice(i, i+50));
+               for (const chunk of chunks) {
+                  await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
+               }
+            } catch (e) { console.error("Error updating services", e); }
          }
 
-         // B. Stubs for missing children
-         const relevantStaging = staging.filter(s => currentParentsSet.has(s.codigo_pai));
+         // B. Stubs for missing children & Links
          const missingChildrenCodes = new Set();
-         for (const item of relevantStaging) {
-            if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
-               missingChildrenCodes.add(item.codigo_item);
+         const linksToCreate = [];
+         
+         // Process items for current parents
+         for (const pCode of currentParents) {
+            const items = stagingByParent.get(pCode);
+            const parent = serviceMap.get(pCode);
+            // Parent should exist now (created above or existed)
+            // But we must check map again for newly created
+            if (!parent && !serviceMap.has(pCode)) {
+               // Should not happen if bulkCreate succeeded
+               continue; 
+            }
+            const parentId = parent ? parent.id : serviceMap.get(pCode)?.id;
+            if (!parentId) continue;
+
+            for (const item of items) {
+               // Identify missing children
+               if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
+                  missingChildrenCodes.add(item.codigo_item);
+               }
+               
+               // Prepare link (assuming child exists or will be created)
+               // Note: If child is missing, we create it below, THEN we need its ID.
+               // So we can't create link yet if child ID is missing.
+               // We need 2 passes or create stubs first.
             }
          }
 
+         // Create missing children stubs
          if (missingChildrenCodes.size > 0) {
             const childrenStubs = Array.from(missingChildrenCodes).map(c => ({
                codigo: c,
@@ -265,68 +309,76 @@ export default function TableImport() {
                unidade: 'UN',
                ativo: true
             }));
-            for (let i=0; i<childrenStubs.length; i+=100) {
-               const created = await base44.entities.Service.bulkCreate(childrenStubs.slice(i, i+100));
-               created?.forEach(c => serviceMap.set(c.codigo, c));
-            }
+            try {
+               for (let i=0; i<childrenStubs.length; i+=100) {
+                  const created = await base44.entities.Service.bulkCreate(childrenStubs.slice(i, i+100));
+                  created?.forEach(c => serviceMap.set(c.codigo, c));
+               }
+            } catch (e) { console.error("Error creating stubs", e); }
          }
 
-         // C. Create Links
-         const linksToCreate = [];
-         for (const item of relevantStaging) {
-            const parent = serviceMap.get(item.codigo_pai);
-            if (!parent) continue;
+         // Now Create Links (All IDs should exist)
+         for (const pCode of currentParents) {
+            const items = stagingByParent.get(pCode);
+            const parentId = serviceMap.get(pCode)?.id;
+            if (!parentId) continue;
 
-            let childId = null;
-            let type = 'SERVICO';
-            let category = 'MATERIAL';
+            for (const item of items) {
+               let childId = null;
+               let type = 'SERVICO';
+               let category = 'MATERIAL';
 
-            if (inputMap.has(item.codigo_item)) {
-               const inp = inputMap.get(item.codigo_item);
-               childId = inp.id;
-               type = 'INSUMO';
-               category = detectCategory(inp.un);
-            } else if (serviceMap.has(item.codigo_item)) {
-               const svc = serviceMap.get(item.codigo_item);
-               childId = svc.id;
-               type = 'SERVICO';
-               category = detectCategory(svc.unidade);
-            }
+               if (inputMap.has(item.codigo_item)) {
+                  const inp = inputMap.get(item.codigo_item);
+                  childId = inp.id;
+                  type = 'INSUMO';
+                  category = detectCategory(inp.un);
+               } else if (serviceMap.has(item.codigo_item)) {
+                  const svc = serviceMap.get(item.codigo_item);
+                  childId = svc.id;
+                  type = 'SERVICO';
+                  category = detectCategory(svc.unidade);
+               }
 
-            if (childId) {
-               linksToCreate.push({
-                  servico_id: parent.id,
-                  tipo_item: type,
-                  item_id: childId,
-                  quantidade: item.quantidade,
-                  categoria: category,
-                  ordem: 0,
-                  custo_unitario_snapshot: 0,
-                  custo_total_item: 0
-               });
+               if (childId) {
+                  linksToCreate.push({
+                     servico_id: parentId,
+                     tipo_item: type,
+                     item_id: childId,
+                     quantidade: item.quantidade,
+                     categoria: category,
+                     ordem: 0, // Order not preserved in import? default 0
+                     custo_unitario_snapshot: 0,
+                     custo_total_item: 0
+                  });
+               }
             }
          }
 
          if (linksToCreate.length > 0) {
-            for (let i=0; i<linksToCreate.length; i+=200) {
-               await base44.entities.ServiceItem.bulkCreate(linksToCreate.slice(i, i+200));
-               // Important yield
-               if (i % 1000 === 0) await new Promise(r => setTimeout(r, 0));
-            }
+            try {
+               for (let i=0; i<linksToCreate.length; i+=200) {
+                  await base44.entities.ServiceItem.bulkCreate(linksToCreate.slice(i, i+200));
+                  // Yield
+                  if (i % 1000 === 0) await new Promise(r => setTimeout(r, 0));
+               }
+            } catch (e) { console.error("Error creating links", e); }
          }
       }
 
       // 3. Clear Staging
-      setProgress({ message: 'Limpando tabela temporária...', percent: 95 });
-      const stagingIds = staging.map(s => s.id);
-      for(let i=0; i<stagingIds.length; i+=500) {
-         await base44.entities.CompositionStaging.delete(stagingIds.slice(i, i+500));
-         await new Promise(r => setTimeout(r, 0));
-      }
+      setProgress({ message: 'Limpando tabela temporária...', percent: 98 });
+      try {
+         const stagingIds = staging.map(s => s.id);
+         for(let i=0; i<stagingIds.length; i+=500) {
+            await base44.entities.CompositionStaging.delete(stagingIds.slice(i, i+500));
+            await new Promise(r => setTimeout(r, 0));
+         }
+      } catch (e) { console.error("Error clearing staging", e); }
 
       setProgress({ message: 'Processamento concluído!', percent: 100 });
       toast.success("Cadastro finalizado com sucesso!");
-      checkStaging(); // Should be 0 now
+      checkStaging();
 
     } catch (err) {
        console.error(err);
