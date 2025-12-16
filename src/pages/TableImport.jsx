@@ -194,7 +194,7 @@ export default function TableImport() {
       ]);
 
       const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
-      const inputMap = new Map(existingInputs.map(i => [i.codigo, { id: i.id, un: i.unidade }]));
+      const inputMap = new Map(existingInputs.map(i => [i.codigo, { id: i.id, un: i.unidade, val: i.valor_unitario }]));
 
       // Helper for UI yielding
       const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -227,24 +227,50 @@ export default function TableImport() {
          await yieldToMain();
       }
 
-      // 1.2 Diff against existing
+      // 1.2 Diff against existing & Update descriptions
       const servicesToCreate = [];
+      const servicesToUpdate = [];
       const codesArr = Array.from(distinctServiceCodes);
       
       for (let i = 0; i < codesArr.length; i += 1000) {
          const chunk = codesArr.slice(i, i + 1000);
          for (const code of chunk) {
+            const meta = parentMeta.get(code);
             if (!serviceMap.has(code)) {
-               const meta = parentMeta.get(code);
                servicesToCreate.push({
                   codigo: code,
                   descricao: meta?.d || `[IMPORTADO] Serviço ${code}`,
                   unidade: meta?.u || 'UN',
                   ativo: true
                });
+            } else if (meta?.d) {
+               // Update description if it exists in import
+               const existing = serviceMap.get(code);
+               if (existing.descricao !== meta.d) {
+                  servicesToUpdate.push({
+                     id: existing.id,
+                     data: { descricao: meta.d, unidade: meta.u || existing.unidade }
+                  });
+               }
             }
          }
          await yieldToMain();
+      }
+
+      // 1.2.1 Bulk Update Existing Services
+      if (servicesToUpdate.length > 0) {
+         const totalUpdates = servicesToUpdate.length;
+         for (let i = 0; i < totalUpdates; i += 100) {
+            const chunk = servicesToUpdate.slice(i, i + 100);
+            setProgress({ 
+               message: `Atualizando ${i + chunk.length}/${totalUpdates} descrições de serviços...`, 
+               percent: 20 
+            });
+            await yieldToMain();
+            // We do parallel updates here as there is no bulkUpdate generic yet usually, 
+            // but let's check if we can do Promise.all
+            await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
+         }
       }
 
       // 1.3 Bulk Create Missing Services
@@ -305,6 +331,15 @@ export default function TableImport() {
              }
 
              if (childId) {
+                let unitCost = 0;
+                if (type === 'INSUMO') {
+                   const inp = inputMap.get(row.codigo_item);
+                   unitCost = inp ? (inp.val || 0) : 0;
+                } else {
+                   const svc = serviceMap.get(row.codigo_item);
+                   unitCost = svc ? (svc.custo_total || 0) : 0;
+                }
+
                 linksToCreate.push({
                    servico_id: parent.id,
                    tipo_item: type,
@@ -312,8 +347,8 @@ export default function TableImport() {
                    quantidade: row.quantidade,
                    categoria: category,
                    ordem: 0,
-                   custo_unitario_snapshot: 0,
-                   custo_total_item: 0
+                   custo_unitario_snapshot: unitCost,
+                   custo_total_item: (row.quantidade || 0) * unitCost
                 });
              }
          }

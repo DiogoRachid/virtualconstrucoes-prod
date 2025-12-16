@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, Save, Plus, Trash2, Calculator, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Pencil, Calculator, Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import * as Engine from '@/components/logic/CompositionEngine';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,9 @@ export default function ServiceEditor() {
   const [services, setServices] = useState([]);
   const [openCombobox, setOpenCombobox] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Edit State
+  const [editingItem, setEditingItem] = useState(null);
 
   // Load initial data
   useEffect(() => {
@@ -153,9 +156,50 @@ export default function ServiceEditor() {
     return services.find(s => s.id === item.item_id)?.descricao || '???';
   };
 
+  const getItemCode = (item) => {
+    if (item.tipo_item === 'INSUMO') return inputs.find(i => i.id === item.item_id)?.codigo || '???';
+    return services.find(s => s.id === item.item_id)?.codigo || '???';
+  };
+
   const getItemUnit = (item) => {
     if (item.tipo_item === 'INSUMO') return inputs.find(i => i.id === item.item_id)?.unidade || 'UN';
     return services.find(s => s.id === item.item_id)?.unidade || 'UN';
+  };
+
+  const handleEditItem = (item) => {
+    setEditingItem({ ...item });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
+    
+    // Recalculate cost
+    let unitCost = 0;
+    if (editingItem.tipo_item === 'INSUMO') {
+       const inp = inputs.find(i => i.id === editingItem.item_id);
+       unitCost = inp ? inp.valor_unitario : 0;
+    } else {
+       const svc = services.find(s => s.id === editingItem.item_id);
+       unitCost = svc ? svc.custo_total : 0;
+    }
+    const total = editingItem.quantidade * unitCost;
+
+    await base44.entities.ServiceItem.update(editingItem.id, {
+      quantidade: parseFloat(editingItem.quantidade),
+      categoria: editingItem.categoria,
+      custo_total_item: total
+    });
+
+    await Engine.recalculateService(serviceId);
+    await Engine.updateDependents('SERVICO', serviceId);
+
+    // Reload
+    const its = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
+    setItems(its.sort((a,b) => a.ordem - b.ordem));
+    const s = await base44.entities.Service.filter({ id: serviceId }).then(r => r[0]);
+    setService(s);
+    setEditingItem(null);
+    toast.success("Item atualizado");
   };
 
   return (
@@ -297,27 +341,32 @@ export default function ServiceEditor() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Código</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead>Descrição (Vinculada)</TableHead>
                       <TableHead>Und</TableHead>
                       <TableHead>Qtd</TableHead>
-                      <TableHead>Unit. (Snapshot)</TableHead>
+                      <TableHead>Unit.</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Cat</TableHead>
-                      <TableHead></TableHead>
+                      <TableHead className="w-24">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map(item => (
                       <TableRow key={item.id}>
+                        <TableCell className="text-xs font-mono">{getItemCode(item)}</TableCell>
                         <TableCell className="text-xs font-mono">{item.tipo_item}</TableCell>
-                        <TableCell className="text-sm">{getItemDesc(item)}</TableCell>
+                        <TableCell className="text-sm max-w-[200px] truncate" title={getItemDesc(item)}>{getItemDesc(item)}</TableCell>
                         <TableCell className="text-xs">{getItemUnit(item)}</TableCell>
                         <TableCell>{item.quantidade}</TableCell>
                         <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.custo_unitario_snapshot)}</TableCell>
                         <TableCell className="font-bold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.custo_total_item)}</TableCell>
                         <TableCell className="text-xs">{item.categoria}</TableCell>
-                        <TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditItem(item)} className="text-blue-600">
+                             <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleDeleteItem(item.id)} className="text-red-500">
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -326,6 +375,44 @@ export default function ServiceEditor() {
                     ))}
                   </TableBody>
                 </Table>
+
+                {/* Edit Dialog */}
+                {editingItem && (
+                   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                      <Card className="w-full max-w-md bg-white">
+                         <CardHeader>
+                            <CardTitle>Editar Item</CardTitle>
+                         </CardHeader>
+                         <CardContent className="space-y-4">
+                            <div>
+                               <Label>Quantidade</Label>
+                               <Input 
+                                  type="number" 
+                                  value={editingItem.quantidade} 
+                                  onChange={e => setEditingItem({...editingItem, quantidade: e.target.value})} 
+                               />
+                            </div>
+                            <div>
+                               <Label>Categoria</Label>
+                               <Select 
+                                  value={editingItem.categoria} 
+                                  onValueChange={v => setEditingItem({...editingItem, categoria: v})}
+                               >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                     <SelectItem value="MATERIAL">Material</SelectItem>
+                                     <SelectItem value="MAO_DE_OBRA">Mão de Obra</SelectItem>
+                                  </SelectContent>
+                               </Select>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-4">
+                               <Button variant="outline" onClick={() => setEditingItem(null)}>Cancelar</Button>
+                               <Button onClick={handleSaveEdit}>Salvar</Button>
+                            </div>
+                         </CardContent>
+                      </Card>
+                   </div>
+                )}
               </CardContent>
             </Card>
           )}

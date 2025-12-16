@@ -33,6 +33,7 @@ export default function Services() {
     { header: 'Código', accessor: 'codigo', className: 'w-24 font-mono text-xs' },
     { header: 'Descrição', accessor: 'descricao' },
     { header: 'Unidade', accessor: 'unidade', className: 'w-16' },
+    { header: 'Data Base', accessor: 'data_base', className: 'w-24 text-xs' },
     { 
       header: 'Material', 
       accessor: 'custo_material', 
