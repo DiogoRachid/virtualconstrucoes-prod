@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { UploadCloud, Loader2, Clipboard, AlertCircle, Play, Trash2, Database, RefreshCw } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ export default function TableImport() {
   const [mode, setMode] = useState('INSUMO');
   const [inputType, setInputType] = useState('PASTE');
   const [loading, setLoading] = useState(false);
+  const [hasCategoryColumn, setHasCategoryColumn] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '', percent: 0 });
   const [pasteData, setPasteData] = useState('');
   const fileInputRef = useRef(null);
@@ -127,37 +129,60 @@ export default function TableImport() {
   };
 
   const processInputsDirectly = async (lines, separator) => {
-      // ... (Same logic as before for inputs)
-      // Re-implemented briefly for completeness
-      const allInputs = await Engine.fetchAll('Input');
-      const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
-      const updates = [];
-      const creates = [];
+  const allInputs = await Engine.fetchAll('Input');
+  const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
+  const updates = [];
+  const creates = [];
 
-      let processed = 0;
-      const total = lines.length;
+  let processed = 0;
+  const total = lines.length;
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
-        if (cols.length < 3) continue;
-        
-        // ... parse logic
-        const codigo = cols[0];
-        const descricao = cols[1];
-        const unidade = cols[2];
-        const valorStr = cols[3];
-        const dataBase = cols[4] || '09/2025';
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
+    if (cols.length < 3) continue;
 
-        if (!codigo) continue;
-        const valor = valorStr ? parseFloat(valorStr.replace('R$', '').replace('.', '').replace(',', '.')) : 0;
+    const codigo = cols[0];
+    const descricao = cols[1];
+    const unidade = cols[2];
+    const valorStr = cols[3];
+    // Coluna 4 (índice 4) agora pode ser categoria se hasCategoryColumn for true
+    // Se hasCategoryColumn for true: 0=COD, 1=DESC, 2=UN, 3=VAL, 4=CAT, 5=DATA
+    // Se false: 0=COD, 1=DESC, 2=UN, 3=VAL, 4=DATA
 
-        const data = { codigo, descricao: descricao.slice(0, 500), unidade: unidade || 'UN', valor_unitario: valor || 0, data_base: dataBase, fonte: 'SINAPI' };
+    let categoria = 'MATERIAL';
+    let dataBase = '09/2025';
 
-        if (inputMap.has(codigo)) updates.push({ id: inputMap.get(codigo), data });
-        else creates.push(data);
-        processed++;
-      }
+    if (hasCategoryColumn) {
+       const catRaw = (cols[4] || '').toUpperCase().trim();
+       if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO')) categoria = 'MAO_OBRA';
+       else if (catRaw.startsWith('MAT')) categoria = 'MATERIAL';
+       dataBase = cols[5] || '09/2025';
+    } else {
+       // Fallback antigo se não tiver coluna explícita
+       // O usuário pediu pra esquecer a regra de H = MO, mas se não tem coluna, usamos padrão MATERIAL
+       // ou mantemos compatibilidade se o usuário não marcar o checkbox.
+       // Vou assumir MATERIAL se não tiver coluna.
+       dataBase = cols[4] || '09/2025';
+    }
+
+    if (!codigo) continue;
+    const valor = valorStr ? parseFloat(valorStr.replace('R$', '').replace('.', '').replace(',', '.')) : 0;
+
+    const data = { 
+       codigo, 
+       descricao: descricao.slice(0, 500), 
+       unidade: unidade || 'UN', 
+       valor_unitario: valor || 0, 
+       categoria,
+       data_base: dataBase, 
+       fonte: 'SINAPI' 
+    };
+
+    if (inputMap.has(codigo)) updates.push({ id: inputMap.get(codigo), data });
+    else creates.push(data);
+    processed++;
+  }
 
       // Execute batches...
       if (creates.length > 0) {
@@ -639,11 +664,17 @@ export default function TableImport() {
                      <SelectTrigger><SelectValue /></SelectTrigger>
                      <SelectContent>
                         <SelectItem value="INSUMO">Insumos (Direto)</SelectItem>
-                        <SelectItem value="COMPOSICAO">Composições (Vai para Tabela)</SelectItem>
-                     </SelectContent>
-                  </Select>
-               </div>
-               <div className="space-y-2">
+                                <SelectItem value="COMPOSICAO">Composições (Vai para Tabela)</SelectItem>
+                             </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center space-x-2 pt-8">
+                          <Checkbox id="catCol" checked={hasCategoryColumn} onCheckedChange={setHasCategoryColumn} />
+                          <label htmlFor="catCol" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                             Incluir coluna de Categoria? (Posição 5)
+                          </label>
+                        </div>
+                        <div className="space-y-2">
                   <Label>Método</Label>
                   <Tabs value={inputType} onValueChange={setInputType}>
                      <TabsList className="w-full">
@@ -674,7 +705,11 @@ export default function TableImport() {
                          className="min-h-[200px] font-mono text-xs" 
                          value={pasteData}
                          onChange={e => setPasteData(e.target.value)}
-                         placeholder={mode === 'INSUMO' ? "COD | DESC | UN | VALOR" : "COD_PAI | DESC | UN | COD_FILHO | QTD"}
+                         placeholder={
+                            mode === 'INSUMO' 
+                            ? (hasCategoryColumn ? "COD | DESC | UN | VALOR | CATEGORIA | DATA" : "COD | DESC | UN | VALOR | DATA") 
+                            : "COD_PAI | DESC | UN | COD_FILHO | QTD"
+                         }
                       />
                       <Button className="w-full" onClick={() => handleUploadToStaging(pasteData)} disabled={!pasteData}>
                          <UploadCloud className="mr-2 h-4 w-4" /> Carregar para Tabela

@@ -103,16 +103,23 @@ export const recalculateService = async (serviceId) => {
         custoMaterial += totalItem * matRatio;
         custoMaoObra += totalItem * laborRatio;
       } else {
-        if (item.categoria === 'MATERIAL') custoMaterial += totalItem;
-        else custoMaoObra += totalItem;
+        // Fallback para categoria do item se serviço não encontrado ou vazio
+        if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+        else custoMaterial += totalItem;
       }
     } else {
-      // Para insumos, respeita a categoria definida
+      // Para insumos, PRIORIDADE TOTAL para a categoria do cadastro do INSUMO
       const insumo = await base44.entities.Input.filter({ id: item.item_id }).then(r => r[0]);
-      if (insumo) itemDate = insumo.data_base;
-
-      if (item.categoria === 'MATERIAL') custoMaterial += totalItem;
-      if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+      if (insumo) {
+         itemDate = insumo.data_base;
+         // Se o insumo tem categoria definida, usamos ela
+         if (insumo.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+         else custoMaterial += totalItem;
+      } else {
+         // Fallback se não achar insumo (usa snapshot do item)
+         if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+         else custoMaterial += totalItem;
+      }
     }
 
     // Verificar data mais antiga

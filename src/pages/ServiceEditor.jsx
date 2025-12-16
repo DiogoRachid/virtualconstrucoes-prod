@@ -295,8 +295,18 @@ export default function ServiceEditor() {
                                     key={item.id}
                                     value={`${item.codigo} ${item.descricao}`}
                                     onSelect={() => {
-                                      const u = (item.unidade || 'UN').toUpperCase().trim();
-                                      const cat = (u === 'H' || u === 'HORA' || u.startsWith('H')) ? 'MAO_OBRA' : 'MATERIAL';
+                                      // Se for insumo, usa a categoria do cadastro. Se for serviço, infere ou usa padrão.
+                                      let cat = 'MATERIAL';
+                                      if (newItem.type === 'INSUMO') {
+                                         cat = item.categoria || 'MATERIAL';
+                                      } else {
+                                         // Para serviço, tentamos inferir, mas geralmente o custo é composto.
+                                         // Deixamos como Material por padrão se for serviço agregado, ou pode ser MO pura.
+                                         // Vamos manter a lógica antiga SÓ para serviços, ou deixar o usuário mudar.
+                                         const u = (item.unidade || 'UN').toUpperCase().trim();
+                                         cat = (u === 'H' || u === 'HORA' || u.startsWith('H')) ? 'MAO_OBRA' : 'MATERIAL';
+                                      }
+                                      
                                       setNewItem(prev => ({ ...prev, id: item.id, cat }));
                                       setOpenCombobox(false);
                                       setSearchQuery('');
