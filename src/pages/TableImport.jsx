@@ -73,19 +73,21 @@ export default function TableImport() {
       const separator = lines[0].includes(';') ? ';' : '\t';
       
       if (mode === 'INSUMO') {
-        // Direct processing for Inputs (Simpler, no staging needed usually, but user asked for robust table)
-        // Let's keep Inputs direct for now as they don't have dependency complexity
         await processInputsDirectly(lines, separator);
       } else {
         // Compositions -> Staging
         const batchId = Date.now().toString();
         const stagingItems = [];
-        
+
         setProgress({ current: 0, total: lines.length, message: 'Analisando linhas...', percent: 0 });
-        
+
         for (const line of lines) {
           if (!line.trim()) continue;
-          const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
+          // Handle tab-separated data from Excel which might not use the detected separator correctly if mixed
+          const actualSeparator = line.includes('\t') ? '\t' : separator;
+          const cols = line.split(actualSeparator).map(c => c?.trim().replace(/"/g, ''));
+
+          // Support the specific 5-column format: COD_PAI | DESC | UN | COD_FILHO | QTD
           if (cols.length < 4) continue;
 
           const codPai = cols[0];
@@ -93,8 +95,16 @@ export default function TableImport() {
           const unPai = cols[2] || 'UN';
           const codFilho = cols[3];
           const qtdStr = cols[4];
-          
+
           if (!codPai || !codFilho) continue;
+
+          // Robust parsing for BRL number format (1.000,00 -> 1000.00)
+          const parseBrlNumber = (str) => {
+             if (!str) return 0;
+             // Remove dots (thousands) and replace comma with dot (decimal)
+             const normalized = str.replace(/\./g, '').replace(',', '.');
+             return parseFloat(normalized) || 0;
+          };
 
           stagingItems.push({
             batch_id: batchId,
@@ -102,7 +112,7 @@ export default function TableImport() {
             descricao_pai: descPai,
             unidade_pai: unPai,
             codigo_item: codFilho,
-            quantidade: qtdStr ? parseFloat(qtdStr.replace(',', '.')) : 0,
+            quantidade: parseBrlNumber(qtdStr),
             status: 'pendente'
           });
         }
@@ -729,7 +739,7 @@ export default function TableImport() {
                          placeholder={
                             mode === 'INSUMO' 
                             ? (hasCategoryColumn ? "COD | DESC | UN | VALOR | CATEGORIA | DATA" : "COD | DESC | UN | VALOR | DATA") 
-                            : "COD_PAI | DESC | UN | COD_FILHO | QTD"
+                            : "COD_PAI  |  DESCRIÇÃO_PAI  |  UN_PAI  |  COD_FILHO  |  QTD_FILHO\nExemplo:\n87339\tARGAMASSA...\tM3\t88404\t7,94"
                          }
                       />
                       <Button className="w-full" onClick={() => handleUploadToStaging(pasteData)} disabled={!pasteData}>
