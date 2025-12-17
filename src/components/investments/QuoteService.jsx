@@ -10,14 +10,14 @@ export async function fetchQuotes(tickers) {
     prompt: `Atue como um especialista de mercado financeiro.
     Sua missão é buscar a cotação ATUALIZADA (em tempo real ou fechamento mais recente) para os seguintes ativos: ${tickerList}.
 
-    FONTES OBRIGATÓRIAS DE PESQUISA (Use a que tiver o dado mais recente):
-    - Status Invest
-    - Investing.com
-    - TradingView
-    - Google Finance
-    - Yahoo Finance
-    - InfoMoney
-    - ADVFN
+    ORDEM DE PRIORIDADE DAS FONTES (Tente nesta ordem exata):
+    1. GOOGLE FINANCE (Principal)
+    2. STATUS INVEST (Secundária)
+    3. Investing.com
+    4. TradingView
+    5. Yahoo Finance
+
+    Se encontrar no Google Finance, use o valor de lá. Se falhar, tente o Status Invest.
 
     REGRAS DE OURO PARA IDENTIFICAÇÃO DE MERCADO:
     
@@ -88,7 +88,10 @@ export async function fetchSingleQuote(ticker, categoria) {
   const response = await base44.integrations.Core.InvokeLLM({
     prompt: `Busque a cotação mais recente para o ativo financeiro: "${ticker}".
     
-    FONTES SUGERIDAS: Status Invest, Investing.com, TradingView, Google Finance.
+    ORDEM DE PRIORIDADE:
+    1. GOOGLE FINANCE (Principal)
+    2. STATUS INVEST (Secundária)
+    3. Outras (Investing, TradingView)
 
     REGRAS DE CONTEXTO:
     - Se o ticker terminar em 3, 4, 11, 33, 34 (ex: AAPL34, BITH11, KISU11):
