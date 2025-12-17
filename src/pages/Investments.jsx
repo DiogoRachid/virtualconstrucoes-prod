@@ -108,17 +108,20 @@ export default function Investments() {
   });
 
   // Carregar indicadores econômicos
-  useEffect(() => {
-    const loadIndicators = async () => {
+  const loadIndicators = async () => {
       setLoadingIndicators(true);
       try {
         const data = await fetchEconomicIndicators();
         setIndicators(data);
+        toast.success("Indicadores atualizados com sucesso");
       } catch (error) {
         console.error('Erro ao carregar indicadores:', error);
+        toast.error("Erro ao atualizar indicadores");
       }
       setLoadingIndicators(false);
-    };
+  };
+
+  useEffect(() => {
     loadIndicators();
   }, []);
 
