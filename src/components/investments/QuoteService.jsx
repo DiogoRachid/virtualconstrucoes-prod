@@ -7,19 +7,23 @@ export async function fetchQuotes(tickers) {
   const tickerList = tickers.join(', ');
   
   const response = await base44.integrations.Core.InvokeLLM({
-    prompt: `Atue como um especialista financeiro. Utilize fontes confiáveis como Google Finance, Yahoo Finance ou Apple Stocks para buscar as cotações mais recentes (fechamento anterior ou tempo real) dos seguintes ativos: ${tickerList}.
+    prompt: `Atue como um especialista financeiro. Utilize fontes confiáveis (Google Finance, Yahoo Finance) para buscar as cotações mais recentes dos ativos: ${tickerList}.
 
-    IMPORTANTE:
-    1. Para Criptomoedas (BTC, ETH, SOL, etc):
-       - Tente buscar o preço diretamente em BRL (Reais).
-       - Se encontrar em BRL, retorne price em BRL e currency = "BRL".
-       - Se só encontrar em USD, retorne em USD.
+    REGRAS CRÍTICAS DE CONTEXTO (B3 vs EXTERIOR):
+    
+    1. ATIVOS B3 (BRASIL) - PREÇO OBRIGATÓRIO EM BRL:
+       - Qualquer ticker terminando em 11 (ETFs/FIIs), 34 (BDRs), 3, 4, 6 (Ações).
+       - Exemplos Citados: BITH11, QETH11, KISU11, AAPL34, BOVA11, IVVB11.
+       - AAPL34 é BDR da Apple no Brasil -> Preço em BRL (~R$ 60-100). NÃO confundir com AAPL (USD).
+       - BITH11/QETH11 são ETFs de Cripto na B3 -> Preço em BRL.
+       - Dica: Busque adicionando ".SA" (ex: BITH11.SA, AAPL34.SA).
 
-    2. Para Ações Brasileiras e FIIs (ex: PETR4, VALE3, KNRI11):
-       - Preço em BRL (Reais).
+    2. CRIPTOMOEDAS PURAS (BTC, ETH):
+       - Priorize BRL. Se só achar USD, ok.
 
-    3. Para Ativos Internacionais (ex: AAPL, MSFT, IVV):
-       - Preço em USD (Dólares).
+    3. ATIVOS EUA (AAPL, MSFT, VOO):
+       - Apenas se NÃO tiver final 34/11.
+       - Preço em USD.
 
     Retorne um JSON com:
     - ticker: código do ativo (ex: BTC, PETR4)
@@ -89,19 +93,17 @@ export async function fetchSingleQuote(ticker, categoria) {
   }
 
   const response = await base44.integrations.Core.InvokeLLM({
-    prompt: `Atue como um especialista financeiro. Busque a cotação mais recente do ativo "${ticker}" (${context}) em fontes confiáveis (Google Finance, Yahoo Finance).
-
-    IMPORTANTE:
-    1. Para Criptomoedas (BTC, ETH, etc):
-       - Tente buscar o preço em BRL (Reais).
-       - Se encontrar em BRL, retorne price em BRL e currency = "BRL".
-       - Se só encontrar em USD, retorne em USD.
+    prompt: `Atue como um especialista financeiro. Busque a cotação mais recente do ativo "${ticker}" em fontes confiáveis.
     
-    2. Para Ações BR e FIIs:
-       - Preço em BRL.
+    REGRA DE OURO B3 (BRASIL):
+    - Se o ticker termina em 11, 33, 34, 3, 4, 6 (ex: BITH11, QETH11, AAPL34, KISU11):
+    - É um ativo negociado na B3 (Brasil).
+    - O PREÇO DEVE SER EM BRL (Reais).
+    - Tente buscar com o sufixo .SA (ex: ${ticker}.SA).
     
-    3. Para Ativos Internacionais:
-       - Preço em USD.
+    Outros casos:
+    - Cripto pura (BTC): Priorize BRL.
+    - Stocks EUA (AAPL, VOO): USD.
 
     Retorne um JSON com:
     - price: preço atual (numérico)
