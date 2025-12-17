@@ -263,21 +263,55 @@ export default function Investments() {
      investido: h.valor_total_investido
   }));
 
+  const assetColumns = React.useMemo(() => {
+    const allAssets = new Map(); // Map id -> name
+
+    // Coletar todos os ativos únicos presentes no histórico
+    sortedHistory.forEach(h => {
+        if (h.detalhes?.assets && Array.isArray(h.detalhes.assets)) {
+            h.detalhes.assets.forEach(a => {
+                if (!allAssets.has(a.id)) {
+                    allAssets.set(a.id, a.nome);
+                }
+            });
+        }
+    });
+
+    return Array.from(allAssets.entries()).map(([id, nome]) => ({
+        header: nome,
+        className: 'min-w-[150px] text-right',
+        cellClassName: 'text-right',
+        render: (row) => {
+            const asset = row.detalhes?.assets?.find(a => a.id === id);
+            if (!asset) return <span className="text-slate-300">-</span>;
+            return (
+                <span className="text-sm">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(asset.valor_atual || 0)}
+                </span>
+            );
+        }
+    }));
+  }, [sortedHistory]);
+
   const historyColumns = [
     {
       header: 'Data',
+      className: 'min-w-[100px]',
       render: (row) => format(new Date(row.data), 'dd/MM/yyyy', { locale: ptBR })
     },
     {
       header: 'Total Investido',
+      className: 'min-w-[140px]',
       render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total_investido || 0)
     },
     {
       header: 'Total Atual',
+      className: 'min-w-[140px]',
       render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total_atual || 0)
     },
     {
       header: 'Rentabilidade',
+      className: 'min-w-[140px]',
       render: (row) => {
          const isPositive = (row.rentabilidade_valor || 0) >= 0;
          return (
@@ -292,9 +326,10 @@ export default function Investments() {
          )
       }
     },
+    ...assetColumns,
     {
       header: '',
-      className: 'w-12',
+      className: 'w-12 sticky right-0 bg-white shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.1)]',
       render: (row) => (
         <Button 
            variant="ghost" 
