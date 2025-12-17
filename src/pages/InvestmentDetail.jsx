@@ -100,6 +100,9 @@ export default function InvestmentDetail() {
     quantidade: '',
     preco_unitario: '',
     valor_total: '',
+    moeda: 'BRL',
+    valor_origem: '',
+    cotacao_aplicada: '',
     data_operacao: format(new Date(), 'yyyy-MM-dd'),
     taxas: '',
     observacoes: '',
@@ -161,6 +164,9 @@ export default function InvestmentDetail() {
         quantidade: data.quantidade ? parseFloat(data.quantidade) : null,
         preco_unitario: data.preco_unitario ? parseFloat(data.preco_unitario) : null,
         valor_total: valor,
+        moeda: data.moeda,
+        valor_origem: data.valor_origem ? parseFloat(data.valor_origem) : null,
+        cotacao_aplicada: data.cotacao_aplicada ? parseFloat(data.cotacao_aplicada) : null,
         taxas: data.taxas ? parseFloat(data.taxas) : 0
       });
 
@@ -214,6 +220,9 @@ export default function InvestmentDetail() {
         quantidade: data.quantidade ? parseFloat(data.quantidade) : null,
         preco_unitario: data.preco_unitario ? parseFloat(data.preco_unitario) : null,
         valor_total: parseFloat(data.valor_total),
+        moeda: data.moeda,
+        valor_origem: data.valor_origem ? parseFloat(data.valor_origem) : null,
+        cotacao_aplicada: data.cotacao_aplicada ? parseFloat(data.cotacao_aplicada) : null,
         taxas: data.taxas ? parseFloat(data.taxas) : 0
       });
     },
@@ -297,6 +306,9 @@ export default function InvestmentDetail() {
       quantidade: '',
       preco_unitario: '',
       valor_total: '',
+      moeda: 'BRL',
+      valor_origem: '',
+      cotacao_aplicada: '',
       data_operacao: format(new Date(), 'yyyy-MM-dd'),
       taxas: '',
       observacoes: '',
@@ -312,6 +324,9 @@ export default function InvestmentDetail() {
       quantidade: transaction.quantidade || '',
       preco_unitario: transaction.preco_unitario || '',
       valor_total: transaction.valor_total || '',
+      moeda: transaction.moeda || 'BRL',
+      valor_origem: transaction.valor_origem || '',
+      cotacao_aplicada: transaction.cotacao_aplicada || '',
       data_operacao: transaction.data_operacao,
       taxas: transaction.taxas || '',
       observacoes: transaction.observacoes || '',
@@ -352,6 +367,7 @@ export default function InvestmentDetail() {
   const Icon = config?.icon || TrendingUp;
   const rentabilidade = investment.rentabilidade_percentual || 0;
   const isPositive = rentabilidade >= 0;
+  const isInternational = ['renda_variavel_int', 'crypto'].includes(investment.categoria);
 
   const transactionColumns = [
     {
@@ -383,9 +399,17 @@ export default function InvestmentDetail() {
     {
       header: 'Valor Total',
       render: (row) => (
-        <span className="font-medium">
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total)}
-        </span>
+        <div className="flex flex-col">
+          <span className="font-medium">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total)}
+          </span>
+          {row.moeda === 'USD' && row.valor_origem > 0 && (
+             <span className="text-xs text-slate-500">
+               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(row.valor_origem)}
+               {row.cotacao_aplicada && ` (Tx: ${row.cotacao_aplicada})`}
+             </span>
+          )}
+        </div>
       )
     },
     {
@@ -784,16 +808,91 @@ export default function InvestmentDetail() {
               </>
             )}
 
-            <div>
-              <Label>Valor Total *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newTransaction.valor_total}
-                onChange={(e) => setNewTransaction(prev => ({ ...prev, valor_total: e.target.value }))}
-                className="mt-1.5"
-              />
-            </div>
+            {isInternational && (
+               <div>
+                  <Label>Moeda da Operação</Label>
+                  <Select
+                    value={newTransaction.moeda}
+                    onValueChange={(v) => {
+                       // Reset valores ao mudar moeda para evitar inconsistência
+                       setNewTransaction(prev => ({ 
+                           ...prev, 
+                           moeda: v, 
+                           valor_origem: '', 
+                           cotacao_aplicada: v === 'USD' ? '' : '',
+                           valor_total: ''
+                       }));
+                    }}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BRL">Real (BRL)</SelectItem>
+                      <SelectItem value="USD">Dólar (USD)</SelectItem>
+                    </SelectContent>
+                  </Select>
+               </div>
+            )}
+
+            {newTransaction.moeda === 'USD' ? (
+                <>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Valor em USD *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={newTransaction.valor_origem}
+                            onChange={(e) => {
+                                const valOrigem = parseFloat(e.target.value);
+                                const cotacao = parseFloat(newTransaction.cotacao_aplicada);
+                                const totalBRL = (!isNaN(valOrigem) && !isNaN(cotacao)) ? (valOrigem * cotacao).toFixed(2) : '';
+                                setNewTransaction(prev => ({ ...prev, valor_origem: e.target.value, valor_total: totalBRL }));
+                            }}
+                            className="mt-1.5"
+                            placeholder="US$ 0.00"
+                          />
+                        </div>
+                        <div>
+                          <Label>Cotação Aplicada *</Label>
+                          <Input
+                            type="number"
+                            step="0.0001"
+                            value={newTransaction.cotacao_aplicada}
+                            onChange={(e) => {
+                                const cotacao = parseFloat(e.target.value);
+                                const valOrigem = parseFloat(newTransaction.valor_origem);
+                                const totalBRL = (!isNaN(valOrigem) && !isNaN(cotacao)) ? (valOrigem * cotacao).toFixed(2) : '';
+                                setNewTransaction(prev => ({ ...prev, cotacao_aplicada: e.target.value, valor_total: totalBRL }));
+                            }}
+                            className="mt-1.5"
+                            placeholder="R$ 0.00"
+                          />
+                        </div>
+                    </div>
+                    <div>
+                      <Label>Valor Total em BRL (Calculado)</Label>
+                      <Input
+                        type="number"
+                        value={newTransaction.valor_total}
+                        readOnly
+                        className="mt-1.5 bg-slate-100"
+                      />
+                    </div>
+                </>
+            ) : (
+                <div>
+                  <Label>Valor Total (BRL) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newTransaction.valor_total}
+                    onChange={(e) => setNewTransaction(prev => ({ ...prev, valor_total: e.target.value }))}
+                    className="mt-1.5"
+                  />
+                </div>
+            )}
 
             <div>
               <Label>Taxas</Label>
