@@ -878,15 +878,20 @@ export default function InvestmentDetail() {
                             value={newTransaction.valor_origem}
                             onChange={(e) => {
                                 const valOrigem = parseFloat(e.target.value);
-                                // Usar indicador se disponível e cotação não definida, ou manter existente
-                                const cotacao = indicators?.dolar || parseFloat(newTransaction.cotacao_aplicada) || 0;
+                                const isProventos = ['dividendo', 'jcp', 'rendimento'].includes(newTransaction.tipo_operacao);
+                                const cotacao = (isProventos && indicators?.dolar) 
+                                  ? indicators.dolar 
+                                  : (parseFloat(newTransaction.cotacao_aplicada) || 0);
+                                  
                                 const totalBRL = (!isNaN(valOrigem) && cotacao) ? (valOrigem * cotacao).toFixed(2) : '';
                                 
                                 setNewTransaction(prev => ({ 
                                   ...prev, 
                                   valor_origem: e.target.value, 
                                   valor_total: totalBRL,
-                                  cotacao_aplicada: prev.cotacao_aplicada || (indicators?.dolar ? indicators.dolar.toString() : '')
+                                  cotacao_aplicada: (isProventos && indicators?.dolar) 
+                                    ? indicators.dolar.toString() 
+                                    : prev.cotacao_aplicada
                                 }));
                             }}
                             className="mt-1.5"
@@ -899,30 +904,22 @@ export default function InvestmentDetail() {
                             <div className="mt-1.5 h-10 px-3 py-2 bg-slate-100 border rounded-md flex items-center text-sm text-slate-500">
                               {indicators?.dolar 
                                 ? `Automático: R$ ${indicators.dolar.toFixed(4)}` 
-                                : 'Carregando cotação...'}
+                                : 'Aguardando cotação...'}
                             </div>
                           ) : (
-                            {['dividendo', 'jcp', 'rendimento'].includes(newTransaction.tipo_operacao) ? (
-                              <div className="mt-1.5 h-10 px-3 py-2 bg-slate-100 border rounded-md flex items-center text-sm text-slate-500">
-                                {indicators?.dolar 
-                                  ? `Automático: R$ ${indicators.dolar.toFixed(4)}` 
-                                  : 'Aguardando cotação...'}
-                              </div>
-                            ) : (
-                              <Input
-                                type="number"
-                                step="0.0001"
-                                value={newTransaction.cotacao_aplicada}
-                                onChange={(e) => {
-                                    const cotacao = parseFloat(e.target.value);
-                                    const valOrigem = parseFloat(newTransaction.valor_origem);
-                                    const totalBRL = (!isNaN(valOrigem) && !isNaN(cotacao)) ? (valOrigem * cotacao).toFixed(2) : '';
-                                    setNewTransaction(prev => ({ ...prev, cotacao_aplicada: e.target.value, valor_total: totalBRL }));
-                                }}
-                                className="mt-1.5"
-                                placeholder="R$ 0.00"
-                              />
-                            )}
+                            <Input
+                              type="number"
+                              step="0.0001"
+                              value={newTransaction.cotacao_aplicada}
+                              onChange={(e) => {
+                                  const cotacao = parseFloat(e.target.value);
+                                  const valOrigem = parseFloat(newTransaction.valor_origem);
+                                  const totalBRL = (!isNaN(valOrigem) && !isNaN(cotacao)) ? (valOrigem * cotacao).toFixed(2) : '';
+                                  setNewTransaction(prev => ({ ...prev, cotacao_aplicada: e.target.value, valor_total: totalBRL }));
+                              }}
+                              className="mt-1.5"
+                              placeholder="R$ 0.00"
+                            />
                           )}
                         </div>
                     </div>
