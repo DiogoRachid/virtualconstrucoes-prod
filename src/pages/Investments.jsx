@@ -85,6 +85,11 @@ export default function Investments() {
     queryFn: () => base44.entities.InvestmentHistory.list('data', 30) // Últimos 30 registros
   });
 
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bankAccounts'],
+    queryFn: () => base44.entities.BankAccount.list()
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Investment.delete(id),
     onSuccess: () => {
@@ -128,9 +133,13 @@ export default function Investments() {
   }).filter(c => c.value > 0);
 
   const totalInvestido = investments.reduce((sum, inv) => sum + (inv.valor_investido || 0), 0);
-  const totalAtual = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
-  const totalRentabilidade = totalAtual - totalInvestido;
-  const rentabilidadePercent = totalInvestido > 0 ? ((totalAtual / totalInvestido) - 1) * 100 : 0;
+  const totalInvestimentos = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
+  const totalBankBalance = bankAccounts.reduce((sum, acc) => sum + (acc.saldo_atual || 0), 0);
+  
+  const totalAtual = totalInvestimentos + totalBankBalance;
+  // Rentabilidade considera apenas investimentos para não distorcer com saldo em conta
+  const totalRentabilidade = totalInvestimentos - totalInvestido;
+  const rentabilidadePercent = totalInvestido > 0 ? ((totalInvestimentos / totalInvestido) - 1) * 100 : 0;
 
   // Histórico de Evolução
   const [historyDate, setHistoryDate] = useState(new Date());
@@ -337,11 +346,18 @@ export default function Investments() {
             <div className="text-3xl font-bold mb-1">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAtual)}
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-300 mb-6">
-              <span>Investido: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalInvestido)}</span>
+            <div className="flex flex-col gap-1 text-sm text-slate-300 mb-4">
+              <div className="flex justify-between">
+                 <span>Investimentos:</span>
+                 <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalInvestimentos)}</span>
+              </div>
+              <div className="flex justify-between">
+                 <span>Saldo em Conta:</span>
+                 <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBankBalance)}</span>
+              </div>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-3 border-t border-slate-700 pt-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">Rentabilidade R$</span>
                 <span className={`font-semibold ${totalRentabilidade >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
