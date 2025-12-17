@@ -367,6 +367,32 @@ export default function Investments() {
       }
     },
     {
+      header: 'Variação Dia',
+      render: (row) => {
+          const prevValue = previousAssetsMap[row.id];
+          if (prevValue === undefined) return <span className="text-slate-400 text-xs">-</span>;
+          
+          const currentValue = row.valor_atual || row.valor_investido || 0;
+          const diff = currentValue - prevValue;
+          const percent = prevValue > 0 ? (diff / prevValue) * 100 : 0;
+          const isPos = diff >= 0;
+          const isZero = Math.abs(diff) < 0.01;
+
+          if (isZero) return <span className="text-slate-400 text-xs">-</span>;
+          
+          return (
+             <div className={`flex flex-col ${isPos ? 'text-emerald-600' : 'text-red-600'}`}>
+                <span className="font-medium text-sm">
+                   {isPos ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diff)}
+                </span>
+                <span className="text-xs">
+                   {isPos ? '+' : ''}{percent.toFixed(2)}%
+                </span>
+             </div>
+          );
+      }
+    },
+    {
       header: 'Rentabilidade',
       render: (row) => {
         const isInternational = ['renda_variavel_int', 'crypto'].includes(row.categoria);
