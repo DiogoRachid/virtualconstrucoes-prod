@@ -188,6 +188,17 @@ export default function Investments() {
   const totalRentabilidade = totalInvestimentos - totalInvestido;
   const rentabilidadePercent = totalInvestido > 0 ? ((totalInvestimentos / totalInvestido) - 1) * 100 : 0;
 
+  // Cálculo de Variação Diária (comparado com o registro anterior mais recente)
+  const sortedHistory = [...history].sort((a,b) => new Date(b.data) - new Date(a.data));
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  // Encontrar o último registro que não seja de hoje (para comparar o hoje real-time com o fechamento anterior)
+  // Ou se hoje já foi salvo, compara com o anterior a ele.
+  const previousRecord = sortedHistory.find(h => h.data < todayStr);
+  const previousValue = previousRecord ? previousRecord.valor_total_atual : 0;
+  const dailyDiffValue = previousValue > 0 ? totalAtual - previousValue : 0;
+  const dailyDiffPercent = previousValue > 0 ? (dailyDiffValue / previousValue) * 100 : 0;
+
+
   // Histórico de Evolução
   const [historyDate, setHistoryDate] = useState(new Date());
 
@@ -210,7 +221,21 @@ export default function Investments() {
         valor_total_atual: totalAtual,
         rentabilidade_valor: totalRentabilidade,
         rentabilidade_percentual: rentabilidadePercent,
-        detalhes: totalsByCategory // Salva o snapshot das categorias
+        detalhes: {
+           categories: totalsByCategory,
+           assets: investments.map(inv => ({
+              id: inv.id,
+              nome: inv.nome,
+              ticker: inv.ticker,
+              categoria: inv.categoria,
+              quantidade: inv.quantidade,
+              preco_medio: inv.preco_medio,
+              cotacao_atual: inv.cotacao_atual,
+              valor_atual: inv.valor_atual,
+              valor_atual_usd: inv.valor_atual_usd,
+              cotacao_atual_usd: inv.cotacao_atual_usd
+           }))
+        }
       });
 
       queryClient.invalidateQueries({ queryKey: ['investment_history'] });
@@ -227,6 +252,55 @@ export default function Investments() {
      total: h.valor_total_atual,
      investido: h.valor_total_investido
   }));
+
+  const historyColumns = [
+    {
+      header: 'Data',
+      render: (row) => format(new Date(row.data), 'dd/MM/yyyy', { locale: ptBR })
+    },
+    {
+      header: 'Total Investido',
+      render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total_investido || 0)
+    },
+    {
+      header: 'Total Atual',
+      render: (row) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_total_atual || 0)
+    },
+    {
+      header: 'Rentabilidade',
+      render: (row) => {
+         const isPositive = (row.rentabilidade_valor || 0) >= 0;
+         return (
+            <div className={`flex flex-col ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+               <span className="font-medium text-sm">
+                  {isPositive ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.rentabilidade_valor || 0)}
+               </span>
+               <span className="text-xs">
+                  {isPositive ? '+' : ''}{(row.rentabilidade_percentual || 0).toFixed(2)}%
+               </span>
+            </div>
+         )
+      }
+    },
+    {
+      header: '',
+      className: 'w-12',
+      render: (row) => (
+        <Button 
+           variant="ghost" 
+           size="icon" 
+           className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+           onClick={() => {
+              if (confirm('Tem certeza que deseja excluir este registro do histórico?')) {
+                 deleteHistoryMutation.mutate(row.id);
+              }
+           }}
+        >
+           <Trash2 className="h-4 w-4" />
+        </Button>
+      )
+    }
+  ];
 
   const columns = [
     {
