@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
@@ -195,7 +195,7 @@ export default function Investments() {
   const sortedHistory = [...history].sort((a,b) => new Date(b.data) - new Date(a.data));
   
   // Pre-processar histórico para incluir diffs
-  const historyWithDiffs = React.useMemo(() => {
+  const historyWithDiffs = useMemo(() => {
       return sortedHistory.map((item, index) => {
           const prevItem = sortedHistory[index + 1];
           const prevTotal = prevItem ? prevItem.valor_total_atual : 0;
@@ -211,7 +211,7 @@ export default function Investments() {
   const dailyDiffValue = previousValue > 0 ? totalAtual - previousValue : 0;
   const dailyDiffPercent = previousValue > 0 ? (dailyDiffValue / previousValue) * 100 : 0;
 
-  const previousAssetsMap = React.useMemo(() => {
+  const previousAssetsMap = useMemo(() => {
       if (!previousRecord || !previousRecord.detalhes || !previousRecord.detalhes.assets) return {};
       const assets = Array.isArray(previousRecord.detalhes.assets) ? previousRecord.detalhes.assets : [];
       return assets.reduce((acc, asset) => {
@@ -275,7 +275,7 @@ export default function Investments() {
      investido: h.valor_total_investido
   }));
 
-  const assetColumns = React.useMemo(() => {
+  const assetColumns = useMemo(() => {
     const allAssets = new Map(); // Map id -> name
 
     // Coletar todos os ativos únicos presentes no histórico
