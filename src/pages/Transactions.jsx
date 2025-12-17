@@ -108,6 +108,8 @@ export default function Transactions() {
         data: format(new Date(), 'yyyy-MM-dd'),
         conta_bancaria_id: '',
         conta_bancaria_nome: '',
+        conta_destino_id: '',
+        conta_destino_nome: '',
         centro_custo_id: '',
         centro_custo_nome: ''
       });
@@ -165,7 +167,15 @@ export default function Transactions() {
         <div>
           <p className="font-medium text-slate-900">{row.descricao}</p>
           {row.conta_bancaria_nome && (
-            <p className="text-sm text-slate-500">{row.conta_bancaria_nome}</p>
+            <p className="text-sm text-slate-500">
+               {row.conta_bancaria_nome}
+               {row.tipo === 'transferencia' && row.conta_destino_nome && (
+                  <span className="flex items-center gap-1 mt-0.5 text-blue-500">
+                     <ArrowLeftRight className="h-3 w-3" />
+                     {row.conta_destino_nome}
+                  </span>
+               )}
+            </p>
           )}
         </div>
       )
