@@ -35,6 +35,12 @@ import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog';
 import { toast } from "sonner";
 import { fetchSingleQuote } from '@/components/investments/QuoteService';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
