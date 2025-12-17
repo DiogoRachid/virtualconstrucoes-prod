@@ -63,8 +63,8 @@ export default function TableImport() {
   };
 
   // 2. Step 1: Upload to Staging (Backend Function)
-  const handleUploadToStaging = async (textData) => {
-    if (!textData) return;
+  const handleUploadToStaging = async (textData, fileUrl = null) => {
+    if (!textData && !fileUrl) return;
     setLoading(true);
     setProgress({ current: 0, total: 100, message: 'Enviando dados para o servidor...', percent: 10 });
 
@@ -73,6 +73,8 @@ export default function TableImport() {
       
       const result = await base44.functions.IngestComposition({
         textData,
+        fileUrl,
+        encoding: 'iso-8859-1', // Default encoding for uploaded files
         mode,
         batchId,
         hasCategoryColumn
@@ -84,7 +86,7 @@ export default function TableImport() {
          if(fileInputRef.current) fileInputRef.current.value = '';
          checkStaging();
       } else {
-         toast.error("Erro no processamento do servidor.");
+         toast.error("Erro no processamento do servidor: " + (result?.message || 'Desconhecido'));
       }
     } catch (err) {
       console.error(err);
@@ -185,12 +187,23 @@ export default function TableImport() {
      setLoading(false);
   };
 
-  const handleFileRead = (e) => {
+  const handleFileRead = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => handleUploadToStaging(ev.target.result);
-    reader.readAsText(file, 'ISO-8859-1');
+    
+    setLoading(true);
+    setProgress({ message: 'Fazendo upload do arquivo...', percent: 20 });
+
+    try {
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        if (!file_url) throw new Error("Falha no upload do arquivo.");
+        
+        await handleUploadToStaging(null, file_url);
+    } catch (err) {
+        console.error(err);
+        toast.error("Erro ao preparar arquivo: " + err.message);
+        setLoading(false);
+    }
   };
 
   return (
@@ -342,7 +355,7 @@ export default function TableImport() {
                             : "COD_PAI | DESC | UN | COD_FILHO | QTD"
                          }
                       />
-                      <Button className="w-full" onClick={() => handleUploadToStaging(pasteData)} disabled={!pasteData}>
+                      <Button className="w-full" onClick={() => handleUploadToStaging(pasteData, null)} disabled={!pasteData}>
                          <UploadCloud className="mr-2 h-4 w-4" /> Carregar para Tabela
                       </Button>
                    </div>
