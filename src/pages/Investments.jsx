@@ -635,55 +635,76 @@ export default function Investments() {
              </div>
            </CardHeader>
            <CardContent>
-              {evolutionData.length > 0 ? (
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={evolutionData}>
-                      <defs>
-                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="data" />
-                      <YAxis 
-                        tickFormatter={(value) => 
-                          new Intl.NumberFormat('pt-BR', { 
-                            notation: "compact", 
-                            compactDisplay: "short" 
-                          }).format(value)
-                        } 
-                      />
-                      <Tooltip 
-                         formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="total" 
-                        name="Patrimônio Total"
-                        stroke="#3b82f6" 
-                        fillOpacity={1} 
-                        fill="url(#colorTotal)" 
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="investido" 
-                        name="Total Investido"
-                        stroke="#94a3b8" 
-                        fill="transparent" 
-                        strokeDasharray="5 5"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-[300px] flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-lg">
-                   <LineChart className="h-10 w-10 mb-2 opacity-50" />
-                   <p>Nenhum histórico registrado.</p>
-                   <p className="text-sm">Salve o histórico para acompanhar a evolução.</p>
-                </div>
-              )}
+              <Tabs defaultValue="chart">
+                 <TabsList className="mb-4">
+                    <TabsTrigger value="chart">Gráfico</TabsTrigger>
+                    <TabsTrigger value="table">Tabela de Histórico</TabsTrigger>
+                 </TabsList>
+                 
+                 <TabsContent value="chart">
+                    {evolutionData.length > 0 ? (
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={evolutionData}>
+                            <defs>
+                              <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="data" />
+                            <YAxis 
+                              tickFormatter={(value) => 
+                                new Intl.NumberFormat('pt-BR', { 
+                                  notation: "compact", 
+                                  compactDisplay: "short" 
+                                }).format(value)
+                              } 
+                            />
+                            <Tooltip 
+                               formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="total" 
+                              name="Patrimônio Total"
+                              stroke="#3b82f6" 
+                              fillOpacity={1} 
+                              fill="url(#colorTotal)" 
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="investido" 
+                              name="Total Investido"
+                              stroke="#94a3b8" 
+                              fill="transparent" 
+                              strokeDasharray="5 5"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-[300px] flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-lg">
+                         <LineChart className="h-10 w-10 mb-2 opacity-50" />
+                         <p>Nenhum histórico registrado.</p>
+                         <p className="text-sm">Salve o histórico para acompanhar a evolução.</p>
+                      </div>
+                    )}
+                 </TabsContent>
+
+                 <TabsContent value="table">
+                    <DataTable 
+                       columns={historyColumns}
+                       data={sortedHistory}
+                       emptyComponent={
+                          <div className="p-8 text-center text-slate-500">
+                             Nenhum histórico salvo.
+                          </div>
+                       }
+                    />
+                 </TabsContent>
+              </Tabs>
            </CardContent>
         </Card>
 
