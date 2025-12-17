@@ -132,6 +132,27 @@ export default function Investments() {
     return { name: CATEGORY_CONFIG[cat].label, value: total, categoria: cat };
   }).filter(c => c.value > 0);
 
+  // Totais por conta (Instituição)
+  const totalsByAccount = investments.reduce((acc, inv) => {
+    const conta = inv.conta_bancaria_nome || 'Outros';
+    const valor = inv.valor_atual || inv.valor_investido || 0;
+    if (!acc[conta]) acc[conta] = 0;
+    acc[conta] += valor;
+    return acc;
+  }, {});
+
+  // Adicionar saldos de contas correntes ao gráfico por instituição
+  bankAccounts.forEach(acc => {
+    const nome = acc.nome || acc.banco || 'Conta';
+    if (!totalsByAccount[nome]) totalsByAccount[nome] = 0;
+    totalsByAccount[nome] += (acc.saldo_atual || 0);
+  });
+
+  const totalsByAccountData = Object.entries(totalsByAccount)
+    .map(([name, value]) => ({ name, value }))
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+
   const totalInvestido = investments.reduce((sum, inv) => sum + (inv.valor_investido || 0), 0);
   const totalInvestimentos = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
   const totalBankBalance = bankAccounts.reduce((sum, acc) => sum + (acc.saldo_atual || 0), 0);
@@ -238,17 +259,40 @@ export default function Investments() {
     {
       header: 'Rentabilidade',
       render: (row) => {
-        const rent = row.rentabilidade_percentual || 0;
-        const isPositive = rent >= 0;
+        const isInternational = ['renda_variavel_int', 'crypto'].includes(row.categoria);
+        let rentPercent = row.rentabilidade_percentual || 0;
+        let rentValue = row.rentabilidade_valor || 0;
+        let isUSD = false;
+
+        // Cálculo específico para ativos internacionais em Dólar
+        if (isInternational && row.valor_atual_usd > 0 && row.quantidade > 0 && row.preco_medio > 0) {
+           const investidoUSD = row.quantidade * row.preco_medio;
+           const atualUSD = row.valor_atual_usd;
+           rentValue = atualUSD - investidoUSD;
+           rentPercent = investidoUSD > 0 ? (rentValue / investidoUSD) * 100 : 0;
+           isUSD = true;
+        }
+
+        const isPositive = rentPercent >= 0;
+        
         return (
-          <div className="flex items-center gap-1">
-            {isPositive ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            )}
-            <span className={`font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
-              {rent >= 0 ? '+' : ''}{rent.toFixed(2)}%
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              {isPositive ? (
+                <TrendingUp className="h-3 w-3 text-emerald-600" />
+              ) : (
+                <TrendingDown className="h-3 w-3 text-red-600" />
+              )}
+              <span className={`font-semibold text-sm ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+                {isPositive ? '+' : ''}{rentPercent.toFixed(2)}%
+              </span>
+            </div>
+            <span className={`text-xs ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+              {isPositive ? '+' : ''}
+              {isUSD 
+                ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(rentValue)
+                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentValue)
+              }
             </span>
           </div>
         );
@@ -374,40 +418,74 @@ export default function Investments() {
           </CardContent>
         </Card>
 
-        {/* Resumo por Categoria */}
+        {/* Resumo de Alocação (Abas) */}
         <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-slate-500">Alocação por Categoria</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {Object.keys(CATEGORY_CONFIG).map(cat => {
-                const totalCat = investments
-                  .filter(inv => inv.categoria === cat)
-                  .reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
-                
-                if (totalCat === 0) return null;
-                
-                const config = CATEGORY_CONFIG[cat];
-                const Icon = config.icon;
-                const percent = totalAtual > 0 ? (totalCat / totalAtual) * 100 : 0;
+          <CardHeader className="pb-2">
+             <Tabs defaultValue="category" className="w-full">
+                <div className="flex items-center justify-between mb-4">
+                  <CardTitle className="text-sm font-medium text-slate-500">Alocação de Ativos</CardTitle>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="category" className="text-xs">Por Categoria</TabsTrigger>
+                    <TabsTrigger value="account" className="text-xs">Por Conta/Instituição</TabsTrigger>
+                  </TabsList>
+                </div>
 
-                return (
-                  <div key={cat} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`p-1.5 rounded-lg ${config.color} bg-opacity-10`}>
-                        <Icon className={`h-4 w-4 ${config.color.replace('bg-', 'text-')}`} />
-                      </div>
-                      <span className="text-xs font-medium text-slate-600 truncate">{config.label}</span>
-                    </div>
-                    <p className="font-semibold text-slate-900">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCat)}
-                    </p>
-                    <p className="text-xs text-slate-500">{percent.toFixed(1)}%</p>
+                <TabsContent value="category" className="mt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {Object.keys(CATEGORY_CONFIG).map(cat => {
+                      const totalCat = investments
+                        .filter(inv => inv.categoria === cat)
+                        .reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
+                      
+                      if (totalCat === 0) return null;
+                      
+                      const config = CATEGORY_CONFIG[cat];
+                      const Icon = config.icon;
+                      const percent = totalAtual > 0 ? (totalCat / totalAtual) * 100 : 0;
+
+                      return (
+                        <div key={cat} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`p-1.5 rounded-lg ${config.color} bg-opacity-10`}>
+                              <Icon className={`h-4 w-4 ${config.color.replace('bg-', 'text-')}`} />
+                            </div>
+                            <span className="text-xs font-medium text-slate-600 truncate">{config.label}</span>
+                          </div>
+                          <p className="font-semibold text-slate-900">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCat)}
+                          </p>
+                          <p className="text-xs text-slate-500">{percent.toFixed(1)}%</p>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </TabsContent>
+
+                <TabsContent value="account" className="mt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {totalsByAccountData.map((item, index) => {
+                      const percent = totalAtual > 0 ? (item.value / totalAtual) * 100 : 0;
+                      return (
+                        <div key={index} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600">
+                              <Building className="h-4 w-4" />
+                            </div>
+                            <span className="text-xs font-medium text-slate-600 truncate" title={item.name}>{item.name}</span>
+                          </div>
+                          <p className="font-semibold text-slate-900">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.value)}
+                          </p>
+                          <p className="text-xs text-slate-500">{percent.toFixed(1)}%</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </TabsContent>
+             </Tabs>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {/* Conteúdo movido para dentro do TabsContent acima */}
           </CardContent>
         </Card>
       </div>
