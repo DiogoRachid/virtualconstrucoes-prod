@@ -1,38 +1,43 @@
 // Serviço para buscar cotações usando a API do LLM com contexto da internet
 import { base44 } from '@/api/base44Client';
 
-function isB3Ticker(ticker) {
-  // Padrão B3: 4 letras + número(s) (ex: PETR4, AAPL34, BOVA11, BITH11)
-  // Ignora criptos (BTC, ETH) e ativos US (AAPL, VOO) que não seguem esse padrão exato
-  return /^[A-Z]{4}[0-9]{1,2}$/.test(ticker.toUpperCase());
-}
-
 export async function fetchQuotes(tickers) {
   if (!tickers || tickers.length === 0) return {};
 
-  // Adiciona sufixo .SA explicitamente para ativos B3 para forçar a busca correta
-  const processedTickers = tickers.map(t => {
-    const upper = t.toUpperCase();
-    return isB3Ticker(upper) && !upper.endsWith('.SA') ? `${upper}.SA` : upper;
-  });
-
-  const tickerList = processedTickers.join(', ');
+  const tickerList = tickers.join(', ');
   
   const response = await base44.integrations.Core.InvokeLLM({
-    prompt: `Atue como um especialista financeiro. Busque as cotações mais recentes para a lista exata de ativos: ${tickerList}.
+    prompt: `Atue como um especialista de mercado financeiro.
+    Sua missão é buscar a cotação ATUALIZADA (em tempo real ou fechamento mais recente) para os seguintes ativos: ${tickerList}.
 
-    REGRAS CRÍTICAS:
-    1. ATIVOS COM SUFIXO ".SA" (ex: AAPL34.SA, BITH11.SA):
-       - SÃO OBRIGATORIAMENTE DA BOLSA BRASILEIRA (B3).
-       - O PREÇO DEVE SER EM REAIS (BRL).
-       - AAPL34.SA não é AAPL (EUA). É um BDR negociado no Brasil.
-       - BITH11.SA é um ETF negociado no Brasil.
+    FONTES OBRIGATÓRIAS DE PESQUISA (Use a que tiver o dado mais recente):
+    - Status Invest
+    - Investing.com
+    - TradingView
+    - Google Finance
+    - Yahoo Finance
+    - InfoMoney
+    - ADVFN
 
-    2. ATIVOS SEM SUFIXO:
-       - Se for Cripto (BTC, ETH): Tente BRL, aceite USD.
-       - Se for Stock EUA (AAPL, VOO): USD.
+    REGRAS DE OURO PARA IDENTIFICAÇÃO DE MERCADO:
+    
+    1. ATIVOS DA BOLSA BRASILEIRA (B3) -> PREÇO EM REAIS (R$):
+       - Identificados por finais numéricos: 3, 4, 5, 6, 11, 33, 34.
+       - Exemplos: PETR4, VALE3, BITH11, QETH11, AAPL34, KISU11, IVVB11.
+       - IMPORTANTE: 
+         * AAPL34 é um BDR da Apple negociado no Brasil. O valor é em R$ (ex: ~R$ 60,00). NÃO confunda com a ação AAPL da NASDAQ (USD).
+         * BITH11 e QETH11 são ETFs de Cripto na B3. Valor em R$.
+         * KISU11 é FII. Valor em R$.
 
-    Retorne um JSON com:
+    2. CRIPTOMOEDAS GLOBAIS (BTC, ETH, SOL):
+       - Busque o valor em REAIS (BRL) se possível (ex: Mercado Bitcoin, Binance BR).
+       - Se não encontrar em BRL, retorne em USD.
+
+    3. ATIVOS INTERNACIONAIS (Stocks/REITs originais):
+       - Apenas se o ticker NÃO tiver número no final (ex: AAPL, MSFT, VOO, VNQ).
+       - Valor em USD.
+
+    Retorne um JSON estrito com:
     - ticker: código do ativo (ex: BTC, PETR4)
     - price: valor numérico do preço
     - currency: "BRL" ou "USD"
@@ -80,26 +85,20 @@ export async function fetchQuotes(tickers) {
 }
 
 export async function fetchSingleQuote(ticker, categoria) {
-  const upperTicker = ticker.toUpperCase();
-  // Se parece ticker da B3 e não tem .SA, adiciona para garantir
-  const searchTicker = (isB3Ticker(upperTicker) && !upperTicker.endsWith('.SA')) 
-    ? `${upperTicker}.SA` 
-    : upperTicker;
-
   const response = await base44.integrations.Core.InvokeLLM({
-    prompt: `Atue como um especialista financeiro. Busque a cotação mais recente para o ativo: "${searchTicker}".
-
-    INSTRUÇÕES RÍGIDAS:
-    1. Se o ticker tem ".SA" (ex: AAPL34.SA, BITH11.SA):
-       - É um ativo da B3 (Brasil).
-       - PREÇO OBRIGATÓRIO EM BRL (Reais).
-       - Ignore cotações em Dólar para estes ativos.
+    prompt: `Busque a cotação mais recente para o ativo financeiro: "${ticker}".
     
-    2. Se for Cripto (BTC, ETH):
-       - Busque o valor em BRL.
+    FONTES SUGERIDAS: Status Invest, Investing.com, TradingView, Google Finance.
 
-    3. Se for Ativo Internacional (AAPL, MSFT) sem .SA:
-       - Preço em USD.
+    REGRAS DE CONTEXTO:
+    - Se o ticker terminar em 3, 4, 11, 33, 34 (ex: AAPL34, BITH11, KISU11):
+      * É um ativo do Brasil (B3).
+      * O preço DEVE ser em BRL (Reais).
+      * Cuidado com BDRs (ex: AAPL34): Preço é em Reais, diferente da ação original em Dólar.
+    
+    - Se for Cripto (BTC, ETH): Tente BRL.
+    
+    - Se for Stock Americana (AAPL, TSLA): USD.
 
     Retorne um JSON com:
     - price: preço atual (numérico)

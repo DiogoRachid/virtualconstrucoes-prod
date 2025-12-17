@@ -603,7 +603,7 @@ export default function Investments() {
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Atualizar Cotações (Apple/Yahoo)
+                Atualizar Cotações (Geral)
               </Button>
             </CardContent>
           </Card>
