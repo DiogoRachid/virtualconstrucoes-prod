@@ -198,6 +198,16 @@ export default function Investments() {
   const dailyDiffValue = previousValue > 0 ? totalAtual - previousValue : 0;
   const dailyDiffPercent = previousValue > 0 ? (dailyDiffValue / previousValue) * 100 : 0;
 
+  const previousAssetsMap = React.useMemo(() => {
+      if (!previousRecord || !previousRecord.detalhes || !previousRecord.detalhes.assets) return {};
+      // Se detalhes.assets for array (formato novo) ou objeto (se houver formato antigo, mas defini como array no save)
+      const assets = Array.isArray(previousRecord.detalhes.assets) ? previousRecord.detalhes.assets : [];
+      return assets.reduce((acc, asset) => {
+          acc[asset.id] = asset.valor_atual;
+          return acc;
+      }, {});
+  }, [previousRecord]);
+
 
   // Histórico de Evolução
   const [historyDate, setHistoryDate] = useState(new Date());
