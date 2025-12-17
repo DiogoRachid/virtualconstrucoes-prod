@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { fetchEconomicIndicators } from '@/components/investments/QuoteService';
 
 const tipoLabels = {
   corrente: 'Conta Corrente',
@@ -29,7 +30,12 @@ export default function BankAccounts() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
+  const [indicators, setIndicators] = useState(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    fetchEconomicIndicators().then(setIndicators).catch(console.error);
+  }, []);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['bankAccounts'],
@@ -52,7 +58,15 @@ export default function BankAccounts() {
     return matchSearch && matchStatus;
   });
 
-  const totalSaldo = accounts.reduce((sum, acc) => sum + (acc.saldo_atual || 0), 0);
+  const totalSaldo = accounts.reduce((sum, acc) => {
+    let saldo = acc.saldo_atual || 0;
+    if (acc.moeda === 'USD' && indicators?.dolar) {
+      saldo = saldo * indicators.dolar;
+    } else if (acc.moeda === 'EUR' && indicators?.euro) {
+      saldo = saldo * indicators.euro;
+    }
+    return sum + saldo;
+  }, 0);
 
   const columns = [
     {
@@ -82,11 +96,24 @@ export default function BankAccounts() {
     },
     {
       header: 'Saldo Atual',
-      render: (row) => (
-        <span className={`font-semibold ${(row.saldo_atual || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.saldo_atual || 0)}
-        </span>
-      )
+      render: (row) => {
+        const moeda = row.moeda || 'BRL';
+        const locale = moeda === 'USD' ? 'en-US' : (moeda === 'EUR' ? 'de-DE' : 'pt-BR');
+        return (
+          <div className="flex flex-col">
+            <span className={`font-semibold ${(row.saldo_atual || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {new Intl.NumberFormat(locale, { style: 'currency', currency: moeda }).format(row.saldo_atual || 0)}
+            </span>
+            {moeda !== 'BRL' && indicators && (
+              <span className="text-xs text-slate-500">
+                ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                  (row.saldo_atual || 0) * (moeda === 'USD' ? indicators.dolar : indicators.euro || 0)
+                )}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Status',

@@ -29,6 +29,7 @@ export default function BankAccountForm() {
     tipo: 'corrente',
     saldo_inicial: '',
     saldo_atual: '',
+    moeda: 'BRL',
     status: 'ativa'
   });
 
@@ -46,6 +47,7 @@ export default function BankAccountForm() {
         agencia: account.agencia || '',
         conta: account.conta || '',
         tipo: account.tipo || 'corrente',
+        moeda: account.moeda || 'BRL',
         saldo_inicial: account.saldo_inicial || '',
         saldo_atual: account.saldo_atual || '',
         status: account.status || 'ativa'
@@ -130,6 +132,23 @@ export default function BankAccountForm() {
                     <SelectItem value="poupanca">Poupança</SelectItem>
                     <SelectItem value="investimento">Investimento</SelectItem>
                     <SelectItem value="caixa">Caixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="moeda">Moeda *</Label>
+                <Select
+                  value={formData.moeda}
+                  onValueChange={(value) => handleChange('moeda', value)}
+                >
+                  <SelectTrigger className="mt-1.5">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BRL">Real (BRL)</SelectItem>
+                    <SelectItem value="USD">Dólar (USD)</SelectItem>
+                    <SelectItem value="EUR">Euro (EUR)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

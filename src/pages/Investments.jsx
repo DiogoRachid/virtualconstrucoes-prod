@@ -145,7 +145,16 @@ export default function Investments() {
   bankAccounts.forEach(acc => {
     const nome = acc.nome || acc.banco || 'Conta';
     if (!totalsByAccount[nome]) totalsByAccount[nome] = 0;
-    totalsByAccount[nome] += (acc.saldo_atual || 0);
+    
+    let saldo = acc.saldo_atual || 0;
+    // Converter para BRL se necessário para o gráfico agregado
+    if (acc.moeda === 'USD' && indicators?.dolar) {
+      saldo = saldo * indicators.dolar;
+    } else if (acc.moeda === 'EUR' && indicators?.euro) {
+      saldo = saldo * indicators.euro;
+    }
+    
+    totalsByAccount[nome] += saldo;
   });
 
   const totalsByAccountData = Object.entries(totalsByAccount)
@@ -155,7 +164,16 @@ export default function Investments() {
 
   const totalInvestido = investments.reduce((sum, inv) => sum + (inv.valor_investido || 0), 0);
   const totalInvestimentos = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
-  const totalBankBalance = bankAccounts.reduce((sum, acc) => sum + (acc.saldo_atual || 0), 0);
+  
+  const totalBankBalance = bankAccounts.reduce((sum, acc) => {
+    let saldo = acc.saldo_atual || 0;
+    if (acc.moeda === 'USD' && indicators?.dolar) {
+      saldo = saldo * indicators.dolar;
+    } else if (acc.moeda === 'EUR' && indicators?.euro) {
+      saldo = saldo * indicators.euro;
+    }
+    return sum + saldo;
+  }, 0);
   
   const totalAtual = totalInvestimentos + totalBankBalance;
   // Rentabilidade considera apenas investimentos para não distorcer com saldo em conta

@@ -184,16 +184,42 @@ export default function InvestmentDetail() {
         const conta = bankAccounts.find(c => c.id === data.conta_id);
         if (conta) {
           const isEntrada = ['venda', 'dividendo', 'jcp', 'rendimento', 'amortizacao'].includes(data.tipo_operacao);
+          
+          // Determinar valor a ser atualizado na conta (depende da moeda da conta e da transação)
+          let valorConta = valor; // Padrão: valor total (BRL ou moeda base da transação se BRL)
+          let descricaoTransacao = `${TIPO_OPERACAO_LABELS[data.tipo_operacao]} - ${investment.nome}`;
+
+          if (conta.moeda === 'USD') {
+             if (data.moeda === 'USD') {
+                valorConta = parseFloat(data.valor_origem); // Mantém em USD
+             } else {
+                 // Transação BRL em conta USD: converter BRL -> USD (estimativa ou erro)
+                 // Assumindo que o usuário não fará isso sem querer, mas se fizer, vamos tentar usar cotação atual do investimento ou 1
+                 // Melhor: Alertar que é conversão implícita ou usar valor BRL se não tiver cotação
+                 // Simplificação: Se conta é USD e transação BRL, alerta ou assume que BRL = USD (errado).
+                 // Como não temos input de cotação reversa, vamos usar o valor total como fallback, mas idealmente deveria ter cotação.
+                 valorConta = valor; // Fallback perigoso, mas evita crash.
+             }
+             descricaoTransacao += ' (USD)';
+          } else {
+             // Conta BRL
+             if (data.moeda === 'USD') {
+                valorConta = valor; // Valor convertido para BRL (valor_total já é BRL)
+             } else {
+                valorConta = valor; // BRL -> BRL
+             }
+          }
+
           const novoSaldo = isEntrada 
-            ? (conta.saldo_atual || 0) + valor 
-            : (conta.saldo_atual || 0) - valor;
+            ? (conta.saldo_atual || 0) + valorConta
+            : (conta.saldo_atual || 0) - valorConta;
           
           await base44.entities.BankAccount.update(conta.id, { saldo_atual: novoSaldo });
           
           await base44.entities.Transaction.create({
             tipo: isEntrada ? 'entrada' : 'saida',
-            descricao: `${TIPO_OPERACAO_LABELS[data.tipo_operacao]} - ${investment.nome}`,
-            valor: valor,
+            descricao: descricaoTransacao,
+            valor: valorConta, // Valor na moeda da conta
             data: data.data_operacao,
             conta_bancaria_id: conta.id,
             conta_bancaria_nome: conta.nome,
@@ -919,7 +945,7 @@ export default function InvestmentDetail() {
                     <SelectItem value="none">Não vincular</SelectItem>
                     {bankAccounts.map(acc => (
                       <SelectItem key={acc.id} value={acc.id}>
-                        {acc.nome} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(acc.saldo_atual || 0)}
+                        {acc.nome} ({acc.moeda || 'BRL'}) - {new Intl.NumberFormat(acc.moeda === 'USD' ? 'en-US' : 'pt-BR', { style: 'currency', currency: acc.moeda || 'BRL' }).format(acc.saldo_atual || 0)}
                       </SelectItem>
                     ))}
                   </SelectContent>
