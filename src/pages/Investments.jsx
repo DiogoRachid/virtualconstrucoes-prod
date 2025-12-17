@@ -38,7 +38,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { fetchQuotes, fetchEconomicIndicators } from '@/components/investments/QuoteService';
+import { fetchEconomicIndicators } from '@/components/investments/QuoteService';
+import BatchUpdateQuotesDialog from '@/components/investments/BatchUpdateQuotesDialog';
 import {
   PieChart,
   Pie,
@@ -69,7 +70,7 @@ export default function Investments() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
-  const [isUpdatingQuotes, setIsUpdatingQuotes] = useState(false);
+  const [showBatchUpdate, setShowBatchUpdate] = useState(false);
   const [indicators, setIndicators] = useState(null);
   const [loadingIndicators, setLoadingIndicators] = useState(false);
   const queryClient = useQueryClient();
@@ -108,87 +109,7 @@ export default function Investments() {
     loadIndicators();
   }, []);
 
-  // Atualizar cotações
-  const updateQuotes = async () => {
-    setIsUpdatingQuotes(true);
-    try {
-      const tickersToUpdate = investments
-        .filter(inv => inv.ticker && ['renda_variavel_br', 'renda_variavel_int', 'crypto', 'fundos'].includes(inv.categoria))
-        .map(inv => inv.ticker);
-
-      if (tickersToUpdate.length === 0) {
-        toast.info('Nenhum ativo com ticker para atualizar');
-        setIsUpdatingQuotes(false);
-        return;
-      }
-
-      // Batch requests to avoid LLM limits (chunk size 3 for better accuracy)
-      const chunkSize = 3;
-      let allQuotes = {};
-      
-      for (let i = 0; i < tickersToUpdate.length; i += chunkSize) {
-         const chunk = tickersToUpdate.slice(i, i + chunkSize);
-         try {
-            const chunkQuotes = await fetchQuotes(chunk);
-            allQuotes = { ...allQuotes, ...chunkQuotes };
-         } catch (e) {
-            console.error("Erro ao buscar chunk", chunk, e);
-         }
-      }
-
-      const quotes = allQuotes;
-      const usdBrl = quotes['USD_BRL']?.price || (indicators?.dolar || 5.50);
-
-      for (const inv of investments) {
-        const tickerUpper = inv.ticker.toUpperCase();
-        // Tenta encontrar o ticker direto ou com sufixos comuns
-        const quote = quotes[tickerUpper] || quotes[tickerUpper + '.SA'] || quotes[tickerUpper + '-USD'];
-        
-        if (quote) {
-          let cotacaoBRL = quote.price;
-          let cotacaoUSD = null;
-          let valorAtualUSD = null;
-
-          // Se a moeda retornada for USD, converte
-          if (quote.currency === 'USD') {
-            cotacaoUSD = quote.price;
-            cotacaoBRL = quote.price * usdBrl;
-            valorAtualUSD = inv.quantidade ? inv.quantidade * cotacaoUSD : cotacaoUSD;
-          } 
-          // Se for BRL, usa direto (mesmo para crypto se a API retornou em BRL)
-          else {
-             // Se for crypto em BRL, não precisamos de cotacaoUSD a não ser para ref
-             if (['renda_variavel_int', 'crypto'].includes(inv.categoria)) {
-                // Estima USD reverso apenas para registro
-                cotacaoUSD = cotacaoBRL / usdBrl;
-                valorAtualUSD = inv.quantidade ? inv.quantidade * cotacaoUSD : cotacaoUSD;
-             }
-          }
-
-          const valorAtual = inv.quantidade ? inv.quantidade * cotacaoBRL : cotacaoBRL;
-          const rentabilidadeValor = valorAtual - (inv.valor_investido || 0);
-          const rentabilidadePercent = inv.valor_investido ? ((valorAtual / inv.valor_investido) - 1) * 100 : 0;
-
-          await base44.entities.Investment.update(inv.id, {
-            cotacao_atual: cotacaoBRL,
-            cotacao_atual_usd: cotacaoUSD,
-            valor_atual: valorAtual,
-            valor_atual_usd: valorAtualUSD,
-            rentabilidade_valor: rentabilidadeValor,
-            rentabilidade_percentual: rentabilidadePercent,
-            ultima_atualizacao: new Date().toISOString()
-          });
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['investments'] });
-      toast.success('Cotações atualizadas com sucesso!');
-    } catch (error) {
-      console.error('Erro ao atualizar cotações:', error);
-      toast.error('Erro ao atualizar cotações');
-    }
-    setIsUpdatingQuotes(false);
-  };
+  // Removida atualização automática de cotações em favor da manual
 
   const filteredInvestments = investments.filter(inv => {
     const matchSearch = !search || 
@@ -595,15 +516,10 @@ export default function Investments() {
                 variant="outline"
                 size="sm"
                 className="w-full mt-4"
-                onClick={updateQuotes}
-                disabled={isUpdatingQuotes}
+                onClick={() => setShowBatchUpdate(true)}
               >
-                {isUpdatingQuotes ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                )}
-                Atualizar Cotações (Geral)
+                <Pencil className="h-4 w-4 mr-2" />
+                Atualizar Valores (Manual)
               </Button>
             </CardContent>
           </Card>
@@ -660,6 +576,12 @@ export default function Investments() {
         isDeleting={deleteMutation.isPending}
         title="Excluir investimento"
         description="Tem certeza que deseja excluir este investimento? Todo o histórico será perdido."
+      />
+
+      <BatchUpdateQuotesDialog 
+        open={showBatchUpdate} 
+        onOpenChange={setShowBatchUpdate}
+        investments={filteredInvestments.length > 0 ? filteredInvestments : investments}
       />
     </div>
   );
