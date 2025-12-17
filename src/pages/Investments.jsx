@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -44,8 +45,16 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Tooltip
+  Tooltip,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid
 } from 'recharts';
+import { Calendar as CalendarIcon, Save } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 const CATEGORY_CONFIG = {
   renda_fixa: { label: 'Renda Fixa', icon: PiggyBank, color: 'bg-blue-500' },
@@ -69,6 +78,11 @@ export default function Investments() {
   const { data: investments = [], isLoading } = useQuery({
     queryKey: ['investments'],
     queryFn: () => base44.entities.Investment.filter({ status: 'ativo' }, '-created_date')
+  });
+
+  const { data: history = [] } = useQuery({
+    queryKey: ['investment_history'],
+    queryFn: () => base44.entities.InvestmentHistory.list('data', 30) // Últimos 30 registros
   });
 
   const deleteMutation = useMutation({
@@ -110,20 +124,32 @@ export default function Investments() {
       }
 
       const quotes = await fetchQuotes(tickersToUpdate);
-      const usdBrl = quotes['USD_BRL']?.price || 5.0;
+      const usdBrl = quotes['USD_BRL']?.price || (indicators?.dolar || 5.50);
 
       for (const inv of investments) {
-        if (inv.ticker && quotes[inv.ticker.toUpperCase()]) {
-          const quote = quotes[inv.ticker.toUpperCase()];
+        const tickerUpper = inv.ticker.toUpperCase();
+        // Tenta encontrar o ticker direto ou com sufixos comuns
+        const quote = quotes[tickerUpper] || quotes[tickerUpper + '.SA'] || quotes[tickerUpper + '-USD'];
+        
+        if (quote) {
           let cotacaoBRL = quote.price;
           let cotacaoUSD = null;
           let valorAtualUSD = null;
 
-          // Se é ativo internacional ou crypto, guardar valor em USD e converter para BRL
-          if (quote.currency === 'USD' && ['renda_variavel_int', 'crypto'].includes(inv.categoria)) {
+          // Se a moeda retornada for USD, converte
+          if (quote.currency === 'USD') {
             cotacaoUSD = quote.price;
             cotacaoBRL = quote.price * usdBrl;
             valorAtualUSD = inv.quantidade ? inv.quantidade * cotacaoUSD : cotacaoUSD;
+          } 
+          // Se for BRL, usa direto (mesmo para crypto se a API retornou em BRL)
+          else {
+             // Se for crypto em BRL, não precisamos de cotacaoUSD a não ser para ref
+             if (['renda_variavel_int', 'crypto'].includes(inv.categoria)) {
+                // Estima USD reverso apenas para registro
+                cotacaoUSD = cotacaoBRL / usdBrl;
+                valorAtualUSD = inv.quantidade ? inv.quantidade * cotacaoUSD : cotacaoUSD;
+             }
           }
 
           const valorAtual = inv.quantidade ? inv.quantidade * cotacaoBRL : cotacaoBRL;
@@ -171,6 +197,46 @@ export default function Investments() {
   const totalAtual = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
   const totalRentabilidade = totalAtual - totalInvestido;
   const rentabilidadePercent = totalInvestido > 0 ? ((totalAtual / totalInvestido) - 1) * 100 : 0;
+
+  // Histórico de Evolução
+  const [historyDate, setHistoryDate] = useState(new Date());
+
+  const handleSaveHistory = async () => {
+    try {
+      const dateStr = format(historyDate, 'yyyy-MM-dd');
+      
+      // Verificar se já existe registro na data
+      const existing = await base44.entities.InvestmentHistory.filter({ data: dateStr });
+      if (existing && existing.length > 0) {
+         if (!confirm(`Já existe um histórico salvo para ${format(historyDate, 'dd/MM/yyyy')}. Deseja sobrescrever?`)) {
+            return;
+         }
+         await base44.entities.InvestmentHistory.delete(existing[0].id);
+      }
+
+      await base44.entities.InvestmentHistory.create({
+        data: dateStr,
+        valor_total_investido: totalInvestido,
+        valor_total_atual: totalAtual,
+        rentabilidade_valor: totalRentabilidade,
+        rentabilidade_percentual: rentabilidadePercent,
+        detalhes: totalsByCategory // Salva o snapshot das categorias
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['investment_history'] });
+      toast.success(`Histórico salvo para ${format(historyDate, 'dd/MM/yyyy')}`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao salvar histórico");
+    }
+  };
+
+  // Dados para o gráfico de evolução (ordena cronologicamente)
+  const evolutionData = [...history].sort((a,b) => new Date(a.data) - new Date(b.data)).map(h => ({
+     data: format(new Date(h.data), 'dd/MM'),
+     total: h.valor_total_atual,
+     investido: h.valor_total_investido
+  }));
 
   const columns = [
     {
@@ -396,85 +462,155 @@ export default function Investments() {
         </Card>
       </div>
 
-      {/* Gráfico e Ações */}
+      {/* Evolução Patrimonial & Ações */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Carteira por Categoria</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={updateQuotes}
-              disabled={isUpdatingQuotes}
-            >
-              {isUpdatingQuotes ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+           <CardHeader className="flex flex-row items-center justify-between pb-2">
+             <CardTitle className="text-lg">Evolução Patrimonial</CardTitle>
+             <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {historyDate ? format(historyDate, 'dd/MM') : "Data"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={historyDate}
+                      onSelect={setHistoryDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Button size="sm" onClick={handleSaveHistory} className="bg-slate-900 text-white hover:bg-slate-800">
+                   <Save className="mr-2 h-4 w-4" />
+                   Salvar Histórico
+                </Button>
+             </div>
+           </CardHeader>
+           <CardContent>
+              {evolutionData.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={evolutionData}>
+                      <defs>
+                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="data" />
+                      <YAxis 
+                        tickFormatter={(value) => 
+                          new Intl.NumberFormat('pt-BR', { 
+                            notation: "compact", 
+                            compactDisplay: "short" 
+                          }).format(value)
+                        } 
+                      />
+                      <Tooltip 
+                         formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="total" 
+                        name="Patrimônio Total"
+                        stroke="#3b82f6" 
+                        fillOpacity={1} 
+                        fill="url(#colorTotal)" 
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="investido" 
+                        name="Total Investido"
+                        stroke="#94a3b8" 
+                        fill="transparent" 
+                        strokeDasharray="5 5"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <div className="h-[300px] flex flex-col items-center justify-center text-slate-500 bg-slate-50 rounded-lg">
+                   <LineChart className="h-10 w-10 mb-2 opacity-50" />
+                   <p>Nenhum histórico registrado.</p>
+                   <p className="text-sm">Salve o histórico para acompanhar a evolução.</p>
+                </div>
               )}
-              Atualizar Cotações
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
-              <TabsList className="mb-4">
-                <TabsTrigger value="all">Todos</TabsTrigger>
-                {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
-                  <TabsTrigger key={key} value={key}>{config.label}</TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </CardContent>
+           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Alocação</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {totalsByCategory.length > 0 ? (
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={totalsByCategory}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={70}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {totalsByCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
-                Nenhum investimento cadastrado
-              </div>
-            )}
-            <div className="mt-4 space-y-2">
-              {totalsByCategory.map((item, index) => (
-                <div key={item.categoria} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span className="text-slate-600">{item.name}</span>
-                  </div>
-                  <span className="font-medium">
-                    {((item.value / totalAtual) * 100).toFixed(1)}%
-                  </span>
+        <div className="space-y-6">
+           {/* Carteira por Categoria (Pie) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Alocação</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {totalsByCategory.length > 0 ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={totalsByCategory}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {totalsByCategory.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-slate-500 text-sm">
+                  Nenhum investimento
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-4"
+                onClick={updateQuotes}
+                disabled={isUpdatingQuotes}
+              >
+                {isUpdatingQuotes ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Atualizar Cotações (Apple/Yahoo)
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Mini Filtro */}
+           <Card>
+             <CardContent className="pt-6">
+                <Tabs defaultValue="all" onValueChange={setCategoryFilter}>
+                  <TabsList className="w-full grid grid-cols-2 h-auto">
+                    <TabsTrigger value="all">Geral</TabsTrigger>
+                    <TabsTrigger value="renda_variavel_br">Ações BR</TabsTrigger>
+                    <TabsTrigger value="renda_variavel_int">Exterior</TabsTrigger>
+                    <TabsTrigger value="crypto">Crypto</TabsTrigger>
+                    <TabsTrigger value="fundos">Fundos</TabsTrigger>
+                    <TabsTrigger value="renda_fixa">Renda Fixa</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+             </CardContent>
+           </Card>
+        </div>
       </div>
 
       {/* Filtros e Tabela */}

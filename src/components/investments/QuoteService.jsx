@@ -7,21 +7,27 @@ export async function fetchQuotes(tickers) {
   const tickerList = tickers.join(', ');
   
   const response = await base44.integrations.Core.InvokeLLM({
-    prompt: `Utilize o Yahoo Finance como fonte de dados para buscar as cotações atuais dos seguintes ativos financeiros: ${tickerList}. 
-    
-    Para cada ativo, retorne:
-    - ticker: código do ativo
-    - price: preço atual em sua moeda original (BRL para ativos brasileiros, USD para internacionais e crypto)
-    - currency: moeda do preço (BRL ou USD)
-    - change_percent: variação percentual do dia
-    
-    Atenção:
-    - Para ações brasileiras (terminadas em números como PETR4, VALE3), busque na B3 (sufixo .SA no Yahoo Finance)
-    - Para ações internacionais (AAPL, MSFT, etc), busque no mercado americano
-    - Para criptomoedas (BTC, ETH, etc), busque o preço em USD (pares com USD, ex: BTC-USD)
-    - Para FIIs brasileiros, busque na B3 (.SA)
-    
-    Retorne APENAS os dados encontrados. Se não encontrar algum ativo, omita-o da resposta.`,
+    prompt: `Atue como um especialista financeiro. Utilize fontes confiáveis como Google Finance, Yahoo Finance ou Apple Stocks para buscar as cotações mais recentes (fechamento anterior ou tempo real) dos seguintes ativos: ${tickerList}.
+
+    IMPORTANTE:
+    1. Para Criptomoedas (BTC, ETH, SOL, etc):
+       - Tente buscar o preço diretamente em BRL (Reais).
+       - Se encontrar em BRL, retorne price em BRL e currency = "BRL".
+       - Se só encontrar em USD, retorne em USD.
+
+    2. Para Ações Brasileiras e FIIs (ex: PETR4, VALE3, KNRI11):
+       - Preço em BRL (Reais).
+
+    3. Para Ativos Internacionais (ex: AAPL, MSFT, IVV):
+       - Preço em USD (Dólares).
+
+    Retorne um JSON com:
+    - ticker: código do ativo (ex: BTC, PETR4)
+    - price: valor numérico do preço
+    - currency: "BRL" ou "USD"
+    - change_percent: variação do dia em % (ex: 1.5 ou -0.5)
+
+    Retorne APENAS os dados encontrados.`,
     add_context_from_internet: true,
     response_json_schema: {
       type: "object",
