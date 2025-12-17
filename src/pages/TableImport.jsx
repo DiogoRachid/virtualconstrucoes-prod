@@ -62,141 +62,37 @@ export default function TableImport() {
     return 'MATERIAL';
   };
 
-  // 2. Step 1: Upload to Staging
+  // 2. Step 1: Upload to Staging (Backend Function)
   const handleUploadToStaging = async (textData) => {
     if (!textData) return;
     setLoading(true);
-    setProgress({ current: 0, total: 100, message: 'Iniciando análise...', percent: 0 });
+    setProgress({ current: 0, total: 100, message: 'Enviando dados para o servidor...', percent: 10 });
 
     try {
-      const lines = textData.split('\n');
-      const separator = lines[0].includes(';') ? ';' : '\t';
+      const batchId = Date.now().toString();
       
-      if (mode === 'INSUMO') {
-        // Direct processing for Inputs (Simpler, no staging needed usually, but user asked for robust table)
-        // Let's keep Inputs direct for now as they don't have dependency complexity
-        await processInputsDirectly(lines, separator);
+      const result = await base44.functions.IngestComposition({
+        textData,
+        mode,
+        batchId,
+        hasCategoryColumn
+      });
+
+      if (result && result.success) {
+         toast.success(`${result.count} itens enviados com sucesso.`);
+         setPasteData('');
+         if(fileInputRef.current) fileInputRef.current.value = '';
+         checkStaging();
       } else {
-        // Compositions -> Staging
-        const batchId = Date.now().toString();
-        const stagingItems = [];
-        
-        setProgress({ current: 0, total: lines.length, message: 'Analisando linhas...', percent: 0 });
-        
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
-          if (cols.length < 4) continue;
-
-          const codPai = cols[0];
-          const descPai = cols[1];
-          const unPai = cols[2] || 'UN';
-          const codFilho = cols[3];
-          const qtdStr = cols[4];
-          
-          if (!codPai || !codFilho) continue;
-
-          stagingItems.push({
-            batch_id: batchId,
-            codigo_pai: codPai,
-            descricao_pai: descPai,
-            unidade_pai: unPai,
-            codigo_item: codFilho,
-            quantidade: qtdStr ? parseFloat(qtdStr.replace(',', '.')) : 0,
-            status: 'pendente'
-          });
-        }
-
-        const total = stagingItems.length;
-        for (let i = 0; i < total; i += 500) {
-           const chunk = stagingItems.slice(i, i + 500);
-           await base44.entities.CompositionStaging.bulkCreate(chunk);
-           const percent = Math.round(((i + chunk.length) / total) * 100);
-           setProgress({ current: i + chunk.length, total, message: 'Salvando na tabela temporária...', percent });
-        }
-
-        toast.success(`${total} itens carregados para a tabela de processamento.`);
-        setPasteData('');
-        if(fileInputRef.current) fileInputRef.current.value = '';
-        checkStaging();
+         toast.error("Erro no processamento do servidor.");
       }
     } catch (err) {
       console.error(err);
       toast.error("Erro no upload: " + err.message);
     } finally {
       setLoading(false);
+      setProgress({ percent: 0, message: '' });
     }
-  };
-
-  const processInputsDirectly = async (lines, separator) => {
-  const allInputs = await Engine.fetchAll('Input');
-  const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
-  const updates = [];
-  const creates = [];
-
-  let processed = 0;
-  const total = lines.length;
-
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
-    if (cols.length < 3) continue;
-
-    const codigo = cols[0];
-    const descricao = cols[1];
-    const unidade = cols[2];
-    const valorStr = cols[3];
-    // Coluna 4 (índice 4) agora pode ser categoria se hasCategoryColumn for true
-    // Se hasCategoryColumn for true: 0=COD, 1=DESC, 2=UN, 3=VAL, 4=CAT, 5=DATA
-    // Se false: 0=COD, 1=DESC, 2=UN, 3=VAL, 4=DATA
-
-    let categoria = 'MATERIAL';
-    let dataBase = '09/2025';
-
-    if (hasCategoryColumn) {
-       const catRaw = (cols[4] || '').toUpperCase().trim();
-       if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO')) categoria = 'MAO_OBRA';
-       else if (catRaw.startsWith('MAT')) categoria = 'MATERIAL';
-       dataBase = cols[5] || '09/2025';
-    } else {
-       // Fallback antigo se não tiver coluna explícita
-       // O usuário pediu pra esquecer a regra de H = MO, mas se não tem coluna, usamos padrão MATERIAL
-       // ou mantemos compatibilidade se o usuário não marcar o checkbox.
-       // Vou assumir MATERIAL se não tiver coluna.
-       dataBase = cols[4] || '09/2025';
-    }
-
-    if (!codigo) continue;
-    const valor = valorStr ? parseFloat(valorStr.replace('R$', '').replace('.', '').replace(',', '.')) : 0;
-
-    const data = { 
-       codigo, 
-       descricao: descricao.slice(0, 500), 
-       unidade: unidade || 'UN', 
-       valor_unitario: valor || 0, 
-       categoria,
-       data_base: dataBase, 
-       fonte: 'SINAPI' 
-    };
-
-    if (inputMap.has(codigo)) updates.push({ id: inputMap.get(codigo), data });
-    else creates.push(data);
-    processed++;
-  }
-
-      // Execute batches...
-      if (creates.length > 0) {
-         setProgress({ message: `Criando ${creates.length} insumos...`, percent: 50 });
-         for (let i=0; i<creates.length; i+=100) await base44.entities.Input.bulkCreate(creates.slice(i, i+100));
-      }
-      if (updates.length > 0) {
-         setProgress({ message: `Atualizando ${updates.length} insumos...`, percent: 75 });
-         // chunked updates
-         for (let i=0; i<updates.length; i+=50) {
-            await Promise.all(updates.slice(i, i+50).map(u => base44.entities.Input.update(u.id, u.data)));
-         }
-      }
-      toast.success(`${processed} insumos processados.`);
   };
 
 
