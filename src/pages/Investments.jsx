@@ -515,8 +515,19 @@ export default function Investments() {
       {indicators && (
         <div className="mb-6 p-4 bg-slate-50 rounded-xl">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-medium text-slate-700">Indicadores do Mercado</h3>
-            {loadingIndicators && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            <div className="flex items-center gap-2">
+               <h3 className="font-medium text-slate-700">Indicadores do Mercado</h3>
+               <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-slate-400 hover:text-blue-600"
+                  onClick={loadIndicators}
+                  disabled={loadingIndicators}
+               >
+                  <RefreshCw className={`h-3 w-3 ${loadingIndicators ? 'animate-spin' : ''}`} />
+               </Button>
+            </div>
+            {loadingIndicators && <span className="text-xs text-slate-400">Atualizando...</span>}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 text-sm">
             <div>
