@@ -515,6 +515,22 @@ export default function Investments() {
                 </span>
               </div>
             </div>
+
+            {/* Variação Diária (vs Dia Anterior) */}
+            <div className="mt-4 pt-3 border-t border-slate-700">
+               <div className="flex items-center justify-between text-sm">
+                 <span className="text-slate-400">Variação (vs Anterior)</span>
+                 <div className={`flex items-center gap-1 font-semibold ${dailyDiffValue >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {dailyDiffValue >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    <span>
+                       {dailyDiffValue >= 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dailyDiffValue)}
+                       <span className="text-xs ml-1 opacity-80">
+                          ({dailyDiffValue >= 0 ? '+' : ''}{dailyDiffPercent.toFixed(2)}%)
+                       </span>
+                    </span>
+                 </div>
+               </div>
+            </div>
           </CardContent>
         </Card>
 
