@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Calculator } from "lucide-react";
 import { base44 } from '@/api/base44Client';
 import { toast } from "sonner";
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,12 +13,25 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
     const [saving, setSaving] = useState(false);
     const queryClient = useQueryClient();
 
+    // Identifica se o investimento deve ser atualizado por cotação unitária
+    const isQuoteBased = (inv) => {
+        if (!inv.quantidade || inv.quantidade <= 0) return false;
+        
+        const typesToCheck = ['Ação', 'BDR', 'ETF', 'FII', 'Bitcoin', 'Stock', 'REIT', 'Ethereum', 'Altcoin', 'Crypto'];
+        const categoriesToCheck = ['renda_variavel_br', 'renda_variavel_int', 'crypto'];
+        
+        return typesToCheck.some(t => inv.tipo?.includes(t)) || categoriesToCheck.includes(inv.categoria);
+    };
+
     useEffect(() => {
         if (open) {
             const initialValues = {};
             investments.forEach(inv => {
-                // Pre-fill with current value
-                initialValues[inv.id] = inv.valor_atual || inv.valor_investido || '';
+                if (isQuoteBased(inv)) {
+                    initialValues[inv.id] = inv.cotacao_atual || '';
+                } else {
+                    initialValues[inv.id] = inv.valor_atual || inv.valor_investido || '';
+                }
             });
             setValues(initialValues);
         }
@@ -28,22 +41,23 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
         setSaving(true);
         try {
             const updates = investments.map(async (inv) => {
-                const newVal = parseFloat(values[inv.id]);
-                if (isNaN(newVal)) return null;
+                const inputVal = parseFloat(values[inv.id]);
+                if (isNaN(inputVal)) return null;
                 
-                // If value hasn't changed, skip update (optional, but good for performance)
-                // However, user might want to confirm value even if unchanged to update timestamp
+                let valorAtual, cotacaoAtual;
                 
-                const valorAtual = newVal;
+                if (isQuoteBased(inv)) {
+                    cotacaoAtual = inputVal;
+                    valorAtual = inputVal * inv.quantidade;
+                } else {
+                    valorAtual = inputVal;
+                    // Tenta calcular cotação reversa se houver quantidade
+                    cotacaoAtual = inv.quantidade > 0 ? valorAtual / inv.quantidade : (inv.cotacao_atual || 0);
+                }
+
                 const valorInvestido = inv.valor_investido || 0;
                 const rentabilidadeValor = valorAtual - valorInvestido;
                 const rentabilidadePercent = valorInvestido > 0 ? ((valorAtual / valorInvestido) - 1) * 100 : 0;
-                
-                // Recalculate unit quote if quantity exists
-                let cotacaoAtual = inv.cotacao_atual;
-                if (inv.quantidade > 0) {
-                    cotacaoAtual = valorAtual / inv.quantidade;
-                }
 
                 return base44.entities.Investment.update(inv.id, {
                     valor_atual: valorAtual,
@@ -72,40 +86,62 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
+            <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Atualizar Valores Atuais (Manual)</DialogTitle>
+                    <DialogTitle>Atualizar Valores (Manual)</DialogTitle>
                 </DialogHeader>
                 
                 <div className="flex-1 overflow-hidden p-1 border rounded-md mt-2">
                     <div className="grid grid-cols-12 gap-4 font-medium text-sm text-slate-500 bg-slate-50 p-3 border-b">
-                        <div className="col-span-5">Investimento</div>
+                        <div className="col-span-4">Investimento</div>
+                        <div className="col-span-2 text-right">Qtd.</div>
                         <div className="col-span-3 text-right">Valor Anterior</div>
-                        <div className="col-span-4">Novo Valor Total (R$)</div>
+                        <div className="col-span-3">Novo Valor</div>
                     </div>
                     <ScrollArea className="h-full">
                         <div className="divide-y">
-                            {investments.map(inv => (
-                                <div key={inv.id} className="grid grid-cols-12 gap-4 items-center text-sm p-3 hover:bg-slate-50">
-                                    <div className="col-span-5">
-                                        <p className="font-medium truncate">{inv.nome}</p>
-                                        <p className="text-xs text-slate-500">{inv.categoria} • {inv.ticker || inv.tipo}</p>
+                            {investments.map(inv => {
+                                const isQuote = isQuoteBased(inv);
+                                const currentVal = isQuote ? inv.cotacao_atual : inv.valor_atual;
+                                const inputVal = parseFloat(values[inv.id]);
+                                const calculatedTotal = isQuote && !isNaN(inputVal) ? inputVal * inv.quantidade : null;
+
+                                return (
+                                    <div key={inv.id} className="grid grid-cols-12 gap-4 items-center text-sm p-3 hover:bg-slate-50">
+                                        <div className="col-span-4">
+                                            <p className="font-medium truncate">{inv.nome}</p>
+                                            <p className="text-xs text-slate-500">{inv.tipo} • {isQuote ? 'Por Cotação' : 'Valor Total'}</p>
+                                        </div>
+                                        <div className="col-span-2 text-right font-mono text-slate-600">
+                                            {inv.quantidade > 0 ? inv.quantidade.toLocaleString('pt-BR') : '-'}
+                                        </div>
+                                        <div className="col-span-3 text-right text-slate-600">
+                                            <span className="text-xs text-slate-400 mr-1">
+                                                {isQuote ? 'Unit:' : 'Total:'}
+                                            </span>
+                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentVal || 0)}
+                                        </div>
+                                        <div className="col-span-3">
+                                            <div className="flex flex-col gap-1">
+                                                <Input 
+                                                    type="number" 
+                                                    step="0.01"
+                                                    value={values[inv.id] || ''}
+                                                    onChange={(e) => handleChange(inv.id, e.target.value)}
+                                                    className="h-9 text-right font-medium"
+                                                    placeholder={isQuote ? "Cotação Unit." : "Valor Total"}
+                                                />
+                                                {calculatedTotal !== null && (
+                                                    <div className="text-xs text-right text-emerald-600 font-medium flex items-center justify-end gap-1">
+                                                        <Calculator className="h-3 w-3" />
+                                                        Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculatedTotal)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="col-span-3 text-right text-slate-600">
-                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inv.valor_atual || 0)}
-                                    </div>
-                                    <div className="col-span-4">
-                                        <Input 
-                                            type="number" 
-                                            step="0.01"
-                                            value={values[inv.id] || ''}
-                                            onChange={(e) => handleChange(inv.id, e.target.value)}
-                                            className="h-9 text-right font-medium"
-                                            placeholder="0,00"
-                                        />
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </ScrollArea>
                 </div>
