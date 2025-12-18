@@ -16,10 +16,26 @@ import {
   GripVertical,
   ChevronDown,
   ChevronRight,
-  FolderPlus
+  FolderPlus,
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
 import { printBudget } from '@/components/budgets/BudgetPrinter';
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -63,6 +79,56 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+
+const ServiceSelector = ({ services, onSelect }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-[400px] justify-between h-8 bg-white border-slate-200 text-slate-500 font-normal"
+        >
+          Adicionar serviço nesta etapa...
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar por nome ou código..." />
+          <CommandList>
+            <CommandEmpty>Nenhum serviço encontrado.</CommandEmpty>
+            <CommandGroup>
+              {services.map((service) => (
+                <CommandItem
+                  key={service.id}
+                  value={`${service.codigo} ${service.descricao}`}
+                  onSelect={() => {
+                    onSelect(service.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4 opacity-0"
+                    )}
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{service.descricao}</span>
+                    <span className="text-xs text-slate-500">{service.codigo} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.custo_total)}</span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 export default function BudgetForm() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -441,18 +507,10 @@ export default function BudgetForm() {
                    <TableRow className="bg-slate-50/50">
                      <TableCell colSpan={10} className="p-2">
                        <div className="flex items-center gap-2">
-                         <Select onValueChange={(v) => handleAddService(v, isUncategorized ? 'uncategorized' : stageId)}>
-                           <SelectTrigger className="h-8 w-[300px] bg-white">
-                             <SelectValue placeholder="Adicionar serviço nesta etapa..." />
-                           </SelectTrigger>
-                           <SelectContent>
-                             {services.map(s => (
-                               <SelectItem key={s.id} value={s.id}>
-                                 {s.codigo} - {s.descricao}
-                               </SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
+                         <ServiceSelector 
+                           services={services} 
+                           onSelect={(v) => handleAddService(v, isUncategorized ? 'uncategorized' : stageId)} 
+                         />
                        </div>
                      </TableCell>
                    </TableRow>
