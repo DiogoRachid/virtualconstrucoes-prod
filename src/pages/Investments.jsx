@@ -61,7 +61,8 @@ const CATEGORY_CONFIG = {
   renda_variavel_br: { label: 'Renda Variável BR', icon: LineChart, color: 'bg-emerald-500' },
   renda_variavel_int: { label: 'Renda Variável INT', icon: Globe, color: 'bg-purple-500' },
   fundos: { label: 'Fundos', icon: Building, color: 'bg-amber-500' },
-  crypto: { label: 'Criptomoedas', icon: Bitcoin, color: 'bg-orange-500' }
+  crypto: { label: 'Criptomoedas', icon: Bitcoin, color: 'bg-orange-500' },
+  saldo_conta: { label: 'Saldo em Conta', icon: Wallet, color: 'bg-slate-500' }
 };
 
 const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#f97316'];
@@ -147,13 +148,58 @@ export default function Investments() {
 
   // Removida atualização automática de cotações em favor da manual
 
-  const filteredInvestments = investments.filter(inv => {
-    const matchSearch = !search || 
-      inv.nome?.toLowerCase().includes(search.toLowerCase()) ||
-      inv.ticker?.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = categoryFilter === 'all' || inv.categoria === categoryFilter;
-    return matchSearch && matchCategory;
-  });
+  // Preparar contas bancárias como ativos
+  const bankAccountAssets = useMemo(() => {
+    return bankAccounts.map(acc => {
+      let saldo = acc.saldo_atual || 0;
+      let valorUSD = 0;
+      
+      // Converter para BRL para visualização unificada se necessário
+      // Mas manter o valor original para exibição detalhada se for moeda estrangeira
+      if (acc.moeda === 'USD' && indicators?.dolar) {
+        valorUSD = saldo;
+        saldo = saldo * indicators.dolar;
+      } else if (acc.moeda === 'EUR' && indicators?.euro) {
+        // Apenas aproximação para BRL
+        saldo = saldo * indicators.euro;
+      }
+
+      return {
+        id: `acc_${acc.id}`,
+        originalId: acc.id,
+        isAccount: true,
+        nome: acc.nome,
+        ticker: 'SALDO',
+        categoria: 'saldo_conta',
+        tipo: acc.tipo === 'corrente' ? 'Conta Corrente' : (acc.tipo === 'poupanca' ? 'Poupança' : 'Conta'),
+        instituicao: acc.banco,
+        conta_bancaria_nome: acc.banco,
+        valor_investido: saldo, // Considera o saldo atual como valor base
+        valor_atual: saldo,
+        valor_atual_usd: valorUSD,
+        cotacao_atual_usd: 0,
+        rentabilidade_percentual: 0,
+        rentabilidade_valor: 0
+      };
+    });
+  }, [bankAccounts, indicators]);
+
+  const filteredInvestments = useMemo(() => {
+    const allAssets = [...investments, ...bankAccountAssets];
+    
+    return allAssets.filter(inv => {
+      const matchSearch = !search || 
+        inv.nome?.toLowerCase().includes(search.toLowerCase()) ||
+        inv.ticker?.toLowerCase().includes(search.toLowerCase());
+      
+      const matchCategory = categoryFilter === 'all' || inv.categoria === categoryFilter;
+      
+      // Se o filtro for 'all', mostra tudo. 
+      // Se o filtro for 'renda_fixa', etc, mostra só investimentos da categoria.
+      // Se tivermos um filtro específico para 'saldo_conta' (que vamos adicionar), mostra só contas.
+      return matchSearch && matchCategory;
+    }).sort((a, b) => (b.valor_atual || 0) - (a.valor_atual || 0));
+  }, [investments, bankAccountAssets, search, categoryFilter]);
 
   const totalInvestido = investments.reduce((sum, inv) => sum + (inv.valor_investido || 0), 0);
   const totalInvestimentos = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
@@ -496,6 +542,10 @@ export default function Investments() {
     {
       header: 'Rentabilidade',
       render: (row) => {
+        if (row.isAccount) {
+          return <span className="text-slate-400 text-sm">-</span>;
+        }
+
         // Usar rentabilidade calculada salva no banco (BRL)
         let rentPercent = row.rentabilidade_percentual || 0;
         let rentValue = row.rentabilidade_valor || 0;
@@ -533,18 +583,33 @@ export default function Investments() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`InvestmentDetail?id=${row.id}`)}>
-              <Eye className="h-4 w-4 mr-2" />
-              Visualizar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`InvestmentForm?id=${row.id}`)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDeleteId(row.id)} className="text-red-600">
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir
-            </DropdownMenuItem>
+            {row.isAccount ? (
+              <>
+                <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`BankAccountDetail?accountId=${row.originalId}`)}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Visualizar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`BankAccountForm?id=${row.originalId}`)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`InvestmentDetail?id=${row.id}`)}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Visualizar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`InvestmentForm?id=${row.id}`)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDeleteId(row.id)} className="text-red-600">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -887,6 +952,7 @@ export default function Investments() {
                     <TabsTrigger value="crypto">Crypto</TabsTrigger>
                     <TabsTrigger value="fundos">Fundos</TabsTrigger>
                     <TabsTrigger value="renda_fixa">Renda Fixa</TabsTrigger>
+                    <TabsTrigger value="saldo_conta">Saldos</TabsTrigger>
                   </TabsList>
                 </Tabs>
              </CardContent>
