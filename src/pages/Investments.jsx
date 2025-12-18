@@ -70,6 +70,7 @@ const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#f97316'];
 export default function Investments() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'valor_atual', direction: 'desc' });
   const [deleteId, setDeleteId] = useState(null);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
   const [indicators, setIndicators] = useState(null);
@@ -187,19 +188,57 @@ export default function Investments() {
   const filteredInvestments = useMemo(() => {
     const allAssets = [...investments, ...bankAccountAssets];
     
-    return allAssets.filter(inv => {
+    let filtered = allAssets.filter(inv => {
       const matchSearch = !search || 
         inv.nome?.toLowerCase().includes(search.toLowerCase()) ||
         inv.ticker?.toLowerCase().includes(search.toLowerCase());
       
       const matchCategory = categoryFilter === 'all' || inv.categoria === categoryFilter;
       
-      // Se o filtro for 'all', mostra tudo. 
-      // Se o filtro for 'renda_fixa', etc, mostra só investimentos da categoria.
-      // Se tivermos um filtro específico para 'saldo_conta' (que vamos adicionar), mostra só contas.
       return matchSearch && matchCategory;
-    }).sort((a, b) => (b.valor_atual || 0) - (a.valor_atual || 0));
-  }, [investments, bankAccountAssets, search, categoryFilter]);
+    });
+
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+
+        // Handle specific cases or nulls
+        if (sortConfig.key === 'instituicao') {
+          valA = a.instituicao || a.conta_bancaria_nome || '';
+          valB = b.instituicao || b.conta_bancaria_nome || '';
+        } else if (sortConfig.key === 'rentabilidade') {
+           valA = a.rentabilidade_percentual || 0;
+           valB = b.rentabilidade_percentual || 0;
+        } else {
+           // Default fallback for numbers to be 0 if null/undefined
+           if (typeof valA === 'number' || typeof valB === 'number') {
+              valA = valA || 0;
+              valB = valB || 0;
+           } else {
+              valA = (valA || '').toString().toLowerCase();
+              valB = (valB || '').toString().toLowerCase();
+           }
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+       // Default sort if no key (by value descending)
+       filtered.sort((a, b) => (b.valor_atual || 0) - (a.valor_atual || 0));
+    }
+
+    return filtered;
+  }, [investments, bankAccountAssets, search, categoryFilter, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
 
   const totalInvestido = investments.reduce((sum, inv) => sum + (inv.valor_investido || 0), 0);
   const totalInvestimentos = investments.reduce((sum, inv) => sum + (inv.valor_atual || inv.valor_investido || 0), 0);
@@ -479,6 +518,8 @@ export default function Investments() {
   const columns = [
     {
       header: 'Investimento',
+      accessor: 'nome',
+      sortable: true,
       render: (row) => {
         const config = CATEGORY_CONFIG[row.categoria];
         const Icon = config?.icon || Wallet;
@@ -497,12 +538,16 @@ export default function Investments() {
     },
     {
       header: 'Tipo',
+      accessor: 'tipo',
+      sortable: true,
       render: (row) => (
         <span className="text-slate-700">{row.tipo}</span>
       )
     },
     {
       header: 'Instituição',
+      accessor: 'instituicao',
+      sortable: true,
       render: (row) => (
         <span className="text-slate-700 text-sm">
           {row.instituicao || row.conta_bancaria_nome || '-'}
@@ -511,6 +556,8 @@ export default function Investments() {
     },
     {
       header: 'Valor Investido',
+      accessor: 'valor_investido',
+      sortable: true,
       render: (row) => (
         <span className="font-medium text-slate-900">
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_investido || 0)}
@@ -519,6 +566,8 @@ export default function Investments() {
     },
     {
       header: 'Valor Atual',
+      accessor: 'valor_atual',
+      sortable: true,
       render: (row) => {
         const isInternational = ['renda_variavel_int', 'crypto'].includes(row.categoria);
         const cotacaoUSD = row.cotacao_atual_usd;
@@ -541,6 +590,8 @@ export default function Investments() {
 
     {
       header: 'Rentabilidade',
+      accessor: 'rentabilidade', // Custom sort key logic
+      sortable: true,
       render: (row) => {
         if (row.isAccount) {
           return <span className="text-slate-400 text-sm">-</span>;
@@ -925,7 +976,13 @@ export default function Investments() {
         columns={columns}
         data={filteredInvestments}
         isLoading={isLoading}
-        onRowClick={(row) => window.location.href = createPageUrl(`InvestmentDetail?id=${row.id}`)}
+        onRowClick={(row) => {
+           if (row.isAccount) return; // Prevent navigation here if handled by menu, or allow if desired
+           window.location.href = createPageUrl(`InvestmentDetail?id=${row.id}`);
+        }}
+        onSort={handleSort}
+        sortColumn={sortConfig.key}
+        sortDirection={sortConfig.direction}
         emptyComponent={
           <EmptyState
             icon={TrendingUp}
