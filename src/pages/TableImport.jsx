@@ -302,12 +302,15 @@ export default function TableImport() {
         });
 
         const codeList = Array.from(allCodes);
+        
+        // Identify which codes are parents (appear as codigo_pai)
+        const parentCodes = new Set();
+        items.forEach(i => {
+           if (i.codigo_pai) parentCodes.add(i.codigo_pai);
+        });
 
         let mapping = {};
         const chunkSize = 5000;
-
-        // Prepare parentCodes for this chunk (if needed by backend, though backend now defaults to Service)
-        const parentCodeList = Array.from(parentCodes);
 
         for (let i = 0; i < codeList.length; i += chunkSize) {
             const chunk = codeList.slice(i, i + chunkSize);
@@ -316,15 +319,11 @@ export default function TableImport() {
             const chunkInfo = {};
             chunk.forEach(c => chunkInfo[c] = itemsInfo[c]);
 
-            // Filter parentCodes relevant to this chunk (optimization)
-            const chunkParents = parentCodeList.filter(p => chunk.includes(p));
-
             setProgress({ message: `Resolvendo bloco ${Math.floor(i/chunkSize)+1}/${Math.ceil(codeList.length/chunkSize)}...`, percent: 20 + Math.floor((i/codeList.length)*30) });
 
             const response = await base44.functions.invoke('importHelpers', {
                 action: 'resolve_and_create',
                 codes: chunk,
-                parentCodes: chunkParents,
                 items_info: chunkInfo
             });
 
@@ -376,23 +375,11 @@ export default function TableImport() {
 
         // 4. Batch Insert Links
         if (linksToCreate.length > 0) {
-            // We can use a huge chunk size for ServiceItem creation if backend supports it
-            // Let's go with 500 to be safe and responsive
             for (let i = 0; i < linksToCreate.length; i+=500) {
                 const chunk = linksToCreate.slice(i, i+500);
                 await base44.entities.ServiceItem.bulkCreate(chunk);
                 linksCreatedCount += chunk.length;
                 setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 60 + Math.floor((i/linksToCreate.length)*40) });
-                await yieldToMain();
-            }
-        }
-
-        if (linksToCreate.length > 0) {
-            for (let i = 0; i < linksToCreate.length; i+=200) {
-                const chunk = linksToCreate.slice(i, i+200);
-                await base44.entities.ServiceItem.bulkCreate(chunk);
-                linksCreatedCount += chunk.length;
-                setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 70 + Math.floor((i/linksToCreate.length)*20) });
                 await yieldToMain();
             }
         }
