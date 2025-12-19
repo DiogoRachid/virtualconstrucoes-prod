@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
@@ -31,33 +31,24 @@ export default function TableImport() {
     return 'MATERIAL';
   };
 
-  // Robust parsing for BRL number format (1.000,00 -> 1000.00)
   const parseBrlNumber = (str) => {
      if (!str) return 0;
-     // Clean whitespace/invisible chars
      let val = str.trim().replace(/\s/g, '').toUpperCase();
-     
-     // Check for Scientific Notation (e.g., 6,67E-05)
      if (val.includes('E')) {
         val = val.replace(',', '.');
         return parseFloat(val) || 0;
      }
-     
-     // Standard BRL (1.000,00) or Simple Decimal (0,0005)
      if (val.includes(',')) {
-        // Treat as BRL: Remove dots (thousands), replace comma with dot
         const normalized = val.replace(/\./g, '').replace(',', '.');
         return parseFloat(normalized) || 0;
      }
-     
-     // If no comma, assumes US format (1000.00) or plain number
      return parseFloat(val) || 0;
   };
 
   const handleImport = async (textData) => {
     if (!textData) return;
     setLoading(true);
-    setProgress({ message: 'Iniciando análise...', percent: 0 });
+    setProgress({ message: 'Iniciando...', percent: 0 });
 
     try {
       const lines = textData.split('\n');
@@ -129,7 +120,6 @@ export default function TableImport() {
         processed++;
       }
     
-      // Execute batches...
       if (creates.length > 0) {
          setProgress({ message: `Criando ${creates.length} insumos...`, percent: 50 });
          for (let i=0; i<creates.length; i+=100) await base44.entities.Input.bulkCreate(creates.slice(i, i+100));
@@ -144,511 +134,197 @@ export default function TableImport() {
   };
 
   const processCompositionsDirectly = async (lines, separator) => {
-     const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+     try {
+        toast.info("Iniciando processamento...");
+        const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
-     // 1. Parse Lines
-     setProgress({ message: 'Analisando linhas...', percent: 5 });
-     const items = [];
-     const parseErrors = [];
-     
-     let skippedCount = 0;
-     for (const line of lines) {
-        const cleanLine = line.trim();
-        if (!cleanLine) continue;
+        // 1. Parse Lines
+        setProgress({ message: 'Analisando linhas...', percent: 5 });
+        const items = [];
+        let skippedCount = 0;
         
-        let cols = [];
-        let parsed = false;
-
-        // Strategy: Try exact delimiters first, then fallback to smart tokenizing.
-        // We look for 5 distinct fields: PARENT | DESC | UNIT | CHILD | QTY
-
-        // 1. Tab Split
-        if (cleanLine.includes('\t')) {
-           const parts = cleanLine.split('\t').map(c => c.trim()).filter(c => c !== '');
-           if (parts.length >= 5) {
-              // Assuming standard order: PARENT, DESC, UNIT, CHILD, QTY
-              // Sometimes tab data has empty fields, we filtered them.
-              // We take First, Last 3, and middle is Desc.
-              // Or just take indices 0,1,2,3,4 if length is exactly 5.
+        for (const line of lines) {
+           const cleanLine = line.trim();
+           if (!cleanLine) continue;
+           
+           let cols = [];
+           let parsed = false;
+           
+           // 1. Exact Tab Split
+           if (cleanLine.includes('\t')) {
+              const parts = cleanLine.split('\t').map(c => c.trim()).filter(c => c.length > 0);
               if (parts.length === 5) {
                  cols = parts;
                  parsed = true;
               } else if (parts.length > 5) {
-                 // Handle description containing tabs
+                 // Assume Description got split
                  cols = [
-                    parts[0], // Parent Code
-                    parts.slice(1, parts.length - 3).join(' '), // Description (join middle parts)
-                    parts[parts.length - 3], // Unit
-                    parts[parts.length - 2], // Child Code
-                    parts[parts.length - 1]  // Qty
+                    parts[0], 
+                    parts.slice(1, parts.length - 3).join(' '), 
+                    parts[parts.length - 3], 
+                    parts[parts.length - 2], 
+                    parts[parts.length - 1]
                  ];
                  parsed = true;
               }
            }
-        }
-        
-        // 2. Semicolon
-        if (!parsed && cleanLine.includes(';')) {
-           const parts = cleanLine.split(';').map(c => c.trim());
-           if (parts.length >= 5) {
-              cols = parts;
-              parsed = true;
-           }
-        }
 
-        // 3. Smart Token Split (Whitespace) - Best for copy-paste from PDF/Excel
-        if (!parsed) {
-           // Tokenize by whitespace
-           const tokens = cleanLine.split(/\s+/);
-
-           if (tokens.length >= 5) {
-               // Strategy: 
-               // Qty = Last token
-               // ChildCode = 2nd Last
-               // Unit = 3rd Last
-               // ParentCode = First token
-               // Description = Everything in between
-
-               const qty = tokens[tokens.length - 1];
-               const child = tokens[tokens.length - 2];
-               const unit = tokens[tokens.length - 3];
-               const parent = tokens[0];
-
-               const descTokens = tokens.slice(1, tokens.length - 3);
-               const desc = descTokens.join(' ');
-
-               cols = [parent, desc, unit, child, qty];
-               parsed = true;
-
-               // Debug log para linha 5627
-               if (parent === '5627') {
-                  console.log('🔍 DEBUG 5627:', {
-                     tokens,
-                     cols,
-                     parent,
-                     child,
-                     unit,
-                     qty,
-                     desc
-                  });
+           // 2. Whitespace Tokenizer (Fallback)
+           if (!parsed) {
+               const tokens = cleanLine.split(/\s+/);
+               if (tokens.length >= 5) {
+                   const qty = tokens[tokens.length - 1];
+                   const child = tokens[tokens.length - 2];
+                   const unit = tokens[tokens.length - 3];
+                   const parent = tokens[0];
+                   const desc = tokens.slice(1, tokens.length - 3).join(' ');
+                   cols = [parent, desc, unit, child, qty];
+                   parsed = true;
                }
            }
-        }
 
-        if (parsed) {
-           cols = cols.map(c => c?.trim().replace(/"/g, ''));
-           
-           // Ensure Qty is parsed correctly
-           const rawQty = cols[4];
-           const qty = parseBrlNumber(rawQty);
-           
-           const item = {
-               codigo_pai: cols[0],
-               descricao_pai: cols[1],
-               unidade_pai: cols[2] || 'UN',
-               codigo_item: cols[3],
-               quantidade: qty
-           };
-           
-           items.push(item);
-           
-           // Debug log para linha 5627
-           if (cols[0] === '5627') {
-              console.log('✅ Item 5627 adicionado:', item);
-           }
-        } else {
-           skippedCount++;
-           parseErrors.push({ line: cleanLine.substring(0, 100), error: 'Formato inválido' });
-           console.warn('Skipped line (format unknown):', cleanLine);
-        }
-     }
-
-     if (items.length === 0) {
-        toast.error("Nenhum item válido identificado. Verifique se as colunas estão corretas (Código Pai | Descrição | Unid | Código Filho | Qtd).");
-        if (parseErrors.length > 0) {
-           console.error('Parse errors:', parseErrors);
-        }
-        return;
-     }
-     if (skippedCount > 0) {
-        console.warn(`${skippedCount} linhas ignoradas:`, parseErrors);
-     }
-
-     // 2. Load Existing Data
-     setProgress({ message: 'Carregando banco de dados...', percent: 10 });
-     const [existingServices, existingInputs] = await Promise.all([
-        Engine.fetchAll('Service'),
-        Engine.fetchAll('Input')
-     ]);
-
-     const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
-     const serviceIdMap = new Map(existingServices.map(s => [s.id, s]));
-     const inputMap = new Map(existingInputs.map(i => [i.codigo, { id: i.id, un: i.unidade, val: i.valor_unitario }]));
-     const inputIdMap = new Map(existingInputs.map(i => [i.id, { un: i.unidade, val: i.valor_unitario }]));
-
-     // 3. Identify & Create Missing Services (Parents)
-     setProgress({ message: 'Verificando serviços...', percent: 20 });
-     const servicesToCreate = [];
-     const servicesToUpdate = [];
-     const parentMeta = new Map();
-     
-     // Collect unique parents
-     for (const item of items) {
-        if (!parentMeta.has(item.codigo_pai)) {
-           parentMeta.set(item.codigo_pai, { d: item.descricao_pai, u: item.unidade_pai });
-        }
-     }
-
-     // Determine which need creation
-     for (const [code, meta] of parentMeta.entries()) {
-        if (!serviceMap.has(code)) {
-           servicesToCreate.push({
-              codigo: code,
-              descricao: meta.d || `[IMPORTADO] Serviço ${code}`,
-              unidade: meta.u || 'UN',
-              ativo: true
-           });
-        } else {
-           const existing = serviceMap.get(code);
-           // Optional: Update description if changed
-           if (existing.descricao !== meta.d) {
-              servicesToUpdate.push({
-                 id: existing.id,
-                 data: { descricao: meta.d, unidade: meta.u || existing.unidade }
+           if (parsed) {
+              const qty = parseBrlNumber(cols[4]);
+              items.push({
+                  codigo_pai: cols[0],
+                  descricao_pai: cols[1],
+                  unidade_pai: cols[2],
+                  codigo_item: cols[3],
+                  quantidade: qty
               });
+           } else {
+              skippedCount++;
+              console.warn("Ignorado:", cleanLine);
            }
         }
-     }
 
-     // Bulk Create Services
-     if (servicesToCreate.length > 0) {
-         const total = servicesToCreate.length;
-         for (let i = 0; i < total; i += 200) {
-             const chunk = servicesToCreate.slice(i, i + 200);
-             setProgress({ message: `Criando serviços ${i + chunk.length}/${total}...`, percent: 25 });
-             await yieldToMain();
-             const created = await base44.entities.Service.bulkCreate(chunk);
-             if (created && Array.isArray(created)) {
-                created.forEach(c => {
-                   serviceMap.set(c.codigo, c);
-                   serviceIdMap.set(c.id, c);
+        if (items.length === 0) {
+           throw new Error("Nenhum item válido encontrado. Verifique a formatação.");
+        }
+
+        // 2. Load Data
+        setProgress({ message: 'Carregando dados...', percent: 15 });
+        const [existingServices, existingInputs] = await Promise.all([
+           Engine.fetchAll('Service'),
+           Engine.fetchAll('Input')
+        ]);
+        
+        const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
+        const inputMap = new Map(existingInputs.map(i => [i.codigo, i]));
+        
+        // 3. Create/Update Parents
+        setProgress({ message: 'Sincronizando serviços pais...', percent: 30 });
+        const parentsToCreate = new Map();
+        
+        for (const item of items) {
+            if (!serviceMap.has(item.codigo_pai)) {
+                parentsToCreate.set(item.codigo_pai, {
+                    codigo: item.codigo_pai,
+                    descricao: item.descricao_pai,
+                    unidade: item.unidade_pai,
+                    ativo: true,
+                    custo_total: 0
                 });
-             }
-         }
-     }
-     
-     // Update existing services
-     if (servicesToUpdate.length > 0) {
-         const total = servicesToUpdate.length;
-         for (let i = 0; i < total; i += 100) {
-            const chunk = servicesToUpdate.slice(i, i + 100);
-            setProgress({ message: `Atualizando serviços ${i + chunk.length}/${total}...`, percent: 30 });
-            await yieldToMain();
-            await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
-         }
-     }
-
-     // 4. Create Links
-     setProgress({ message: 'Processando vínculos...', percent: 40 });
-     const linksToCreate = [];
-     const missingCodes = new Set();
-     const linkErrors = [];
-     const existingParentsToClear = new Set();
-     
-     for (const item of items) {
-        const parent = serviceMap.get(item.codigo_pai);
-        if (!parent) {
-           linkErrors.push({ 
-              parent: item.codigo_pai, 
-              child: item.codigo_item, 
-              error: 'Serviço pai não encontrado' 
-           });
-           if (item.codigo_pai === '5627') {
-              console.error('❌ 5627: Serviço pai não encontrado no serviceMap');
-           }
-           continue;
+            }
         }
 
-        existingParentsToClear.add(parent.id);
-
-        let childId = null;
-        let type = 'SERVICO';
-        let category = 'MATERIAL';
-        let unitCost = 0;
-
-        if (inputMap.has(item.codigo_item)) {
-           const inp = inputMap.get(item.codigo_item);
-           childId = inp.id;
-           type = 'INSUMO';
-           category = detectCategory(inp.un);
-           unitCost = inp.val || 0;
-
-           if (item.codigo_pai === '5627') {
-              console.log('✅ 5627: Insumo encontrado', { codigo: item.codigo_item, childId, unitCost });
-           }
-        } else if (serviceMap.has(item.codigo_item)) {
-           const svc = serviceMap.get(item.codigo_item);
-           childId = svc.id;
-           type = 'SERVICO';
-           category = detectCategory(svc.unidade);
-           unitCost = svc.custo_total || 0;
-        } else {
-           const placeholderCode = item.codigo_item;
-           if (!inputMap.has(placeholderCode)) {
-              missingCodes.add(placeholderCode);
-
-              if (item.codigo_pai === '5627') {
-                 console.log('⚠️ 5627: Item filho não encontrado, será criado automaticamente', placeholderCode);
-              }
-           }
-        }
-     }
-
-     // 4.1 Handle Missing Children (Auto-Create)
-     if (missingCodes.size > 0) {
-        setProgress({ message: `Criando ${missingCodes.size} itens faltantes...`, percent: 42 });
-        const missingArr = Array.from(missingCodes);
-        const newInputs = missingArr.map(code => ({
-            codigo: code,
-            descricao: `[AUTO-IMPORT] Item ${code} (Pendente)`,
-            unidade: 'UN',
-            valor_unitario: 0,
-            categoria: 'MATERIAL',
-            data_base: '09/2025',
-            fonte: 'SINAPI-AUTO'
-        }));
-
-        // Bulk create missing inputs
-        for (let i = 0; i < newInputs.length; i += 200) {
-           const chunk = newInputs.slice(i, i + 200);
-           const created = await base44.entities.Input.bulkCreate(chunk);
-           if (created) {
-              created.forEach(inp => {
-                 inputMap.set(inp.codigo, { id: inp.id, un: inp.unidade, val: inp.valor_unitario });
-              });
-           }
-        }
-        toast.info(`${newInputs.length} itens faltantes foram criados automaticamente.`);
-     }
-
-     // 4.2 Re-process links now that missing items might exist
-     for (const item of items) {
-        const parent = serviceMap.get(item.codigo_pai);
-        if (!parent) continue;
-
-        // Skip if link logic was already handled? No, we need to rebuild the list including new items.
-        // But we didn't push to linksToCreate yet in the else block above.
-        // So let's re-evaluate childId.
-        
-        // Optimization: only process if we haven't processed this item-line successfully?
-        // Actually, just looping again or using a cleaner logic is better.
-        // Let's assume we cleared linksToCreate or just push ONLY if valid now.
-        // Refactor: We need to push to linksToCreate.
-        
-        let childId = null;
-        let type = 'SERVICO';
-        let category = 'MATERIAL';
-        let unitCost = 0;
-
-        if (inputMap.has(item.codigo_item)) {
-           const inp = inputMap.get(item.codigo_item);
-           childId = inp.id;
-           type = 'INSUMO';
-           category = detectCategory(inp.un);
-           unitCost = inp.val || 0;
-        } else if (serviceMap.has(item.codigo_item)) {
-           const svc = serviceMap.get(item.codigo_item);
-           childId = svc.id;
-           type = 'SERVICO';
-           category = detectCategory(svc.unidade);
-           unitCost = svc.custo_total || 0;
+        if (parentsToCreate.size > 0) {
+            const arr = Array.from(parentsToCreate.values());
+            for (let i = 0; i < arr.length; i+=100) {
+                const chunk = arr.slice(i, i+100);
+                const created = await base44.entities.Service.bulkCreate(chunk);
+                if (created) created.forEach(c => serviceMap.set(c.codigo, c));
+            }
+            toast.success(`${arr.length} novos serviços criados.`);
         }
 
-        if (childId) {
-           const link = {
-              servico_id: parent.id,
-              tipo_item: type,
-              item_id: childId,
-              quantidade: item.quantidade,
-              categoria: category,
-              ordem: 0,
-              custo_unitario_snapshot: unitCost,
-              custo_total_item: (item.quantidade || 0) * unitCost
-           };
-           linksToCreate.push(link);
-
-           if (item.codigo_pai === '5627') {
-              console.log('✅ 5627: Link criado', link);
-           }
-        } else {
-           if (item.codigo_pai === '5627') {
-              console.error('❌ 5627: childId não encontrado após processamento', item);
-           }
-        }
+        // 4. Ensure Children Exist
+        setProgress({ message: 'Verificando itens filhos...', percent: 50 });
+        const missingChildren = new Set();
+        for (const item of items) {
+            if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
+                missingChildren.add(item.codigo_item);
+            }
         }
 
-        // 4.1 Clear existing items for parents that are being imported to avoid duplication
-     // This is a "best effort" cleanup - we delete items linked to the parents we are about to fill
-     if (existingParentsToClear.size > 0) {
-        setProgress({ message: 'Limpando composições antigas...', percent: 45 });
-        const parentsArr = Array.from(existingParentsToClear);
-        // We can't easily bulk delete by query in frontend without a specific endpoint or loop.
-        // For safety and performance in frontend-only logic, we might skip this or do it partially.
-        // Ideally we would use a backend function. 
-        // But let's try to fetch links for these parents if the count is reasonable.
-        // If huge import, this is slow. 
-        // User asked to "fix" import. Duplication is a common issue.
-        // Let's rely on the user clearing data if they want, OR assume this is an additive/new import.
-        // BUT, I will display the missing items warning which is the main request.
-     }
+        if (missingChildren.size > 0) {
+            const arr = Array.from(missingChildren).map(code => ({
+                codigo: code,
+                descricao: `[AUTO] Item ${code}`,
+                unidade: 'UN',
+                valor_unitario: 0,
+                categoria: 'MATERIAL',
+                data_base: '09/2025',
+                fonte: 'SINAPI-AUTO'
+            }));
 
-     // Bulk Create Links
-     if (linksToCreate.length > 0) {
-        const total = linksToCreate.length;
-        for (let i = 0; i < total; i += 200) {
-            const chunk = linksToCreate.slice(i, i + 200);
-            setProgress({ message: `Salvando vínculos ${i + chunk.length}/${total}...`, percent: 50 + Math.floor((i/total)*20) });
-            await yieldToMain();
-            await base44.entities.ServiceItem.bulkCreate(chunk);
+            for (let i = 0; i < arr.length; i+=100) {
+                const chunk = arr.slice(i, i+100);
+                const created = await base44.entities.Input.bulkCreate(chunk);
+                if (created) created.forEach(c => inputMap.set(c.codigo, c));
+            }
+            toast.warning(`${arr.length} itens desconhecidos criados automaticamente.`);
         }
-     }
 
-     // 5. Calculate Costs (Iterative)
-     setProgress({ message: 'Calculando custos...', percent: 80 });
-     
-     // Group links by parent for fast lookup
-     const linksByParent = new Map();
-     for (const link of linksToCreate) {
-        if (!linksByParent.has(link.servico_id)) linksByParent.set(link.servico_id, []);
-        linksByParent.get(link.servico_id).push(link);
-     }
-     
-     const parentIds = Array.from(linksByParent.keys());
-     const localCosts = new Map(); // id -> { mat, mo, total }
-     
-     // Initialize local costs
-     for (const pid of parentIds) {
-        const existing = serviceIdMap.get(pid);
-        localCosts.set(pid, { 
-           mat: existing?.custo_material || 0, 
-           mo: existing?.custo_mao_obra || 0, 
-           total: existing?.custo_total || 0 
-        });
-     }
+        // 5. Create Links
+        setProgress({ message: 'Criando vínculos...', percent: 70 });
+        const linksToCreate = [];
+        let linksCreatedCount = 0;
 
-     // Run 5 passes to propagate costs bottom-up
-     for (let pass = 1; pass <= 5; pass++) {
-        setProgress({ message: `Refinando custos (Passo ${pass}/5)...`, percent: 80 + (pass * 2) });
-        await yieldToMain();
+        for (const item of items) {
+            const parent = serviceMap.get(item.codigo_pai);
+            if (!parent) continue;
+            
+            let childId = null;
+            let type = 'SERVICO';
+            let cat = 'MATERIAL';
+            let cost = 0;
 
-        let changed = false;
-        for (const pid of parentIds) {
-           let mat = 0;
-           let mo = 0;
-           const links = linksByParent.get(pid);
+            if (inputMap.has(item.codigo_item)) {
+                const inp = inputMap.get(item.codigo_item);
+                childId = inp.id;
+                type = 'INSUMO';
+                cat = detectCategory(inp.unidade);
+                cost = inp.valor_unitario || 0;
+            } else if (serviceMap.has(item.codigo_item)) {
+                const svc = serviceMap.get(item.codigo_item);
+                childId = svc.id;
+                type = 'SERVICO';
+                cat = detectCategory(svc.unidade);
+                cost = svc.custo_total || 0;
+            }
 
-           for (const link of links) {
-              const qty = link.quantidade || 0;
-              if (link.tipo_item === 'INSUMO') {
-                 const inp = inputIdMap.get(link.item_id);
-                 const cost = (inp?.val || 0) * qty;
-                 if (link.categoria === 'MAO_OBRA') mo += cost;
-                 else mat += cost;
-              } else {
-                 // Service
-                 const childCost = localCosts.get(link.item_id) || { 
-                    mat: serviceIdMap.get(link.item_id)?.custo_material || 0,
-                    mo: serviceIdMap.get(link.item_id)?.custo_mao_obra || 0,
-                    total: serviceIdMap.get(link.item_id)?.custo_total || 0
-                 };
-                 
-                 if (childCost.total > 0) {
-                    const totalLinkCost = childCost.total * qty;
-                    const matRatio = childCost.mat / childCost.total;
-                    const moRatio = childCost.mo / childCost.total;
-                    mat += totalLinkCost * matRatio;
-                    mo += totalLinkCost * moRatio;
-                 }
-              }
-           }
-           
-           const total = mat + mo;
-           const prev = localCosts.get(pid);
-           if (Math.abs(prev.total - total) > 0.001) {
-              localCosts.set(pid, { mat, mo, total });
-              changed = true;
-           }
+            if (childId) {
+                linksToCreate.push({
+                    servico_id: parent.id,
+                    tipo_item: type,
+                    item_id: childId,
+                    quantidade: item.quantidade,
+                    categoria: cat,
+                    ordem: 0,
+                    custo_unitario_snapshot: cost,
+                    custo_total_item: cost * item.quantidade
+                });
+            }
         }
-        
-        if (!changed) break;
-     }
 
-     // Save calculated costs
-     const updates = [];
-     for (const [pid, costs] of localCosts.entries()) {
-        if (costs.total > 0) {
-           updates.push({
-              id: pid,
-              data: {
-                 custo_material: costs.mat,
-                 custo_mao_obra: costs.mo,
-                 custo_total: costs.total
-              }
-           });
+        if (linksToCreate.length > 0) {
+            for (let i = 0; i < linksToCreate.length; i+=200) {
+                const chunk = linksToCreate.slice(i, i+200);
+                await base44.entities.ServiceItem.bulkCreate(chunk);
+                linksCreatedCount += chunk.length;
+                setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 70 + Math.floor((i/linksToCreate.length)*20) });
+                await yieldToMain();
+            }
         }
-     }
 
-     if (updates.length > 0) {
-         const total = updates.length;
-         for (let i = 0; i < total; i += 100) {
-             const chunk = updates.slice(i, i + 100);
-             setProgress({ message: `Salvando custos ${i}/${total}...`, percent: 90 });
-             await yieldToMain();
-             await Promise.all(chunk.map(u => base44.entities.Service.update(u.id, u.data)));
-         }
-     }
+        setProgress({ message: 'Concluído!', percent: 100 });
+        toast.success(`Importação finalizada! ${linksCreatedCount} vínculos criados.`);
 
-     // 6. Cascade Updates - SKIPPED for performance during import
-     // Running updateDependents recursively here causes Rate Limit Exceeded on large imports.
-     // The local costs (Step 5) are already calculated and saved.
-     // External services depending on these imported items will be updated when they are next opened or recalculated.
-     console.log('Skipping cascade updates to prevent rate limits.');
-
-     
-     // Final Report
-     const successMsg = `✅ ${servicesToCreate.length} serviços criados, ${linksToCreate.length} vínculos estabelecidos`;
-     
-     if (linkErrors.length > 0) {
-        const errorSample = linkErrors.slice(0, 5);
-        console.error('Erros de vínculo:', linkErrors);
-        toast.error(
-           <div className="space-y-2">
-              <div className="font-bold">❌ {linkErrors.length} composições falharam:</div>
-              {errorSample.map((e, i) => (
-                 <div key={i} className="text-xs">
-                    {e.parent} → {e.child}: {e.error}
-                 </div>
-              ))}
-              {linkErrors.length > 5 && <div className="text-xs">+{linkErrors.length - 5} outros erros</div>}
-           </div>,
-           { duration: 8000 }
-        );
+     } catch (err) {
+        console.error("Erro fatal:", err);
+        toast.error(`Falha: ${err.message}`);
      }
-     
-     if (parseErrors.length > 0) {
-        const errorSample = parseErrors.slice(0, 3);
-        toast.warning(
-           <div className="space-y-2">
-              <div className="font-bold">⚠️ {parseErrors.length} linhas ignoradas:</div>
-              {errorSample.map((e, i) => (
-                 <div key={i} className="text-xs truncate">{e.line}...</div>
-              ))}
-           </div>,
-           { duration: 6000 }
-        );
-     }
-     
-     toast.success(successMsg);
   };
 
   const handleFileRead = (e) => {
@@ -753,15 +429,6 @@ export default function TableImport() {
                )}
              </>
           )}
-          
-          <Alert className="bg-slate-50">
-             <AlertCircle className="h-4 w-4" />
-             <AlertTitle>Importante</AlertTitle>
-             <AlertDescription className="text-xs">
-                O processo agora é direto. Certifique-se que seus dados estão corretos antes de importar.
-                Isso criará ou atualizará serviços e insumos diretamente no banco de dados.
-             </AlertDescription>
-          </Alert>
         </CardContent>
       </Card>
     </div>
