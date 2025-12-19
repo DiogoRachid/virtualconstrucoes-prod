@@ -368,10 +368,9 @@ export default function TableImport() {
               custo_total_item: (item.quantidade || 0) * unitCost
            });
         }
-     }
-     }
-     
-     // 4.1 Clear existing items for parents that are being imported to avoid duplication
+        }
+
+        // 4.1 Clear existing items for parents that are being imported to avoid duplication
      // This is a "best effort" cleanup - we delete items linked to the parents we are about to fill
      if (existingParentsToClear.size > 0) {
         setProgress({ message: 'Limpando composições antigas...', percent: 45 });
