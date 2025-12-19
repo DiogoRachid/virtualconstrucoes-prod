@@ -281,9 +281,79 @@ export default function TableImport() {
            category = detectCategory(svc.unidade);
            unitCost = svc.custo_total || 0;
         } else {
-           // Item not found (neither input nor service). 
-           missingCodes.add(`${item.codigo_item} (em ${item.codigo_pai})`);
-           console.warn(`Item ${item.codigo_item} not found (Parent: ${item.codigo_pai})`);
+           // Item not found: Auto-create as Placeholder Input
+           // This ensures the link is created and the user can fix the input details later (or import the input list).
+           const placeholderCode = item.codigo_item;
+           
+           // Check if we already staged this placeholder in this very batch
+           if (!inputMap.has(placeholderCode)) {
+              // We'll create it "virtually" for now and add to a creation queue
+              // But we need an ID for the link. 
+              // We can't create link without ID.
+              // So we must actually create these inputs first.
+              missingCodes.add(placeholderCode);
+           }
+        }
+     }
+
+     // 4.1 Handle Missing Children (Auto-Create)
+     if (missingCodes.size > 0) {
+        setProgress({ message: `Criando ${missingCodes.size} itens faltantes...`, percent: 42 });
+        const missingArr = Array.from(missingCodes);
+        const newInputs = missingArr.map(code => ({
+            codigo: code,
+            descricao: `[AUTO-IMPORT] Item ${code} (Pendente)`,
+            unidade: 'UN',
+            valor_unitario: 0,
+            categoria: 'MATERIAL',
+            data_base: '09/2025',
+            fonte: 'SINAPI-AUTO'
+        }));
+
+        // Bulk create missing inputs
+        for (let i = 0; i < newInputs.length; i += 200) {
+           const chunk = newInputs.slice(i, i + 200);
+           const created = await base44.entities.Input.bulkCreate(chunk);
+           if (created) {
+              created.forEach(inp => {
+                 inputMap.set(inp.codigo, { id: inp.id, un: inp.unidade, val: inp.valor_unitario });
+              });
+           }
+        }
+        toast.info(`${newInputs.length} itens faltantes foram criados automaticamente.`);
+     }
+
+     // 4.2 Re-process links now that missing items might exist
+     for (const item of items) {
+        const parent = serviceMap.get(item.codigo_pai);
+        if (!parent) continue;
+
+        // Skip if link logic was already handled? No, we need to rebuild the list including new items.
+        // But we didn't push to linksToCreate yet in the else block above.
+        // So let's re-evaluate childId.
+        
+        // Optimization: only process if we haven't processed this item-line successfully?
+        // Actually, just looping again or using a cleaner logic is better.
+        // Let's assume we cleared linksToCreate or just push ONLY if valid now.
+        // Refactor: We need to push to linksToCreate.
+        
+        let childId = null;
+        let type = 'SERVICO';
+        let category = 'MATERIAL';
+        let unitCost = 0;
+
+        if (inputMap.has(item.codigo_item)) {
+           const inp = inputMap.get(item.codigo_item);
+           childId = inp.id;
+           type = 'INSUMO';
+           category = detectCategory(inp.un);
+           unitCost = inp.val || 0;
+        } else if (serviceMap.has(item.codigo_item)) {
+           const svc = serviceMap.get(item.codigo_item);
+           childId = svc.id;
+           type = 'SERVICO';
+           category = detectCategory(svc.unidade);
+           unitCost = svc.custo_total || 0;
         }
 
         if (childId) {
@@ -298,6 +368,7 @@ export default function TableImport() {
               custo_total_item: (item.quantidade || 0) * unitCost
            });
         }
+     }
      }
      
      // 4.1 Clear existing items for parents that are being imported to avoid duplication
