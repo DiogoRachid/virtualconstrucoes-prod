@@ -89,20 +89,21 @@ export default function TableImport() {
           let cols;
           if (line.includes('\t')) {
              cols = line.split('\t');
+             // Filter out empty columns ONLY if they are likely artifacts (e.g., double tabs)
+             // But be careful not to remove empty unit.
+             // Strategy: If we have > 5 columns, maybe trim empty ones?
+             // For now, keep exact split to preserve positions.
           } else if (line.includes(';')) {
              cols = line.split(';');
           } else {
-             // Fallback: try splitting by multiple spaces (common in copy-paste from PDF/Fixed width)
+             // Fallback: try splitting by multiple spaces
              cols = line.split(/\s{2,}/);
           }
           
           cols = cols.map(c => c?.trim().replace(/"/g, ''));
 
           // Support the specific 5-column format: COD_PAI | DESC | UN | COD_FILHO | QTD
-          // Relaxed check: at least 4 cols (Unidade might be merged or missing)
           if (cols.length < 4) {
-             // Try to rescue if we have 3 cols but the last one looks like "COD QTD" combined?
-             // Unlikely. Just log/skip.
              console.warn('Skipping line (cols < 4):', line);
              continue;
           }
@@ -118,19 +119,18 @@ export default function TableImport() {
           // Robust parsing for BRL number format (1.000,00 -> 1000.00)
           const parseBrlNumber = (str) => {
              if (!str) return 0;
-             let val = str.trim().toUpperCase();
+             // Clean whitespace/invisible chars
+             let val = str.trim().replace(/\s/g, '').toUpperCase();
              
              // Check for Scientific Notation (e.g., 6,67E-05)
              if (val.includes('E')) {
-                // If it has E, we assume standard format or comma decimal
-                // Replace comma with dot for JS
                 val = val.replace(',', '.');
                 return parseFloat(val) || 0;
              }
              
              // Standard BRL (1.000,00) or Simple Decimal (0,0005)
-             // If it contains comma, assumes BRL format: remove dots, replace comma with dot
              if (val.includes(',')) {
+                // Treat as BRL: Remove dots (thousands), replace comma with dot
                 const normalized = val.replace(/\./g, '').replace(',', '.');
                 return parseFloat(normalized) || 0;
              }
