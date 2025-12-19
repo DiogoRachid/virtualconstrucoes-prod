@@ -277,112 +277,98 @@ export default function TableImport() {
           throw new Error("Nenhuma linha válida identificada. Verifique se o formato está correto: CÓD_PAI (TAB) DESCRIÇÃO (TAB) UN (TAB) CÓD_FILHO (TAB) QUANTIDADE");
        }
 
-        // 2. Load Data
-        setProgress({ message: 'Carregando dados existentes...', percent: 15 });
-        const [existingServices, existingInputs] = await Promise.all([
-           Engine.fetchAll('Service'),
-           Engine.fetchAll('Input')
-        ]);
-        
-        const serviceMap = new Map(existingServices.map(s => [s.codigo, s]));
-        const inputMap = new Map(existingInputs.map(i => [i.codigo, i]));
-        
-        // 3. Create/Update Parents
-        setProgress({ message: 'Sincronizando serviços pais...', percent: 30 });
-        const parentsToCreate = new Map();
-        
-        for (const item of items) {
-            // Se já existe, não precisamos fazer nada (ou poderíamos atualizar a descrição)
-            // Se não existe, cria.
-            if (!serviceMap.has(item.codigo_pai)) {
-                parentsToCreate.set(item.codigo_pai, {
-                    codigo: item.codigo_pai,
-                    descricao: item.descricao_pai || `Serviço ${item.codigo_pai}`,
-                    unidade: item.unidade_pai || 'UN',
-                    ativo: true,
-                    custo_total: 0
-                });
+        // 2. Resolve Entities via Backend
+        setProgress({ message: 'Resolvendo códigos e criando entidades faltantes (Server-Side)...', percent: 20 });
+
+        const allCodes = new Set();
+        const parentCodes = new Set();
+
+        items.forEach(i => {
+           if (i.codigo_pai) {
+               allCodes.add(i.codigo_pai);
+               parentCodes.add(i.codigo_pai);
+           }
+           if (i.codigo_item) {
+               allCodes.add(i.codigo_item);
+           }
+        });
+
+        const codeList = Array.from(allCodes);
+        const parentCodeList = Array.from(parentCodes);
+
+        // Call Backend Helper
+        // Chunking request if too big, but backend handles logic.
+        // 55k items -> codeList ~15k max unique probably.
+        // We send in chunks of 5000 to be safe on payload size.
+
+        let mapping = {};
+        const chunkSize = 5000;
+
+        for (let i = 0; i < codeList.length; i += chunkSize) {
+            const chunk = codeList.slice(i, i + chunkSize);
+            const parentsChunk = parentCodeList.filter(p => chunk.includes(p)); // approximation
+
+            setProgress({ message: `Resolvendo bloco ${Math.floor(i/chunkSize)+1}/${Math.ceil(codeList.length/chunkSize)}...`, percent: 20 + Math.floor((i/codeList.length)*30) });
+
+            const response = await base44.functions.invoke('importHelpers', {
+                action: 'resolve_and_create',
+                codes: chunk,
+                parentCodes: parentsChunk
+            });
+
+            if (response.data && response.data.mapping) {
+                mapping = { ...mapping, ...response.data.mapping };
+            } else {
+                throw new Error("Falha ao resolver entidades no servidor.");
             }
         }
 
-        if (parentsToCreate.size > 0) {
-            const arr = Array.from(parentsToCreate.values());
-            for (let i = 0; i < arr.length; i+=100) {
-                const chunk = arr.slice(i, i+100);
-                const created = await base44.entities.Service.bulkCreate(chunk);
-                if (created) created.forEach(c => serviceMap.set(c.codigo, c));
-            }
-            toast.success(`${arr.length} novos serviços pais criados.`);
-        }
-
-        // 4. Ensure Children Exist
-        setProgress({ message: 'Verificando itens filhos...', percent: 50 });
-        const missingChildren = new Set();
-        for (const item of items) {
-            if (!item.codigo_item) continue;
-            if (!inputMap.has(item.codigo_item) && !serviceMap.has(item.codigo_item)) {
-                missingChildren.add(item.codigo_item);
-            }
-        }
-
-        if (missingChildren.size > 0) {
-            const arr = Array.from(missingChildren).map(code => ({
-                codigo: code,
-                descricao: `[AUTO-IMPORT] Item ${code}`,
-                unidade: 'UN',
-                valor_unitario: 0,
-                categoria: 'MATERIAL',
-                data_base: '09/2025',
-                fonte: 'SINAPI-AUTO'
-            }));
-
-            for (let i = 0; i < arr.length; i+=100) {
-                const chunk = arr.slice(i, i+100);
-                const created = await base44.entities.Input.bulkCreate(chunk);
-                if (created) created.forEach(c => inputMap.set(c.codigo, c));
-            }
-            toast.warning(`${arr.length} itens desconhecidos foram criados automaticamente como Insumos.`);
-        }
-
-        // 5. Create Links
-        setProgress({ message: 'Criando vínculos...', percent: 70 });
+        // 3. Create Links
+        setProgress({ message: 'Preparando vínculos...', percent: 60 });
         const linksToCreate = [];
         let linksCreatedCount = 0;
 
-        for (const item of items) {
-            const parent = serviceMap.get(item.codigo_pai);
-            if (!parent) continue;
-            
-            let childId = null;
-            let type = 'SERVICO';
-            let cat = 'MATERIAL';
-            let cost = 0;
+        // Helper to detect category if needed (though backend mapping might not have unit, we added unit to backend return)
+        // mapping[code] = { id, type, unit }
 
-            if (inputMap.has(item.codigo_item)) {
-                const inp = inputMap.get(item.codigo_item);
-                childId = inp.id;
-                type = 'INSUMO';
-                cat = detectCategory(inp.unidade);
-                cost = inp.valor_unitario || 0;
-            } else if (serviceMap.has(item.codigo_item)) {
-                const svc = serviceMap.get(item.codigo_item);
-                childId = svc.id;
-                type = 'SERVICO';
-                cat = detectCategory(svc.unidade);
-                cost = svc.custo_total || 0;
+        for (const item of items) {
+            const parentData = mapping[item.codigo_pai];
+            const childData = mapping[item.codigo_item];
+
+            if (!parentData || !childData) {
+                // Should not happen if backend did its job
+                continue;
             }
 
-            if (childId) {
-                linksToCreate.push({
-                    servico_id: parent.id,
-                    tipo_item: type,
-                    item_id: childId,
-                    quantidade: item.quantidade,
-                    categoria: cat,
-                    ordem: 0,
-                    custo_unitario_snapshot: cost,
-                    custo_total_item: cost * item.quantidade
-                });
+            // Determine category based on child unit
+            let cat = 'MATERIAL';
+            if (childData.unit) {
+               const u = childData.unit.toUpperCase();
+               if (u.startsWith('H')) cat = 'MAO_OBRA';
+            }
+
+            linksToCreate.push({
+                servico_id: parentData.id,
+                tipo_item: childData.type,
+                item_id: childData.id,
+                quantidade: item.quantidade,
+                categoria: cat,
+                ordem: 0,
+                custo_unitario_snapshot: 0, // Will be calculated later or we accept 0 for now
+                custo_total_item: 0
+            });
+        }
+
+        // 4. Batch Insert Links
+        if (linksToCreate.length > 0) {
+            // We can use a huge chunk size for ServiceItem creation if backend supports it
+            // Let's go with 500 to be safe and responsive
+            for (let i = 0; i < linksToCreate.length; i+=500) {
+                const chunk = linksToCreate.slice(i, i+500);
+                await base44.entities.ServiceItem.bulkCreate(chunk);
+                linksCreatedCount += chunk.length;
+                setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 60 + Math.floor((i/linksToCreate.length)*40) });
+                await yieldToMain();
             }
         }
 
