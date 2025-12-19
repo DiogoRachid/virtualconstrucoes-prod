@@ -134,90 +134,148 @@ export default function TableImport() {
   };
 
   const processCompositionsDirectly = async (lines, separator) => {
-     try {
-        toast.info("Iniciando processamento...");
-        const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+    try {
+       toast.info("Iniciando processamento...");
+       const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
-        // 1. Parse Lines
-        setProgress({ message: 'Analisando linhas...', percent: 5 });
-        const items = [];
-        let skippedCount = 0;
-        
-        for (const line of lines) {
-           const cleanLine = line.trim();
-           if (!cleanLine) continue;
-           
-           let cols = [];
-           let parsed = false;
-           
-           // Detect separator automatically per line if mixed, or global
-           // Fallback logic:
-           // 1. Tab
-           if (cleanLine.includes('\t')) {
-              const parts = cleanLine.split('\t').map(c => c.trim()).filter(c => c.length > 0);
-              // Expected 5 columns: Parent, Desc, Unit, Child, Qty
-              // If Description has tabs, it might split into more.
-              if (parts.length >= 5) {
-                 // Assume Last is Qty, 2nd Last is Child, 3rd Last is Unit, First is Parent
-                 // Everything in middle is Desc.
-                 const qty = parts[parts.length - 1];
-                 const child = parts[parts.length - 2];
-                 const unit = parts[parts.length - 3];
-                 const parent = parts[0];
-                 const desc = parts.slice(1, parts.length - 3).join(' ');
-                 
-                 cols = [parent, desc, unit, child, qty];
-                 parsed = true;
-              }
-           }
+       // 1. Parse Lines
+       setProgress({ message: 'Analisando linhas...', percent: 5 });
+       const items = [];
+       let skippedCount = 0;
 
-           // 2. Whitespace Tokenizer (Fallback for copy-paste where tabs became spaces)
-           if (!parsed) {
-               // Split by 2+ spaces to be safer than single space (Desc might have single spaces)
-               // If that fails, try single space.
-               let tokens = cleanLine.split(/\s{2,}/);
-               if (tokens.length < 5) {
-                   tokens = cleanLine.split(/\s+/);
-               }
+       for (const line of lines) {
+          const cleanLine = line.trim();
+          if (!cleanLine) continue;
 
-               if (tokens.length >= 5) {
-                   const qty = tokens[tokens.length - 1];
-                   const child = tokens[tokens.length - 2];
-                   const unit = tokens[tokens.length - 3];
-                   const parent = tokens[0];
-                   const desc = tokens.slice(1, tokens.length - 3).join(' ');
+          let cols = [];
+          let parsed = false;
+
+          // Validador simples
+          const looksLikeCode = (str) => str && str.length < 20 && !str.includes(' ');
+          const looksLikeUnit = (str) => str && str.length <= 5;
+
+          // Estratégia 1: Tabulação (Excel / Copy-Paste)
+          if (cleanLine.includes('\t')) {
+             const parts = cleanLine.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+             // Esperado: COD_PAI | DESC | UN | COD_FILHO | QTD
+             if (parts.length >= 5) {
+                // Assumimos estrutura padrão:
+                // Posição 0: Cod Pai
+                // Posição Última: Qtd
+                // Posição Penúltima: Cod Filho
+                // Posição Antepenúltima: Unidade Pai (Se não parecer unidade, pode ser parte da descrição?)
+
+                const qty = parts[parts.length - 1];
+                const child = parts[parts.length - 2];
+                const unitCandidate = parts[parts.length - 3];
+                const parent = parts[0];
+
+                let desc = '';
+                let unit = unitCandidate;
+
+                // Validação extra: Se unidade é muito longa, talvez a estrutura seja diferente
+                if (!looksLikeUnit(unitCandidate)) {
+                   // Talvez não tenha coluna de unidade? Ou descrição invadiu?
+                   // Vamos tentar assumir UN
+                   // desc = parts.slice(1, parts.length - 2).join(' ');
+                   // unit = 'UN'; 
+                   // Melhor manter o padrão, mas logar aviso
+                }
+
+                desc = parts.slice(1, parts.length - 3).join(' ');
+
+                if (looksLikeCode(parent) && looksLikeCode(child)) {
                    cols = [parent, desc, unit, child, qty];
                    parsed = true;
-               }
-           }
+                }
+             }
+          }
 
-           // 3. Semicolon (CSV)
-           if (!parsed && cleanLine.includes(';')) {
-               const parts = cleanLine.split(';');
-               if (parts.length >= 5) {
-                   cols = [parts[0], parts[1], parts[2], parts[3], parts[4]];
-                   parsed = true;
-               }
-           }
+          // Estratégia 2: Ponto e Vírgula (CSV)
+          if (!parsed && cleanLine.includes(';')) {
+              const parts = cleanLine.split(';').map(c => c.trim());
+              if (parts.length >= 5) {
+                  const qty = parts[parts.length - 1];
+                  const child = parts[parts.length - 2];
+                  const unit = parts[parts.length - 3];
+                  const parent = parts[0];
+                  const desc = parts.slice(1, parts.length - 3).join(' ');
 
-           if (parsed) {
-              const qty = parseBrlNumber(cols[4]);
-              items.push({
-                  codigo_pai: cols[0]?.trim(),
-                  descricao_pai: cols[1]?.trim()?.replace(/^["']|["']$/g, ''), // Remove quotes
-                  unidade_pai: cols[2]?.trim(),
-                  codigo_item: cols[3]?.trim(),
-                  quantidade: qty
-              });
-           } else {
-              skippedCount++;
-              console.warn("Linha ignorada (formato não reconhecido):", cleanLine);
-           }
-        }
+                  if (looksLikeCode(parent)) { // child as vezes é vazio em linhas de cabeçalho
+                      cols = [parent, desc, unit, child, qty];
+                      parsed = true;
+                  }
+              }
+          }
 
-        if (items.length === 0) {
-           throw new Error("Nenhum item válido identificado. Verifique se o texto copiado contém as colunas necessárias.");
-        }
+          // Estratégia 3: Espaços (PDF Copy-Paste) - O mais problemático
+          if (!parsed) {
+              // Tenta quebrar por múltiplos espaços primeiro (mais seguro)
+              let tokens = cleanLine.split(/\s{2,}/).map(c => c.trim()).filter(c => c);
+
+              // Se não deu certo, tenta espaço simples, mas com muito cuidado
+              if (tokens.length < 5) {
+                  tokens = cleanLine.split(' ').map(c => c.trim()).filter(c => c);
+              }
+
+              if (tokens.length >= 5) {
+                  const qty = tokens[tokens.length - 1];
+                  const child = tokens[tokens.length - 2];
+                  const unit = tokens[tokens.length - 3];
+                  const parent = tokens[0];
+
+                  // Validar se parecem estar nos lugares certos
+                  const parentIsCode = looksLikeCode(parent);
+                  const childIsCode = looksLikeCode(child);
+                  const unitIsUnit = looksLikeUnit(unit);
+                  const qtyIsNum = /[\d.,]+/.test(qty);
+
+                  if (parentIsCode && childIsCode && qtyIsNum) {
+                      // Parece correto
+                      const desc = tokens.slice(1, tokens.length - 3).join(' ');
+                      cols = [parent, desc, unit, child, qty];
+                      parsed = true;
+                  } else if (parentIsCode && childIsCode && !unitIsUnit) {
+                      // Pode ser que não tenha coluna de unidade?
+                      // Ex: COD | DESC | CHILD | QTD
+                      // tokens[length-3] seria parte da descrição
+                      const potentialChild = tokens[tokens.length - 2];
+                      const potentialQty = tokens[tokens.length - 1];
+
+                      if (looksLikeCode(potentialChild) && /[\d.,]+/.test(potentialQty)) {
+                         // Assumir sem unidade
+                         const desc = tokens.slice(1, tokens.length - 2).join(' ');
+                         cols = [parent, desc, 'UN', potentialChild, potentialQty];
+                         parsed = true;
+                      }
+                  }
+              }
+          }
+
+          if (parsed) {
+             const qty = parseBrlNumber(cols[4]);
+             // Filtro final para evitar lixo
+             if (!cols[0] || cols[0].length > 15 || !/^[A-Z0-9.-]+$/.test(cols[0])) {
+                 skippedCount++;
+                 continue; 
+             }
+
+             items.push({
+                 codigo_pai: cols[0]?.trim(),
+                 descricao_pai: cols[1]?.trim()?.replace(/^["']|["']$/g, ''), 
+                 unidade_pai: cols[2]?.trim() || 'UN',
+                 codigo_item: cols[3]?.trim(),
+                 quantidade: qty
+             });
+          } else {
+             skippedCount++;
+             // console.warn("Linha ignorada:", cleanLine);
+          }
+       }
+
+       if (items.length === 0) {
+          throw new Error("Nenhuma linha válida identificada. Verifique se o formato está correto: CÓD_PAI (TAB) DESCRIÇÃO (TAB) UN (TAB) CÓD_FILHO (TAB) QUANTIDADE");
+       }
 
         // 2. Load Data
         setProgress({ message: 'Carregando dados existentes...', percent: 15 });
