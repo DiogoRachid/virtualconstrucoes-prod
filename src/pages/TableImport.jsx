@@ -193,7 +193,7 @@ export default function TableImport() {
         if (!parsed) {
            // Tokenize by whitespace
            const tokens = cleanLine.split(/\s+/);
-           
+
            if (tokens.length >= 5) {
                // Strategy: 
                // Qty = Last token
@@ -201,22 +201,30 @@ export default function TableImport() {
                // Unit = 3rd Last
                // ParentCode = First token
                // Description = Everything in between
-               
+
                const qty = tokens[tokens.length - 1];
                const child = tokens[tokens.length - 2];
                const unit = tokens[tokens.length - 3];
                const parent = tokens[0];
-               
-               // Validate if they look like what we expect to avoid false positives
-               // Qty should be number-ish (allow comma)
-               // Parent/Child usually alphanumeric/numeric
-               // Unit usually short
-               
+
                const descTokens = tokens.slice(1, tokens.length - 3);
                const desc = descTokens.join(' ');
-               
+
                cols = [parent, desc, unit, child, qty];
                parsed = true;
+
+               // Debug log para linha 5627
+               if (parent === '5627') {
+                  console.log('🔍 DEBUG 5627:', {
+                     tokens,
+                     cols,
+                     parent,
+                     child,
+                     unit,
+                     qty,
+                     desc
+                  });
+               }
            }
         }
 
@@ -227,16 +235,20 @@ export default function TableImport() {
            const rawQty = cols[4];
            const qty = parseBrlNumber(rawQty);
            
-           // Extra check: if Qty is 0 but raw string wasn't empty/zero, maybe parsing failed?
-           // For 0,000056 it works.
-           
-           items.push({
+           const item = {
                codigo_pai: cols[0],
                descricao_pai: cols[1],
                unidade_pai: cols[2] || 'UN',
                codigo_item: cols[3],
                quantidade: qty
-           });
+           };
+           
+           items.push(item);
+           
+           // Debug log para linha 5627
+           if (cols[0] === '5627') {
+              console.log('✅ Item 5627 adicionado:', item);
+           }
         } else {
            skippedCount++;
            parseErrors.push({ line: cleanLine.substring(0, 100), error: 'Formato inválido' });
@@ -344,6 +356,9 @@ export default function TableImport() {
               child: item.codigo_item, 
               error: 'Serviço pai não encontrado' 
            });
+           if (item.codigo_pai === '5627') {
+              console.error('❌ 5627: Serviço pai não encontrado no serviceMap');
+           }
            continue;
         }
 
@@ -360,6 +375,10 @@ export default function TableImport() {
            type = 'INSUMO';
            category = detectCategory(inp.un);
            unitCost = inp.val || 0;
+
+           if (item.codigo_pai === '5627') {
+              console.log('✅ 5627: Insumo encontrado', { codigo: item.codigo_item, childId, unitCost });
+           }
         } else if (serviceMap.has(item.codigo_item)) {
            const svc = serviceMap.get(item.codigo_item);
            childId = svc.id;
@@ -370,6 +389,10 @@ export default function TableImport() {
            const placeholderCode = item.codigo_item;
            if (!inputMap.has(placeholderCode)) {
               missingCodes.add(placeholderCode);
+
+              if (item.codigo_pai === '5627') {
+                 console.log('⚠️ 5627: Item filho não encontrado, será criado automaticamente', placeholderCode);
+              }
            }
         }
      }
@@ -435,7 +458,7 @@ export default function TableImport() {
         }
 
         if (childId) {
-           linksToCreate.push({
+           const link = {
               servico_id: parent.id,
               tipo_item: type,
               item_id: childId,
@@ -444,7 +467,16 @@ export default function TableImport() {
               ordem: 0,
               custo_unitario_snapshot: unitCost,
               custo_total_item: (item.quantidade || 0) * unitCost
-           });
+           };
+           linksToCreate.push(link);
+
+           if (item.codigo_pai === '5627') {
+              console.log('✅ 5627: Link criado', link);
+           }
+        } else {
+           if (item.codigo_pai === '5627') {
+              console.error('❌ 5627: childId não encontrado após processamento', item);
+           }
         }
         }
 
