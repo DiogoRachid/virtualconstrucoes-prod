@@ -6,7 +6,7 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { action, codes, parentCodes } = await req.json();
+        const { action, codes, items_info } = await req.json();
 
         if (action === 'resolve_and_create') {
             const uniqueCodes = [...new Set(codes || [])];
@@ -38,19 +38,31 @@ Deno.serve(async (req) => {
             // 2. Resolve
             for (const code of uniqueCodes) {
                 if (inputMap.has(code)) {
-                    mapping[code] = { id: inputMap.get(code).id, type: 'INSUMO', unit: inputMap.get(code).unidade };
+                    const i = inputMap.get(code);
+                    mapping[code] = { 
+                        id: i.id, 
+                        type: 'INSUMO', 
+                        unit: i.unidade,
+                        cost: i.valor_unitario || 0
+                    };
                 } else if (serviceMap.has(code)) {
-                    mapping[code] = { id: serviceMap.get(code).id, type: 'SERVICO', unit: serviceMap.get(code).unidade };
+                    const s = serviceMap.get(code);
+                    mapping[code] = { 
+                        id: s.id, 
+                        type: 'SERVICO', 
+                        unit: s.unidade,
+                        cost: s.custo_total || 0
+                    };
                 } else {
-                    // Missing!
-                    // User instruction: "não criar esse itens no insumos, apenas nos serviços"
-                    // Assumption: All Inputs are already imported. Any unknown code is a Service.
+                    // Missing! Create as Service.
+                    const info = items_info && items_info[code] ? items_info[code] : {};
                     
                     servicesToCreate.push({
                         codigo: code,
-                        descricao: `Service ${code} (Auto)`,
-                        unidade: 'UN',
-                        ativo: true
+                        descricao: info.description || `Service ${code} (Auto)`,
+                        unidade: info.unit || 'UN',
+                        ativo: true,
+                        custo_total: 0 // New service starts with 0
                     });
                 }
             }
@@ -65,9 +77,14 @@ Deno.serve(async (req) => {
                  }
             }
 
-            // 4. Update Mapping
+            // 4. Update Mapping for created services
             createdServices.forEach(s => {
-                mapping[s.codigo] = { id: s.id, type: 'SERVICO', unit: s.unidade };
+                mapping[s.codigo] = { 
+                    id: s.id, 
+                    type: 'SERVICO', 
+                    unit: s.unidade,
+                    cost: 0 
+                };
             });
 
             return Response.json({ mapping });

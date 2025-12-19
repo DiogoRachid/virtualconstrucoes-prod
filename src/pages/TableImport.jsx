@@ -281,39 +281,41 @@ export default function TableImport() {
         setProgress({ message: 'Resolvendo códigos e criando entidades faltantes (Server-Side)...', percent: 20 });
 
         const allCodes = new Set();
-        const parentCodes = new Set();
+        const itemsInfo = {}; // Map code -> { description, unit }
 
         items.forEach(i => {
            if (i.codigo_pai) {
                allCodes.add(i.codigo_pai);
-               parentCodes.add(i.codigo_pai);
+               if (!itemsInfo[i.codigo_pai]) {
+                   itemsInfo[i.codigo_pai] = { description: i.descricao_pai, unit: i.unidade_pai };
+               }
            }
            if (i.codigo_item) {
                allCodes.add(i.codigo_item);
+               if (!itemsInfo[i.codigo_item]) {
+                   itemsInfo[i.codigo_item] = { description: i.descricao_item, unit: i.unidade_item }; // Might be undefined if column missing
+               }
            }
         });
 
         const codeList = Array.from(allCodes);
-        const parentCodeList = Array.from(parentCodes);
-
-        // Call Backend Helper
-        // Chunking request if too big, but backend handles logic.
-        // 55k items -> codeList ~15k max unique probably.
-        // We send in chunks of 5000 to be safe on payload size.
 
         let mapping = {};
         const chunkSize = 5000;
 
         for (let i = 0; i < codeList.length; i += chunkSize) {
             const chunk = codeList.slice(i, i + chunkSize);
-            const parentsChunk = parentCodeList.filter(p => chunk.includes(p)); // approximation
+
+            // Prepare chunk items_info
+            const chunkInfo = {};
+            chunk.forEach(c => chunkInfo[c] = itemsInfo[c]);
 
             setProgress({ message: `Resolvendo bloco ${Math.floor(i/chunkSize)+1}/${Math.ceil(codeList.length/chunkSize)}...`, percent: 20 + Math.floor((i/codeList.length)*30) });
 
             const response = await base44.functions.invoke('importHelpers', {
                 action: 'resolve_and_create',
                 codes: chunk,
-                parentCodes: parentsChunk
+                items_info: chunkInfo
             });
 
             if (response.data && response.data.mapping) {
@@ -347,6 +349,9 @@ export default function TableImport() {
                if (u.startsWith('H')) cat = 'MAO_OBRA';
             }
 
+            const unitCost = childData.cost || 0;
+            const totalCost = unitCost * (item.quantidade || 0);
+
             linksToCreate.push({
                 servico_id: parentData.id,
                 tipo_item: childData.type,
@@ -354,10 +359,10 @@ export default function TableImport() {
                 quantidade: item.quantidade,
                 categoria: cat,
                 ordem: 0,
-                custo_unitario_snapshot: 0, // Will be calculated later or we accept 0 for now
-                custo_total_item: 0
+                custo_unitario_snapshot: unitCost,
+                custo_total_item: totalCost
             });
-        }
+            }
 
         // 4. Batch Insert Links
         if (linksToCreate.length > 0) {
