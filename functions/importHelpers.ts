@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
 
             const mapping = {};
             const servicesToCreate = [];
+            const servicesToUpdate = [];
 
             // 2. Resolve
             for (const code of uniqueCodes) {
@@ -47,19 +48,26 @@ Deno.serve(async (req) => {
                         cost: i.valor_unitario || 0
                     };
                 } else if (serviceMap.has(code)) {
-                    // It's a Service
+                    // It's a Service - check if needs update
                     const s = serviceMap.get(code);
+                    const info = items_info && items_info[code] ? items_info[code] : {};
+                    
+                    // Update if description or unit changed
+                    if (info.description && info.description !== s.descricao) {
+                        servicesToUpdate.push({ id: s.id, descricao: info.description });
+                    }
+                    if (info.unit && info.unit !== s.unidade) {
+                        servicesToUpdate.push({ id: s.id, unidade: info.unit });
+                    }
+                    
                     mapping[code] = { 
                         id: s.id, 
                         type: 'SERVICO', 
-                        unit: s.unidade,
+                        unit: info.unit || s.unidade,
                         cost: s.custo_total || 0
                     };
                 } else {
                     // Missing! Create as Service.
-                    // We DO NOT create Inputs here anymore.
-                    // Assumption: All Inputs are already imported.
-                    
                     const info = items_info && items_info[code] ? items_info[code] : {};
                     
                     servicesToCreate.push({
@@ -82,7 +90,24 @@ Deno.serve(async (req) => {
                  }
             }
 
-            // 4. Update Mapping
+            // 4. Update Existing Services
+            if (servicesToUpdate.length > 0) {
+                // Group updates by id
+                const updateMap = new Map();
+                servicesToUpdate.forEach(u => {
+                    if (!updateMap.has(u.id)) {
+                        updateMap.set(u.id, {});
+                    }
+                    Object.assign(updateMap.get(u.id), u);
+                });
+                
+                for (const [id, data] of updateMap.entries()) {
+                    const { id: _, ...updateData } = data;
+                    await base44.entities.Service.update(id, updateData);
+                }
+            }
+
+            // 5. Update Mapping
             createdServices.forEach(s => {
                 mapping[s.codigo] = { 
                     id: s.id, 
