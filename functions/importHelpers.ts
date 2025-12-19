@@ -90,7 +90,8 @@ Deno.serve(async (req) => {
                  }
             }
 
-            // 4. Update Existing Services
+            // 4. Update Existing Services and cascade changes
+            const updatedServiceIds = [];
             if (servicesToUpdate.length > 0) {
                 // Group updates by id
                 const updateMap = new Map();
@@ -104,6 +105,29 @@ Deno.serve(async (req) => {
                 for (const [id, data] of updateMap.entries()) {
                     const { id: _, ...updateData } = data;
                     await base44.entities.Service.update(id, updateData);
+                    updatedServiceIds.push(id);
+                }
+                
+                // For each updated service, update compositions that use it
+                for (const serviceId of updatedServiceIds) {
+                    // Find all ServiceItems that reference this service
+                    const dependentItems = await base44.asServiceRole.entities.ServiceItem.filter({
+                        tipo_item: 'SERVICO',
+                        item_id: serviceId
+                    });
+                    
+                    // Get the updated service to get its new cost
+                    const updatedService = await base44.asServiceRole.entities.Service.filter({ id: serviceId }).then(r => r[0]);
+                    if (!updatedService) continue;
+                    
+                    // Update each dependent item's snapshot
+                    for (const item of dependentItems) {
+                        const newTotal = item.quantidade * updatedService.custo_total;
+                        await base44.asServiceRole.entities.ServiceItem.update(item.id, {
+                            custo_unitario_snapshot: updatedService.custo_total,
+                            custo_total_item: newTotal
+                        });
+                    }
                 }
             }
 
