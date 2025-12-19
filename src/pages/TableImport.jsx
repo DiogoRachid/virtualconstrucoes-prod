@@ -156,37 +156,40 @@ export default function TableImport() {
 
           // Estratégia 1: Tabulação (Excel / Copy-Paste)
           if (cleanLine.includes('\t')) {
-             const parts = cleanLine.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+             // NÃO filtrar strings vazias para manter a posição das colunas
+             const parts = cleanLine.split('\t').map(c => c.trim());
+             
              // Esperado: COD_PAI | DESC | UN | COD_FILHO | QTD
+             // Pode ter colunas extras, mas assumimos que as essenciais estão em posições relativas ou fixas
              if (parts.length >= 5) {
-                // Assumimos estrutura padrão:
-                // Posição 0: Cod Pai
-                // Posição Última: Qtd
-                // Posição Penúltima: Cod Filho
-                // Posição Antepenúltima: Unidade Pai (Se não parecer unidade, pode ser parte da descrição?)
+                // Se a linha tiver muitas colunas vazias no meio, o split preserva.
+                
+                // Assumindo as 5 primeiras colunas fixas se o arquivo for bem formatado
+                // OU assumindo as últimas se for variável.
+                // Vamos tentar pegar as posições fixas primeiro (0, 1, 2, 3, 4)
+                
+                // Tentativa A: Posições fixas (0 a 4)
+                let p0 = parts[0]; // Pai
+                let p1 = parts[1]; // Desc
+                let p2 = parts[2]; // Unidade
+                let p3 = parts[3]; // Filho
+                let p4 = parts[4]; // Qtd
 
-                const qty = parts[parts.length - 1];
-                const child = parts[parts.length - 2];
-                const unitCandidate = parts[parts.length - 3];
-                const parent = parts[0];
-
-                let desc = '';
-                let unit = unitCandidate;
-
-                // Validação extra: Se unidade é muito longa, talvez a estrutura seja diferente
-                if (!looksLikeUnit(unitCandidate)) {
-                   // Talvez não tenha coluna de unidade? Ou descrição invadiu?
-                   // Vamos tentar assumir UN
-                   // desc = parts.slice(1, parts.length - 2).join(' ');
-                   // unit = 'UN'; 
-                   // Melhor manter o padrão, mas logar aviso
-                }
-
-                desc = parts.slice(1, parts.length - 3).join(' ');
-
-                if (looksLikeCode(parent) && looksLikeCode(child)) {
-                   cols = [parent, desc, unit, child, qty];
-                   parsed = true;
+                if (looksLikeCode(p0) && looksLikeCode(p3) && /[\d.,]+/.test(p4)) {
+                    cols = [p0, p1, p2, p3, p4];
+                    parsed = true;
+                } else {
+                    // Tentativa B: Relativo ao final (caso a descrição quebre em colunas ou tenha colunas extras antes)
+                    const qty = parts[parts.length - 1];
+                    const child = parts[parts.length - 2];
+                    const unitCandidate = parts[parts.length - 3];
+                    const parent = parts[0];
+                    
+                    if (looksLikeCode(parent) && looksLikeCode(child)) {
+                        const desc = parts.slice(1, parts.length - 3).join(' '); // Junta o meio como descrição
+                        cols = [parent, desc, unitCandidate, child, qty];
+                        parsed = true;
+                    }
                 }
              }
           }
