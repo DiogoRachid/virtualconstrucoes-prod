@@ -176,13 +176,63 @@ export default function InvestmentDetail() {
         taxas: data.taxas ? parseFloat(data.taxas) : 0
       });
 
-      // Atualizar valor atual se for rendimento
-      if (['rendimento', 'dividendo', 'jcp'].includes(data.tipo_operacao)) {
-        const novoValorAtual = (investment.valor_atual || 0) + valor;
-        await base44.entities.Investment.update(investmentId, {
-          valor_atual: novoValorAtual,
-          ultima_atualizacao: new Date().toISOString()
-        });
+      // Atualizar Investimento (Compra, Venda, Amortização, Rendimentos)
+      const currentQty = investment.quantidade || 0;
+      const currentInvested = investment.valor_investido || 0;
+      const currentQuote = investment.cotacao_atual || 0;
+      let updates = {};
+
+      if (data.tipo_operacao === 'compra') {
+          const transQty = data.quantidade ? parseFloat(data.quantidade) : 0;
+          const transTotal = valor;
+          const newQty = currentQty + transQty;
+          const newInvested = currentInvested + transTotal;
+          const newAvgPrice = newQty > 0 ? newInvested / newQty : 0;
+          const newCurrentValue = newQty * currentQuote;
+
+          updates = {
+              quantidade: newQty,
+              valor_investido: newInvested,
+              preco_medio: newAvgPrice,
+              valor_atual: newCurrentValue
+          };
+      } else if (data.tipo_operacao === 'venda') {
+          const transQty = data.quantidade ? parseFloat(data.quantidade) : 0;
+          // Redução proporcional do valor investido (baixa do custo médio)
+          // Valor Investido Novo = Valor Investido Antigo * (Qtd Restante / Qtd Antiga)
+          const ratio = currentQty > 0 ? (currentQty - transQty) / currentQty : 0;
+          const newInvested = currentInvested * ratio;
+          const newQty = Math.max(0, currentQty - transQty);
+          const newCurrentValue = newQty * currentQuote;
+
+          updates = {
+              quantidade: newQty,
+              valor_investido: newInvested,
+              preco_medio: newQty > 0 ? newInvested / newQty : 0,
+              valor_atual: newCurrentValue
+          };
+      } else if (data.tipo_operacao === 'amortizacao') {
+          const newInvested = Math.max(0, currentInvested - valor);
+          updates = {
+              valor_investido: newInvested,
+              preco_medio: currentQty > 0 ? newInvested / currentQty : 0
+          };
+      } else if (['rendimento', 'dividendo', 'jcp'].includes(data.tipo_operacao)) {
+         // Se for rendimento acumulado (não pago em conta), aumenta o valor atual?
+         // A lógica anterior apenas somava ao valor atual. Mantendo compatibilidade mas corrigindo rentabilidade.
+         const novoValorAtual = (investment.valor_atual || 0) + valor;
+         updates = { valor_atual: novoValorAtual };
+      }
+
+      if (Object.keys(updates).length > 0) {
+          const newValAtual = updates.valor_atual !== undefined ? updates.valor_atual : (investment.valor_atual || 0);
+          const newValInv = updates.valor_investido !== undefined ? updates.valor_investido : (investment.valor_investido || 0);
+          
+          updates.rentabilidade_valor = newValAtual - newValInv;
+          updates.rentabilidade_percentual = newValInv > 0 ? ((newValAtual / newValInv) - 1) * 100 : 0;
+          updates.ultima_atualizacao = new Date().toISOString();
+          
+          await base44.entities.Investment.update(investmentId, updates);
       }
 
       // Atualizar conta bancária se selecionada

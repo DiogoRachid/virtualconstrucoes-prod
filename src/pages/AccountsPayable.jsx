@@ -147,11 +147,15 @@ export default function AccountsPayable() {
     },
     {
       header: 'Vencimento',
-      render: (row) => (
-        <span className={row.status === 'atrasado' ? 'text-red-600 font-medium' : ''}>
-          {format(new Date(row.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
-        </span>
-      )
+      render: (row) => {
+        const dateParts = row.data_vencimento ? row.data_vencimento.split('-') : [];
+        const dateStr = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : row.data_vencimento;
+        return (
+          <span className={row.status === 'atrasado' ? 'text-red-600 font-medium' : ''}>
+            {dateStr}
+          </span>
+        );
+      }
     },
     {
       header: 'Centro de Custo',
