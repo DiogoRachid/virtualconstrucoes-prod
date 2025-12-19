@@ -8,6 +8,7 @@ import SearchFilter from '@/components/shared/SearchFilter';
 import DataTable from '@/components/shared/DataTable';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ export default function Inputs() {
   const [openBulk, setOpenBulk] = useState(false);
   const [bulkDate, setBulkDate] = useState('');
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   
   const [form, setForm] = useState({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' });
 
@@ -107,6 +109,39 @@ export default function Inputs() {
     }
   };
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(s => s.id)));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleBulkDeleteInputs = async () => {
+    if (!confirm(`Tem certeza que deseja excluir ${selectedIds.size} insumos selecionados?`)) return;
+    try {
+      const ids = Array.from(selectedIds);
+      let deletedCount = 0;
+      for (let i = 0; i < ids.length; i+=50) {
+        await Promise.all(ids.slice(i, i+50).map(id => base44.entities.Input.delete(id)));
+        deletedCount += ids.slice(i, i+50).length;
+      }
+      toast.success(`${deletedCount} insumos excluídos.`);
+      setSelectedIds(new Set());
+      refetch();
+    } catch(e) {
+      toast.error("Erro ao excluir insumos.");
+      console.error(e);
+    }
+  };
+
   const handleBulkUpdate = async () => {
     if (!bulkDate) return toast.error("Informe a data");
     if (!confirm(`Atualizar a Data Base de TODOS os insumos para ${bulkDate}?`)) return;
@@ -137,6 +172,23 @@ export default function Inputs() {
   };
 
   const columns = [
+    {
+      header: (
+        <Checkbox 
+          checked={filtered.length > 0 && selectedIds.size === filtered.length}
+          onCheckedChange={toggleSelectAll}
+          aria-label="Select all"
+        />
+      ),
+      className: 'w-10',
+      render: (row) => (
+        <Checkbox 
+          checked={selectedIds.has(row.id)}
+          onCheckedChange={() => toggleSelectOne(row.id)}
+          aria-label="Select row"
+        />
+      )
+    },
     { header: 'Código', accessor: 'codigo', className: 'w-24 font-mono text-xs', sortable: true },
     { header: 'Descrição', accessor: 'descricao', sortable: true },
     { header: 'Unidade', accessor: 'unidade', className: 'w-16', sortable: true },
@@ -189,9 +241,16 @@ export default function Inputs() {
       
       <div className="flex justify-between items-center mb-4">
          <SearchFilter searchValue={search} onSearchChange={setSearch} placeholder="Buscar insumo..." />
-         <Button variant="outline" onClick={() => setOpenBulk(true)}>
-            <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
-         </Button>
+         <div className="flex gap-2">
+            {selectedIds.size > 0 && (
+                <Button variant="destructive" onClick={handleBulkDeleteInputs}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})
+                </Button>
+            )}
+            <Button variant="outline" onClick={() => setOpenBulk(true)}>
+                <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
+            </Button>
+         </div>
       </div>
       <DataTable 
         columns={columns} 
