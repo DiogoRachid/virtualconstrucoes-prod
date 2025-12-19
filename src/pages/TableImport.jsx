@@ -379,13 +379,35 @@ export default function TableImport() {
                 const chunk = linksToCreate.slice(i, i+500);
                 await base44.entities.ServiceItem.bulkCreate(chunk);
                 linksCreatedCount += chunk.length;
-                setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 60 + Math.floor((i/linksToCreate.length)*40) });
+                setProgress({ message: `Salvando vínculos ${linksCreatedCount}/${linksToCreate.length}...`, percent: 60 + Math.floor((i/linksToCreate.length)*30) });
+                await yieldToMain();
+            }
+        }
+
+        // 5. Recalculate Service Costs
+        setProgress({ message: 'Calculando custos dos serviços...', percent: 90 });
+        const uniqueParentIds = [...new Set(items.map(i => mapping[i.codigo_pai]?.id).filter(Boolean))];
+        
+        // Sort by dependency level (bottom-up)
+        const servicesWithLevel = [];
+        for (const parentId of uniqueParentIds) {
+            const s = await base44.entities.Service.filter({ id: parentId }).then(r => r[0]);
+            if (s) servicesWithLevel.push(s);
+        }
+        servicesWithLevel.sort((a, b) => (a.nivel_max_dependencia || 0) - (b.nivel_max_dependencia || 0));
+
+        let recalculated = 0;
+        for (const service of servicesWithLevel) {
+            await Engine.recalculateService(service.id);
+            recalculated++;
+            if (recalculated % 10 === 0) {
+                setProgress({ message: `Calculando custos ${recalculated}/${servicesWithLevel.length}...`, percent: 90 + Math.floor((recalculated/servicesWithLevel.length)*10) });
                 await yieldToMain();
             }
         }
 
         setProgress({ message: 'Concluído!', percent: 100 });
-        toast.success(`Importação finalizada! ${linksCreatedCount} vínculos processados.`);
+        toast.success(`Importação finalizada! ${linksCreatedCount} vínculos e ${recalculated} serviços calculados.`);
 
      } catch (err) {
         console.error("Erro fatal:", err);
