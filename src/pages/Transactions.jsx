@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Receipt, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Loader2, Plus } from 'lucide-react';
+import { Receipt, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Loader2, Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { createPageUrl } from '@/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
