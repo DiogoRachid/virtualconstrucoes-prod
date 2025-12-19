@@ -511,23 +511,6 @@ export default function TableImport() {
      }
 
      
-     if (missingCodes.size > 0) {
-        const missingArr = Array.from(missingCodes).slice(0, 10);
-        const overflow = missingCodes.size - 10;
-        const msg = `Itens não encontrados:\n${missingArr.join(', ')}${overflow > 0 ? ` (+${overflow} outros)` : ''}`;
-        
-        toast.warning(
-           <div className="flex flex-col gap-2">
-              <span className="font-bold">Atenção: {missingCodes.size} itens ignorados por falta de cadastro do filho:</span>
-              <pre className="text-xs bg-slate-100 p-2 rounded overflow-auto max-h-32">
-                 {msg}
-              </pre>
-              <span className="text-xs">Certifique-se de importar os insumos/serviços filhos primeiro.</span>
-           </div>,
-           { duration: 10000 } // Show for 10s
-        );
-     }
-  
      toast.success(`Importação concluída! ${servicesToCreate.length} novos serviços e ${linksToCreate.length} itens vinculados.`);
   };
 
