@@ -570,10 +570,12 @@ export default function Investments() {
       accessor: 'valor_atual',
       sortable: true,
       render: (row) => {
-        const isInternational = ['renda_variavel_int', 'crypto'].includes(row.categoria);
+        // Removed 'crypto' from isInternational to not show USD
+        const isInternational = ['renda_variavel_int'].includes(row.categoria);
+        const isCrypto = row.categoria === 'crypto';
         const cotacaoUSD = row.cotacao_atual_usd;
         const valorAtualUSD = row.valor_atual_usd;
-        
+
         return (
           <div>
             <span className="font-medium text-slate-900">
@@ -584,10 +586,15 @@ export default function Investments() {
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(valorAtualUSD)}
               </p>
             )}
+            {isCrypto && (
+               <p className="text-xs text-slate-500">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.cotacao_atual || 0)} / un
+               </p>
+            )}
           </div>
         );
       }
-    },
+      },
 
     {
       header: 'Rentabilidade',

@@ -75,7 +75,8 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
                 if (isNaN(inputVal)) return null;
                 
                 let valorAtual, cotacaoAtual, valorAtualUSD, cotacaoAtualUSD;
-                const isIntl = ['renda_variavel_int', 'crypto'].includes(inv.categoria);
+                // Removed 'crypto' from isIntl to treat it as BRL
+                const isIntl = ['renda_variavel_int'].includes(inv.categoria);
                 const dolar = parseFloat(indicators.dolar) || 0;
                 
                 if (isQuoteBased(inv)) {
