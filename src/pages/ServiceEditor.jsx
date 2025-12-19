@@ -132,10 +132,15 @@ export default function ServiceEditor() {
     await Engine.recalculateService(serviceId);
     await Engine.updateDependents('SERVICO', serviceId);
 
-    // Reload
-    const its = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
+    // Reload - pequeno delay para garantir commit no banco
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const [its, s] = await Promise.all([
+      base44.entities.ServiceItem.filter({ servico_id: serviceId }),
+      base44.entities.Service.filter({ id: serviceId }).then(r => r[0])
+    ]);
+    
     setItems(its.sort((a,b) => a.ordem - b.ordem));
-    const s = await base44.entities.Service.filter({ id: serviceId }).then(r => r[0]);
     setService(s);
     
     toast.success("Item adicionado e custos recalculados");
@@ -149,9 +154,14 @@ export default function ServiceEditor() {
     await Engine.updateDependents('SERVICO', serviceId);
     
     // Reload
-    const its = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const [its, s] = await Promise.all([
+      base44.entities.ServiceItem.filter({ servico_id: serviceId }),
+      base44.entities.Service.filter({ id: serviceId }).then(r => r[0])
+    ]);
+    
     setItems(its);
-    const s = await base44.entities.Service.filter({ id: serviceId }).then(r => r[0]);
     setService(s);
   };
 
@@ -199,9 +209,14 @@ export default function ServiceEditor() {
     await Engine.updateDependents('SERVICO', serviceId);
 
     // Reload
-    const its = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const [its, s] = await Promise.all([
+      base44.entities.ServiceItem.filter({ servico_id: serviceId }),
+      base44.entities.Service.filter({ id: serviceId }).then(r => r[0])
+    ]);
+    
     setItems(its.sort((a,b) => a.ordem - b.ordem));
-    const s = await base44.entities.Service.filter({ id: serviceId }).then(r => r[0]);
     setService(s);
     setEditingItem(null);
     toast.success("Item atualizado");
