@@ -42,6 +42,7 @@ import Budgets from './pages/Budgets';
 import BudgetForm from './pages/BudgetForm';
 import TableImport from './pages/TableImport';
 import ServiceEditor from './pages/ServiceEditor';
+import InvestmentTransactions from './pages/InvestmentTransactions';
 import __Layout from './Layout.jsx';
 
 
@@ -90,6 +91,7 @@ export const PAGES = {
     "BudgetForm": BudgetForm,
     "TableImport": TableImport,
     "ServiceEditor": ServiceEditor,
+    "InvestmentTransactions": InvestmentTransactions,
 }
 
 export const pagesConfig = {

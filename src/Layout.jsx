@@ -30,8 +30,9 @@ import {
   Package,
   Layers,
   Calculator,
-  UploadCloud
-} from 'lucide-react';
+  UploadCloud,
+  History
+  } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -91,7 +92,10 @@ const menuItems = [
   {
     title: 'Investimentos',
     icon: TrendingUp,
-    page: 'Investments'
+    submenu: [
+      { title: 'Carteira', page: 'Investments', icon: TrendingUp },
+      { title: 'Histórico Global', page: 'InvestmentTransactions', icon: History }
+    ]
   },
   {
     title: 'Relatórios',
