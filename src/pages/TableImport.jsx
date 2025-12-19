@@ -173,9 +173,16 @@ export default function TableImport() {
               if (parts.length === 5) {
                  cols = parts;
                  parsed = true;
-              } else {
-                 // > 5 parts (maybe desc has tabs?) - Unlikely but possible.
-                 // Let's fallback to smart extraction from ends.
+              } else if (parts.length > 5) {
+                 // Handle description containing tabs
+                 cols = [
+                    parts[0], // Parent Code
+                    parts.slice(1, parts.length - 3).join(' '), // Description (join middle parts)
+                    parts[parts.length - 3], // Unit
+                    parts[parts.length - 2], // Child Code
+                    parts[parts.length - 1]  // Qty
+                 ];
+                 parsed = true;
               }
            }
         }
