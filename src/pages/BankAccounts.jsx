@@ -136,11 +136,9 @@ export default function BankAccounts() {
                 Visualizar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to={createPageUrl(`BankAccountForm?id=${row.id}`)} className="flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                Editar
-              </Link>
+            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`BankAccountForm?id=${row.id}`)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => setDeleteId(row.id)}
