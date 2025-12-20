@@ -40,13 +40,17 @@ export default function ClientForm() {
     observacoes: ''
   });
 
-  const { data: client, isLoading } = useQuery({
+  const { data: client, isLoading, error } = useQuery({
     queryKey: ['client', clientId],
     queryFn: async () => {
-      const clients = await base44.entities.Client.filter({ id: clientId });
-      return clients[0];
+      if (!clientId) return null;
+      const allClients = await base44.entities.Client.list();
+      const found = allClients.find(c => c.id === clientId);
+      console.log('Cliente encontrado:', found);
+      return found;
     },
-    enabled: isEdit
+    enabled: isEdit,
+    retry: false
   });
 
   const { data: projects = [] } = useQuery({

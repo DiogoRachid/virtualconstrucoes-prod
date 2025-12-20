@@ -33,13 +33,17 @@ export default function BankAccountForm() {
     status: 'ativa'
   });
 
-  const { data: account, isLoading } = useQuery({
+  const { data: account, isLoading, error } = useQuery({
     queryKey: ['bankAccount', accountId],
     queryFn: async () => {
-      const accounts = await base44.entities.BankAccount.filter({ id: accountId });
-      return accounts[0];
+      if (!accountId) return null;
+      const allAccounts = await base44.entities.BankAccount.list();
+      const found = allAccounts.find(a => a.id === accountId);
+      console.log('Conta encontrada:', found);
+      return found;
     },
-    enabled: isEdit
+    enabled: isEdit,
+    retry: false
   });
 
   useEffect(() => {

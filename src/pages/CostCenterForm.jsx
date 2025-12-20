@@ -31,13 +31,17 @@ export default function CostCenterForm() {
     status: 'ativo'
   });
 
-  const { data: center, isLoading } = useQuery({
+  const { data: center, isLoading, error } = useQuery({
     queryKey: ['costCenter', centerId],
     queryFn: async () => {
-      const centers = await base44.entities.CostCenter.filter({ id: centerId });
-      return centers[0];
+      if (!centerId) return null;
+      const allCenters = await base44.entities.CostCenter.list();
+      const found = allCenters.find(c => c.id === centerId);
+      console.log('Centro de custo encontrado:', found);
+      return found;
     },
-    enabled: isEdit
+    enabled: isEdit,
+    retry: false
   });
 
   useEffect(() => {

@@ -35,13 +35,17 @@ export default function ProjectForm() {
     descricao: ''
   });
 
-  const { data: project, isLoading } = useQuery({
+  const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
     queryFn: async () => {
-      const projects = await base44.entities.Project.filter({ id: projectId });
-      return projects[0];
+      if (!projectId) return null;
+      const allProjects = await base44.entities.Project.list();
+      const found = allProjects.find(p => p.id === projectId);
+      console.log('Obra encontrada:', found);
+      return found;
     },
-    enabled: isEdit
+    enabled: isEdit,
+    retry: false
   });
 
   useEffect(() => {

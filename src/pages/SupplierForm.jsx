@@ -53,13 +53,17 @@ export default function SupplierForm() {
     observacoes: ''
   });
 
-  const { data: supplier, isLoading } = useQuery({
+  const { data: supplier, isLoading, error } = useQuery({
     queryKey: ['supplier', supplierId],
     queryFn: async () => {
-      const suppliers = await base44.entities.Supplier.filter({ id: supplierId });
-      return suppliers[0];
+      if (!supplierId) return null;
+      const allSuppliers = await base44.entities.Supplier.list();
+      const found = allSuppliers.find(s => s.id === supplierId);
+      console.log('Fornecedor encontrado:', found);
+      return found;
     },
-    enabled: isEdit
+    enabled: isEdit,
+    retry: false
   });
 
   useEffect(() => {
