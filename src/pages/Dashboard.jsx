@@ -44,18 +44,20 @@ export default function Dashboard() {
 
   const { data: payables = [], isLoading: loadingPayables } = useQuery({
     queryKey: ['accountsPayable'],
-    queryFn: () => base44.entities.AccountPayable.list({
-        sort: { data_vencimento: 1 },
-        limit: 50
-    })
+    queryFn: () => base44.entities.AccountPayable.filter(
+      { status: { $in: ['em_aberto', 'atrasado'] } },
+      'data_vencimento',
+      50
+    )
   });
 
   const { data: receivables = [], isLoading: loadingReceivables } = useQuery({
     queryKey: ['accountsReceivable'],
-    queryFn: () => base44.entities.AccountReceivable.list({
-        sort: { data_vencimento: 1 },
-        limit: 50
-    })
+    queryFn: () => base44.entities.AccountReceivable.filter(
+      { status: { $in: ['em_aberto', 'atrasado'] } },
+      'data_vencimento',
+      50
+    )
   });
 
   const { data: transactions = [] } = useQuery({
