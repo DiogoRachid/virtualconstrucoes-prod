@@ -30,6 +30,8 @@ export default function BankAccounts() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
+  const [sortColumn, setSortColumn] = useState('nome');
+  const [sortDirection, setSortDirection] = useState('asc');
   const [indicators, setIndicators] = useState(null);
   const queryClient = useQueryClient();
 
@@ -56,7 +58,23 @@ export default function BankAccounts() {
       a.banco?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || a.status === statusFilter;
     return matchSearch && matchStatus;
+  }).sort((a, b) => {
+    if (!sortColumn) return 0;
+    const aValue = a[sortColumn];
+    const bValue = b[sortColumn];
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
   });
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   const totalSaldo = accounts.reduce((sum, acc) => {
     let saldo = acc.saldo_atual || 0;
@@ -71,6 +89,8 @@ export default function BankAccounts() {
   const columns = [
     {
       header: 'Conta',
+      accessor: 'nome',
+      sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -85,6 +105,8 @@ export default function BankAccounts() {
     },
     {
       header: 'Banco',
+      accessor: 'banco',
+      sortable: true,
       render: (row) => (
         <div className="text-sm">
           <p className="font-medium text-slate-700">{row.banco || '-'}</p>
@@ -96,6 +118,8 @@ export default function BankAccounts() {
     },
     {
       header: 'Saldo Atual',
+      accessor: 'saldo_atual',
+      sortable: true,
       render: (row) => {
         const moeda = row.moeda || 'BRL';
         const locale = moeda === 'USD' ? 'en-US' : (moeda === 'EUR' ? 'de-DE' : 'pt-BR');
@@ -117,6 +141,8 @@ export default function BankAccounts() {
     },
     {
       header: 'Status',
+      accessor: 'status',
+      sortable: true,
       render: (row) => <StatusBadge status={row.status} />
     },
     {
@@ -143,7 +169,10 @@ export default function BankAccounts() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={() => setDeleteId(row.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteId(row.id);
+              }}
               className="text-red-600"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -206,6 +235,9 @@ export default function BankAccounts() {
         data={filteredAccounts}
         isLoading={isLoading}
         onRowClick={(row) => window.location.href = createPageUrl(`BankAccountDetail?id=${row.id}`)}
+        onSort={handleSort}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
         emptyComponent={
           <EmptyState
             icon={Landmark}

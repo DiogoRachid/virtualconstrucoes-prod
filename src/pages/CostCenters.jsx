@@ -42,6 +42,8 @@ export default function CostCenters() {
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
+  const [sortColumn, setSortColumn] = useState('nome');
+  const [sortDirection, setSortDirection] = useState('asc');
   const queryClient = useQueryClient();
 
   const { data: costCenters = [], isLoading } = useQuery({
@@ -63,11 +65,29 @@ export default function CostCenters() {
       c.codigo?.toLowerCase().includes(search.toLowerCase());
     const matchTipo = tipoFilter === 'all' || c.tipo === tipoFilter;
     return matchSearch && matchTipo;
+  }).sort((a, b) => {
+    if (!sortColumn) return 0;
+    const aValue = a[sortColumn];
+    const bValue = b[sortColumn];
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
   });
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   const columns = [
     {
       header: 'Centro de Custo',
+      accessor: 'nome',
+      sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
@@ -82,6 +102,8 @@ export default function CostCenters() {
     },
     {
       header: 'Tipo',
+      accessor: 'tipo',
+      sortable: true,
       render: (row) => (
         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tipoColors[row.tipo] || tipoColors.outros}`}>
           {tipoLabels[row.tipo] || row.tipo}
@@ -90,6 +112,8 @@ export default function CostCenters() {
     },
     {
       header: 'Orçamento Mensal',
+      accessor: 'orcamento_mensal',
+      sortable: true,
       render: (row) => (
         <span className="font-medium text-slate-900">
           {row.orcamento_mensal 
@@ -101,6 +125,8 @@ export default function CostCenters() {
     },
     {
       header: 'Status',
+      accessor: 'status',
+      sortable: true,
       render: (row) => <StatusBadge status={row.status} />
     },
     {
@@ -121,7 +147,10 @@ export default function CostCenters() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={() => setDeleteId(row.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteId(row.id);
+              }}
               className="text-red-600"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -165,6 +194,9 @@ export default function CostCenters() {
         columns={columns}
         data={filteredCenters}
         isLoading={isLoading}
+        onSort={handleSort}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
         emptyComponent={
           <EmptyState
             icon={PieChart}
