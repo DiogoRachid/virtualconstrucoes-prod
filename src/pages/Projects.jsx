@@ -22,8 +22,10 @@ import {
 
 export default function Projects() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [deleteId, setDeleteId] = useState(null);
+  const [sortColumn, setSortColumn] = useState('nome');
+  const [sortDirection, setSortDirection] = useState('asc');
   const queryClient = useQueryClient();
 
   const { data: projects = [], isLoading } = useQuery({
@@ -43,13 +45,38 @@ export default function Projects() {
     const matchSearch = !search || 
       p.nome?.toLowerCase().includes(search.toLowerCase()) ||
       p.endereco?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+    
+    let matchStatus = true;
+    if (statusFilter === 'active') {
+      matchStatus = p.status !== 'concluida' && p.status !== 'cancelada';
+    } else if (statusFilter !== 'all') {
+      matchStatus = p.status === statusFilter;
+    }
+    
     return matchSearch && matchStatus;
+  }).sort((a, b) => {
+    if (!sortColumn) return 0;
+    const aValue = a[sortColumn];
+    const bValue = b[sortColumn];
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
   });
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   const columns = [
     {
       header: 'Obra',
+      accessor: 'nome',
+      sortable: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
@@ -69,6 +96,8 @@ export default function Projects() {
     },
     {
       header: 'Período',
+      accessor: 'data_inicio',
+      sortable: true,
       render: (row) => (
         <div className="text-sm">
           {row.data_inicio && (
@@ -85,6 +114,8 @@ export default function Projects() {
     },
     {
       header: 'Valor do Contrato',
+      accessor: 'valor_contrato',
+      sortable: true,
       render: (row) => (
         <span className="font-medium text-slate-900">
           {row.valor_contrato 
@@ -96,6 +127,8 @@ export default function Projects() {
     },
     {
       header: 'Status',
+      accessor: 'status',
+      sortable: true,
       render: (row) => <StatusBadge status={row.status} />
     },
     {
@@ -122,7 +155,10 @@ export default function Projects() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={() => setDeleteId(row.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteId(row.id);
+              }}
               className="text-red-600"
             >
               <Trash2 className="h-4 w-4 mr-2" />
