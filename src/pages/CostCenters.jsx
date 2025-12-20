@@ -114,11 +114,9 @@ export default function CostCenters() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link to={createPageUrl(`CostCenterForm?id=${row.id}`)} className="flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                Editar
-              </Link>
+            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`CostCenterForm?id=${row.id}`)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => setDeleteId(row.id)}
