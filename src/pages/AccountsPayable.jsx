@@ -43,12 +43,20 @@ export default function AccountsPayable() {
     queryFn: () => base44.entities.AccountPayable.list('-data_vencimento')
   });
 
-  // Atualizar status de atrasados
+  // Atualizar status de atrasados e voltar para em_aberto se vencimento for futuro
   useEffect(() => {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     accounts.forEach(async (acc) => {
-      if (acc.status === 'em_aberto' && isBefore(new Date(acc.data_vencimento), today)) {
+      const dueDate = new Date(acc.data_vencimento);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      if (acc.status === 'em_aberto' && isBefore(dueDate, today)) {
         await base44.entities.AccountPayable.update(acc.id, { status: 'atrasado' });
+        queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      } else if (acc.status === 'atrasado' && (isAfter(dueDate, today) || dueDate.getTime() === today.getTime())) {
+        await base44.entities.AccountPayable.update(acc.id, { status: 'em_aberto' });
         queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
       }
     });

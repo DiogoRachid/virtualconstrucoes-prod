@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { ArrowUpCircle, Loader2 } from 'lucide-react';
+import { ArrowUpCircle, Loader2, Plus, X } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
 import PageHeader from '@/components/ui/PageHeader';
 import DocumentUploader from '@/components/shared/DocumentUploader';
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,10 @@ export default function AccountReceivableForm() {
     documentos: [],
     observacoes: ''
   });
+
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(2);
+  const [installments, setInstallments] = useState([]);
 
   const { data: account, isLoading } = useQuery({
     queryKey: ['accountReceivable', accountId],
@@ -107,16 +112,67 @@ export default function AccountReceivableForm() {
     }
   }, [clientId, clients]);
 
-  const saveMutation = useMutation({
-    mutationFn: (data) => {
-      const payload = {
-        ...data,
-        valor: data.valor ? parseFloat(data.valor) : 0
-      };
-      if (isEdit) {
-        return base44.entities.AccountReceivable.update(accountId, payload);
+  // Definir conta padrão Itaú Empresas
+  useEffect(() => {
+    if (bankAccounts.length && !formData.conta_bancaria_id) {
+      const itau = bankAccounts.find(acc => acc.nome?.toLowerCase().includes('itaú empresas') || acc.nome?.toLowerCase().includes('itau empresas'));
+      if (itau) {
+        setFormData(prev => ({
+          ...prev,
+          conta_bancaria_id: itau.id,
+          conta_bancaria_nome: itau.nome
+        }));
       }
-      return base44.entities.AccountReceivable.create(payload);
+    }
+  }, [bankAccounts]);
+
+  useEffect(() => {
+    if (isInstallment && formData.valor && formData.data_vencimento) {
+      const totalValue = parseFloat(formData.valor) || 0;
+      const installmentValue = totalValue / installmentCount;
+      
+      const newInstallments = Array.from({ length: installmentCount }, (_, i) => {
+        const dueDate = new Date(formData.data_vencimento);
+        dueDate.setMonth(dueDate.getMonth() + i);
+        
+        return {
+          numero: i + 1,
+          valor: i === installmentCount - 1 
+            ? totalValue - (installmentValue * (installmentCount - 1))
+            : installmentValue,
+          data_vencimento: dueDate.toISOString().split('T')[0]
+        };
+      });
+      
+      setInstallments(newInstallments);
+    }
+  }, [isInstallment, installmentCount, formData.valor, formData.data_vencimento]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data) => {
+      if (isInstallment && !isEdit) {
+        // Criar múltiplas contas parceladas
+        const promises = installments.map((inst) => {
+          const payload = {
+            ...data,
+            descricao: `${data.descricao} - Parcela ${inst.numero}/${installmentCount}`,
+            valor: inst.valor,
+            data_vencimento: inst.data_vencimento
+          };
+          delete payload.data_recebimento;
+          return base44.entities.AccountReceivable.create(payload);
+        });
+        return Promise.all(promises);
+      } else {
+        const payload = {
+          ...data,
+          valor: data.valor ? parseFloat(data.valor) : 0
+        };
+        if (isEdit) {
+          return base44.entities.AccountReceivable.update(accountId, payload);
+        }
+        return base44.entities.AccountReceivable.create(payload);
+      }
     },
     onSuccess: () => {
       window.location.href = createPageUrl('AccountsReceivable');
@@ -229,6 +285,70 @@ export default function AccountReceivableForm() {
                   className="mt-1.5"
                 />
               </div>
+
+              {!isEdit && (
+                <div className="md:col-span-2 flex items-center space-x-2 pt-2">
+                  <Checkbox 
+                    id="installment" 
+                    checked={isInstallment}
+                    onCheckedChange={setIsInstallment}
+                  />
+                  <Label htmlFor="installment" className="text-sm font-normal cursor-pointer">
+                    Parcelar esta conta
+                  </Label>
+                </div>
+              )}
+
+              {isInstallment && !isEdit && (
+                <div className="md:col-span-2 space-y-3 pt-2 border-t">
+                  <div className="flex gap-4 items-end">
+                    <div className="flex-1">
+                      <Label htmlFor="installmentCount">Número de Parcelas</Label>
+                      <Input
+                        id="installmentCount"
+                        type="number"
+                        min="2"
+                        max="60"
+                        value={installmentCount}
+                        onChange={(e) => setInstallmentCount(parseInt(e.target.value) || 2)}
+                        className="mt-1.5"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <Label className="text-sm font-medium">Parcelas Geradas:</Label>
+                    {installments.map((inst, idx) => (
+                      <div key={idx} className="flex gap-2 items-center bg-slate-50 p-2 rounded">
+                        <span className="text-xs font-medium min-w-[70px]">
+                          Parcela {inst.numero}/{installmentCount}
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={inst.valor}
+                          onChange={(e) => {
+                            const newInst = [...installments];
+                            newInst[idx].valor = parseFloat(e.target.value) || 0;
+                            setInstallments(newInst);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="date"
+                          value={inst.data_vencimento}
+                          onChange={(e) => {
+                            const newInst = [...installments];
+                            newInst[idx].data_vencimento = e.target.value;
+                            setInstallments(newInst);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="status">Status *</Label>
@@ -391,7 +511,7 @@ export default function AccountReceivableForm() {
               className="bg-blue-600 hover:bg-blue-700"
             >
               {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {isEdit ? 'Salvar Alterações' : 'Cadastrar Conta'}
+              {isEdit ? 'Salvar Alterações' : isInstallment ? `Cadastrar ${installmentCount} Parcelas` : 'Cadastrar Conta'}
             </Button>
             <Button
               type="button"
