@@ -317,6 +317,75 @@ export default function Investments() {
     .filter(item => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
+  // Totais por Carteira Personalizada (Novo Demonstrativo)
+  const totalsByCustomPortfolio = useMemo(() => {
+    let xpAcoes = 0;
+    let btc = 0;
+    let dolar = 0;
+    let empresas = 0;
+    let pf = 0;
+    let xpFixa = 0;
+
+    // Processar Investimentos
+    investments.forEach(inv => {
+      const val = inv.valor_atual || inv.valor_investido || 0;
+      const inst = (inv.instituicao || '').toLowerCase();
+      const cat = inv.categoria;
+      const ticker = (inv.ticker || '').toUpperCase();
+
+      if (ticker === 'BTC' || ticker.includes('BITCOIN') || cat === 'crypto') {
+        btc += val;
+      } else if (cat === 'renda_variavel_int') {
+        dolar += val;
+      } else if (inst.includes('xp')) {
+        if (cat === 'renda_variavel_br' || cat === 'acoes') {
+          xpAcoes += val;
+        } else if (cat === 'renda_fixa' || cat === 'fundos') {
+          xpFixa += val;
+        } else {
+           // Fallback for XP if category unclear, default to Fixa or Acoes? 
+           // Assuming Fixa for safety or check type
+           xpFixa += val; 
+        }
+      } else if (inst.includes('itaú') || inst.includes('itau')) {
+         // Ativos no Itaú Silvio -> PF
+         pf += val;
+      } else {
+         // Outros ativos?
+      }
+    });
+
+    // Processar Contas Bancárias
+    bankAccounts.forEach(acc => {
+      let saldo = acc.saldo_atual || 0;
+      if (acc.moeda === 'USD' && indicators?.dolar) saldo *= indicators.dolar;
+      else if (acc.moeda === 'EUR' && indicators?.euro) saldo *= indicators.euro;
+
+      const nome = (acc.nome || '').toLowerCase();
+      const banco = (acc.banco || '').toLowerCase();
+
+      if (nome.includes('empresa') || banco.includes('empresa')) {
+        empresas += saldo;
+      } else if (nome.includes('silvio') || banco.includes('itaú') || banco.includes('itau')) {
+        // Itaú Silvio -> PF
+        pf += saldo;
+      } else {
+         // Outros saldos -> PF (default?)
+         pf += saldo;
+      }
+    });
+
+    return [
+      { name: 'XP Ações', value: xpAcoes },
+      { name: 'BTC', value: btc },
+      { name: 'Dólar', value: dolar },
+      { name: 'Empresas', value: empresas },
+      { name: 'Pessoa Física', value: pf },
+      { name: 'XP Fixa', value: xpFixa },
+    ].filter(i => i.value > 0).sort((a,b) => b.value - a.value);
+
+  }, [investments, bankAccounts, indicators]);
+
 
 
   // Cálculo de Variação Diária (comparado com o registro anterior mais recente)
@@ -605,11 +674,13 @@ export default function Investments() {
           return <span className="text-slate-400 text-sm">-</span>;
         }
 
-        // Usar rentabilidade calculada salva no banco (BRL)
-        let rentPercent = row.rentabilidade_percentual || 0;
-        let rentValue = row.rentabilidade_valor || 0;
+        const valorAtual = row.valor_atual || row.valor_investido || 0;
+        const valorInvestido = row.valor_investido || 0;
+        
+        let rentValue = valorAtual - valorInvestido;
+        let rentPercent = valorInvestido > 0 ? (rentValue / valorInvestido) * 100 : 0;
 
-        const isPositive = rentPercent >= 0;
+        const isPositive = rentValue >= 0;
 
         return (
           <div className="flex flex-col">
@@ -772,8 +843,9 @@ export default function Investments() {
            <CardContent>
              <Tabs defaultValue="category" className="w-full">
                 <TabsList className="w-full mb-4">
-                  <TabsTrigger value="category" className="flex-1 text-xs">Por Categoria</TabsTrigger>
-                  <TabsTrigger value="account" className="flex-1 text-xs">Por Instituição</TabsTrigger>
+                  <TabsTrigger value="category" className="flex-1 text-xs">Categoria</TabsTrigger>
+                  <TabsTrigger value="account" className="flex-1 text-xs">Instituição</TabsTrigger>
+                  <TabsTrigger value="custom" className="flex-1 text-xs">Estratégia</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="category" className="mt-0 space-y-3">
@@ -808,6 +880,28 @@ export default function Investments() {
                           <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
                               <Building className="h-4 w-4" />
+                            </div>
+                            <div className="flex flex-col">
+                               <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={item.name}>{item.name}</span>
+                               <span className="text-xs text-slate-400">{percent.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          <span className="font-semibold text-slate-900 text-sm">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.value)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </TabsContent>
+
+                <TabsContent value="custom" className="mt-0 space-y-3">
+                    {totalsByCustomPortfolio.map((item, index) => {
+                      const percent = totalAtual > 0 ? (item.value / totalAtual) * 100 : 0;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
+                              <LineChart className="h-4 w-4" />
                             </div>
                             <div className="flex flex-col">
                                <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={item.name}>{item.name}</span>
