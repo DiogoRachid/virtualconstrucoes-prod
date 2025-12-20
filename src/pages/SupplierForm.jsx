@@ -83,12 +83,12 @@ export default function SupplierForm() {
       
       if (found) {
         console.log('✓ Fornecedor ENCONTRADO:', found);
+        return found;
       } else {
         console.error('✗ Fornecedor NÃO ENCONTRADO');
         console.log('Lista completa de IDs:', allSuppliers.map(s => ({id: s.id, nome: s.razao_social})));
+        return null;
       }
-      
-      return found;
     },
     enabled: !!supplierId,
     retry: 1
