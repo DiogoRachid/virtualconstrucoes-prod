@@ -43,8 +43,8 @@ export default function ClientForm() {
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', clientId],
     queryFn: async () => {
-      const clients = await base44.entities.Client.list();
-      return clients.find(c => c.id === clientId);
+      const clients = await base44.entities.Client.filter({ id: clientId });
+      return clients[0];
     },
     enabled: isEdit
   });

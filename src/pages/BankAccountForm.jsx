@@ -36,8 +36,8 @@ export default function BankAccountForm() {
   const { data: account, isLoading } = useQuery({
     queryKey: ['bankAccount', accountId],
     queryFn: async () => {
-      const accounts = await base44.entities.BankAccount.list();
-      return accounts.find(a => a.id === accountId);
+      const accounts = await base44.entities.BankAccount.filter({ id: accountId });
+      return accounts[0];
     },
     enabled: isEdit
   });
