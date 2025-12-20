@@ -114,12 +114,11 @@ export default function CostCenters() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => {
-              console.log('Editando centro de custo ID:', row.id, 'Nome:', row.nome);
-              window.location.href = createPageUrl(`CostCenterForm?id=${row.id}`);
-            }}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar
+            <DropdownMenuItem asChild>
+              <Link to={createPageUrl(`CostCenterForm?id=${row.id}`)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => setDeleteId(row.id)}

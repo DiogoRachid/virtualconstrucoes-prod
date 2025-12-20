@@ -108,12 +108,11 @@ export default function Clients() {
                 Visualizar
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              console.log('Editando cliente ID:', row.id, 'Nome:', row.nome);
-              window.location.href = createPageUrl(`ClientForm?id=${row.id}`);
-            }}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Editar
+            <DropdownMenuItem asChild>
+              <Link to={createPageUrl(`ClientForm?id=${row.id}`)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => setDeleteId(row.id)}
