@@ -190,6 +190,8 @@ export default function Projects() {
             onChange: setStatusFilter,
             placeholder: 'Status',
             options: [
+              { value: 'active', label: 'Ativas (Em Andamento/Planejamento)' },
+              { value: 'all', label: 'Todas' },
               { value: 'planejamento', label: 'Planejamento' },
               { value: 'em_andamento', label: 'Em Andamento' },
               { value: 'pausada', label: 'Pausada' },
@@ -200,7 +202,7 @@ export default function Projects() {
         ]}
         onClearFilters={() => {
           setSearch('');
-          setStatusFilter('all');
+          setStatusFilter('active');
         }}
       />
 
@@ -209,6 +211,9 @@ export default function Projects() {
         data={filteredProjects}
         isLoading={isLoading}
         onRowClick={(row) => window.location.href = createPageUrl(`ProjectDetail?id=${row.id}`)}
+        onSort={handleSort}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
         emptyComponent={
           <EmptyState
             icon={HardHat}

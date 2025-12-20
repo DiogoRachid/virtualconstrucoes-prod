@@ -44,6 +44,7 @@ export default function Reports() {
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
   const reportRef = useRef(null);
 
   const { data: transactions = [] } = useQuery({
@@ -76,6 +77,11 @@ export default function Reports() {
     queryFn: () => base44.entities.Client.list()
   });
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => base44.entities.Project.list()
+  });
+
   // Filtrar dados pelo período
   const filterByDate = (items, dateField) => {
     return items.filter(item => {
@@ -93,14 +99,16 @@ export default function Reports() {
     const matchSupplier = supplierFilter === 'all' || p.fornecedor_id === supplierFilter;
     const matchCC = costCenterFilter === 'all' || p.centro_custo_id === costCenterFilter;
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchSupplier && matchCC && matchStatus;
+    const matchProject = projectFilter === 'all' || p.obra_id === projectFilter;
+    return matchSupplier && matchCC && matchStatus && matchProject;
   });
 
   const filteredReceivables = filterByDate(receivables, 'data_vencimento').filter(r => {
     const matchClient = clientFilter === 'all' || r.cliente_id === clientFilter;
     const matchCC = costCenterFilter === 'all' || r.centro_custo_id === costCenterFilter;
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
-    return matchClient && matchCC && matchStatus;
+    const matchProject = projectFilter === 'all' || r.obra_id === projectFilter;
+    return matchClient && matchCC && matchStatus && matchProject;
   });
 
   // Totais
@@ -126,6 +134,58 @@ export default function Reports() {
     return { ...cc, despesas, receitas, saldo: receitas - despesas };
   }).filter(cc => cc.despesas > 0 || cc.receitas > 0);
 
+  // Agrupar por Obra e Centro de Custo (Usando Payables e Receivables PAGOS/RECEBIDOS como proxy, ou usando transações se tivessem obra_id. 
+  // Como transações não tem obra_id direto, vou usar Payables/Receivables com status de pago/recebido para o relatório detalhado solicitado pelo usuário)
+  const reportData = [];
+  
+  // Collect realized expenses from Payables (status=pago)
+  const paidPayables = filterByDate(payables, 'data_pagamento').filter(p => p.status === 'pago');
+  const receivedReceivables = filterByDate(receivables, 'data_recebimento').filter(r => r.status === 'recebido');
+
+  const allRelevantProjects = projects.filter(p => projectFilter === 'all' || p.id === projectFilter);
+  const allRelevantCCs = costCenters.filter(cc => costCenterFilter === 'all' || cc.id === costCenterFilter);
+
+  const detailedReport = allRelevantProjects.map(proj => {
+    const projectExpenses = paidPayables.filter(p => p.obra_id === proj.id);
+    const projectIncomes = receivedReceivables.filter(r => r.obra_id === proj.id);
+    
+    if (projectExpenses.length === 0 && projectIncomes.length === 0) return null;
+
+    const byCC = allRelevantCCs.map(cc => {
+      const ccExpenses = projectExpenses.filter(p => p.centro_custo_id === cc.id);
+      const ccIncomes = projectIncomes.filter(r => r.centro_custo_id === cc.id);
+      
+      const totalExp = ccExpenses.reduce((sum, p) => sum + (p.valor || 0), 0);
+      const totalInc = ccIncomes.reduce((sum, r) => sum + (r.valor || 0), 0);
+
+      if (totalExp === 0 && totalInc === 0) return null;
+
+      return {
+        ccName: cc.nome,
+        expenses: totalExp,
+        incomes: totalInc,
+        balance: totalInc - totalExp
+      };
+    }).filter(Boolean);
+
+    const totalProjExp = projectExpenses.reduce((sum, p) => sum + (p.valor || 0), 0);
+    const totalProjInc = projectIncomes.reduce((sum, r) => sum + (r.valor || 0), 0);
+
+    return {
+      projectName: proj.nome,
+      ccs: byCC,
+      totalExpenses: totalProjExp,
+      totalIncomes: totalProjInc,
+      balance: totalProjInc - totalProjExp
+    };
+  }).filter(Boolean);
+
+  // Totais do Relatório Detalhado
+  const detailedTotalExpenses = detailedReport.reduce((sum, r) => sum + r.totalExpenses, 0);
+  const detailedTotalIncomes = detailedReport.reduce((sum, r) => sum + r.totalIncomes, 0);
+  const detailedBalance = detailedTotalIncomes - detailedTotalExpenses;
+
+
   const handlePrint = () => {
     const printContent = reportRef.current;
     const printWindow = window.open('', '_blank');
@@ -140,17 +200,19 @@ export default function Reports() {
             .header img { height: 60px; }
             .header h1 { color: #2563eb; margin: 0; }
             .header p { color: #64748b; margin: 5px 0 0 0; }
-            h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+            h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-top: 30px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; font-size: 14px; }
             th { background: #f8fafc; font-weight: 600; }
-            .total { font-weight: bold; background: #f1f5f9; }
+            .total-row { font-weight: bold; background: #f1f5f9; }
             .positive { color: #059669; }
             .negative { color: #dc2626; }
             .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0; }
-            .summary-card { background: #f8fafc; padding: 15px; border-radius: 8px; }
+            .summary-card { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; }
             .summary-card h3 { margin: 0 0 5px 0; font-size: 14px; color: #64748b; }
             .summary-card p { margin: 0; font-size: 24px; font-weight: bold; }
+            .project-section { margin-bottom: 30px; }
+            .project-header { background: #e0f2fe; padding: 10px; font-weight: bold; color: #0369a1; border-radius: 4px; margin-bottom: 10px; }
             @media print { body { padding: 20px; } }
           </style>
         </head>
@@ -167,7 +229,10 @@ export default function Reports() {
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
+    // Aguardar carregamento das imagens antes de imprimir (opcional, mas boa prática)
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
   };
 
   return (
@@ -235,6 +300,20 @@ export default function Reports() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Obra</Label>
+              <Select value={projectFilter} onValueChange={setProjectFilter}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex gap-3 mt-4">
             <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
@@ -247,13 +326,96 @@ export default function Reports() {
 
       {/* Relatório */}
       <div ref={reportRef}>
-        <Tabs defaultValue="resumo" className="space-y-6">
+        <Tabs defaultValue="detailed" className="space-y-6">
           <TabsList>
+            <TabsTrigger value="detailed">Por Obra e CC</TabsTrigger>
             <TabsTrigger value="resumo">Resumo Geral</TabsTrigger>
             <TabsTrigger value="centros">Por Centro de Custo</TabsTrigger>
             <TabsTrigger value="pagar">Contas a Pagar</TabsTrigger>
             <TabsTrigger value="receber">Contas a Receber</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="detailed">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Relatório Detalhado por Obra e Centro de Custo (Regime de Caixa)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Resumo Final no Topo para facilitar */}
+                <div className="grid grid-cols-3 gap-4 mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-center">
+                    <p className="text-sm text-slate-500 mb-1">Total Entradas</p>
+                    <p className="text-2xl font-bold text-emerald-600">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(detailedTotalIncomes)}
+                    </p>
+                  </div>
+                  <div className="text-center border-l border-r border-slate-200">
+                    <p className="text-sm text-slate-500 mb-1">Total Saídas</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(detailedTotalExpenses)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-slate-500 mb-1">Resultado</p>
+                    <p className={`text-2xl font-bold ${detailedBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(detailedBalance)}
+                    </p>
+                  </div>
+                </div>
+
+                {detailedReport.length > 0 ? (
+                  detailedReport.map((proj, idx) => (
+                    <div key={idx} className="mb-8 border rounded-lg overflow-hidden">
+                      <div className="bg-slate-100 p-3 font-bold text-slate-800 flex justify-between">
+                        <span>OBRA: {proj.projectName}</span>
+                        <span>Saldo: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proj.balance)}</span>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Centro de Custo</TableHead>
+                            <TableHead className="text-right">Entradas (R$)</TableHead>
+                            <TableHead className="text-right">Saídas (R$)</TableHead>
+                            <TableHead className="text-right">Resultado (R$)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {proj.ccs.map((cc, ccIdx) => (
+                            <TableRow key={ccIdx}>
+                              <TableCell>{cc.ccName}</TableCell>
+                              <TableCell className="text-right text-emerald-600">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cc.incomes)}
+                              </TableCell>
+                              <TableCell className="text-right text-red-600">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cc.expenses)}
+                              </TableCell>
+                              <TableCell className={`text-right font-medium ${cc.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cc.balance)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-slate-50 font-semibold">
+                            <TableCell>TOTAL OBRA</TableCell>
+                            <TableCell className="text-right text-emerald-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proj.totalIncomes)}
+                            </TableCell>
+                            <TableCell className="text-right text-red-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proj.totalExpenses)}
+                            </TableCell>
+                            <TableCell className={`text-right ${proj.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(proj.balance)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-slate-500 py-8">Nenhuma movimentação encontrada para o período selecionado.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="resumo">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
