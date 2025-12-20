@@ -32,29 +32,31 @@ export default function BankAccountForm() {
     status: 'ativa'
   });
 
-  const { data: accounts } = useQuery({
-    queryKey: ['bankAccounts'],
-    queryFn: () => base44.entities.BankAccount.list()
+  const { data: account, isLoading } = useQuery({
+    queryKey: ['bankAccount', accountId],
+    queryFn: async () => {
+      if (!accountId) return null;
+      const res = await base44.entities.BankAccount.filter({ id: accountId });
+      return res && res.length > 0 ? res[0] : null;
+    },
+    enabled: isEditing
   });
 
   useEffect(() => {
-    if (isEditing && accounts) {
-      const account = accounts.find(a => a.id === accountId);
-      if (account) {
-        setFormData({
-          nome: account.nome || '',
-          banco: account.banco || '',
-          agencia: account.agencia || '',
-          conta: account.conta || '',
-          tipo: account.tipo || 'corrente',
-          moeda: account.moeda || 'BRL',
-          saldo_inicial: account.saldo_inicial || '',
-          saldo_atual: account.saldo_atual || '',
-          status: account.status || 'ativa'
-        });
-      }
+    if (isEditing && account) {
+      setFormData({
+        nome: account.nome || '',
+        banco: account.banco || '',
+        agencia: account.agencia || '',
+        conta: account.conta || '',
+        tipo: account.tipo || 'corrente',
+        moeda: account.moeda || 'BRL',
+        saldo_inicial: account.saldo_inicial || '',
+        saldo_atual: account.saldo_atual || '',
+        status: account.status || 'ativa'
+      });
     }
-  }, [isEditing, accountId, accounts]);
+  }, [isEditing, account]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -90,7 +92,7 @@ export default function BankAccountForm() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isEditing && !accounts) {
+  if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

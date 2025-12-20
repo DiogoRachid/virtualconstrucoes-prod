@@ -34,30 +34,32 @@ export default function ProjectForm() {
     descricao: ''
   });
 
-  const { data: projects } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => base44.entities.Project.list()
+  const { data: project, isLoading } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+      const res = await base44.entities.Project.filter({ id: projectId });
+      return res && res.length > 0 ? res[0] : null;
+    },
+    enabled: isEditing
   });
 
   useEffect(() => {
-    if (isEditing && projects) {
-      const project = projects.find(p => p.id === projectId);
-      if (project) {
-        setFormData({
-          nome: project.nome || '',
-          endereco: project.endereco || '',
-          cidade: project.cidade || '',
-          estado: project.estado || '',
-          status: project.status || 'planejamento',
-          data_inicio: project.data_inicio || '',
-          data_previsao: project.data_previsao || '',
-          valor_contrato: project.valor_contrato || '',
-          responsavel: project.responsavel || '',
-          descricao: project.descricao || ''
-        });
-      }
+    if (isEditing && project) {
+      setFormData({
+        nome: project.nome || '',
+        endereco: project.endereco || '',
+        cidade: project.cidade || '',
+        estado: project.estado || '',
+        status: project.status || 'planejamento',
+        data_inicio: project.data_inicio || '',
+        data_previsao: project.data_previsao || '',
+        valor_contrato: project.valor_contrato || '',
+        responsavel: project.responsavel || '',
+        descricao: project.descricao || ''
+      });
     }
-  }, [isEditing, projectId, projects]);
+  }, [isEditing, project]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -92,7 +94,7 @@ export default function ProjectForm() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isEditing && !projects) {
+  if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

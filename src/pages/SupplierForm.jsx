@@ -49,32 +49,34 @@ export default function SupplierForm() {
     observacoes: ''
   });
 
-  const { data: suppliers } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: () => base44.entities.Supplier.list()
+  const { data: supplier, isLoading } = useQuery({
+    queryKey: ['supplier', supplierId],
+    queryFn: async () => {
+      if (!supplierId) return null;
+      const res = await base44.entities.Supplier.filter({ id: supplierId });
+      return res && res.length > 0 ? res[0] : null;
+    },
+    enabled: isEditing
   });
 
   useEffect(() => {
-    if (isEditing && suppliers) {
-      const supplier = suppliers.find(s => s.id === supplierId);
-      if (supplier) {
-        setFormData({
-          razao_social: supplier.razao_social || '',
-          cnpj: supplier.cnpj || '',
-          telefone: supplier.telefone || '',
-          email: supplier.email || '',
-          endereco: supplier.endereco || '',
-          cidade: supplier.cidade || '',
-          estado: supplier.estado || '',
-          cep: supplier.cep || '',
-          status: supplier.status || 'ativo',
-          tipo_servico: supplier.tipo_servico || '',
-          documentos: supplier.documentos || [],
-          observacoes: supplier.observacoes || ''
-        });
-      }
+    if (isEditing && supplier) {
+      setFormData({
+        razao_social: supplier.razao_social || '',
+        cnpj: supplier.cnpj || '',
+        telefone: supplier.telefone || '',
+        email: supplier.email || '',
+        endereco: supplier.endereco || '',
+        cidade: supplier.cidade || '',
+        estado: supplier.estado || '',
+        cep: supplier.cep || '',
+        status: supplier.status || 'ativo',
+        tipo_servico: supplier.tipo_servico || '',
+        documentos: supplier.documentos || [],
+        observacoes: supplier.observacoes || ''
+      });
     }
-  }, [isEditing, supplierId, suppliers]);
+  }, [isEditing, supplier]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -104,7 +106,7 @@ export default function SupplierForm() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isEditing && !suppliers) {
+  if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

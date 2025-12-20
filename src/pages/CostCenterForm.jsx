@@ -30,26 +30,28 @@ export default function CostCenterForm() {
     status: 'ativo'
   });
 
-  const { data: costCenters } = useQuery({
-    queryKey: ['costCenters'],
-    queryFn: () => base44.entities.CostCenter.list()
+  const { data: costCenter, isLoading } = useQuery({
+    queryKey: ['costCenter', costCenterId],
+    queryFn: async () => {
+      if (!costCenterId) return null;
+      const res = await base44.entities.CostCenter.filter({ id: costCenterId });
+      return res && res.length > 0 ? res[0] : null;
+    },
+    enabled: isEditing
   });
 
   useEffect(() => {
-    if (isEditing && costCenters) {
-      const costCenter = costCenters.find(c => c.id === costCenterId);
-      if (costCenter) {
-        setFormData({
-          nome: costCenter.nome || '',
-          codigo: costCenter.codigo || '',
-          tipo: costCenter.tipo || 'outros',
-          descricao: costCenter.descricao || '',
-          orcamento_mensal: costCenter.orcamento_mensal || '',
-          status: costCenter.status || 'ativo'
-        });
-      }
+    if (isEditing && costCenter) {
+      setFormData({
+        nome: costCenter.nome || '',
+        codigo: costCenter.codigo || '',
+        tipo: costCenter.tipo || 'outros',
+        descricao: costCenter.descricao || '',
+        orcamento_mensal: costCenter.orcamento_mensal || '',
+        status: costCenter.status || 'ativo'
+      });
     }
-  }, [isEditing, costCenterId, costCenters]);
+  }, [isEditing, costCenter]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -84,7 +86,7 @@ export default function CostCenterForm() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isEditing && !costCenters) {
+  if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

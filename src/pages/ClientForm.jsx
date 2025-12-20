@@ -39,9 +39,14 @@ export default function ClientForm() {
     observacoes: ''
   });
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => base44.entities.Client.list()
+  const { data: client, isLoading } = useQuery({
+    queryKey: ['client', clientId],
+    queryFn: async () => {
+      if (!clientId) return null;
+      const res = await base44.entities.Client.filter({ id: clientId });
+      return res && res.length > 0 ? res[0] : null;
+    },
+    enabled: isEditing
   });
 
   const { data: projects } = useQuery({
@@ -50,27 +55,24 @@ export default function ClientForm() {
   });
 
   useEffect(() => {
-    if (isEditing && clients) {
-      const client = clients.find(c => c.id === clientId);
-      if (client) {
-        setFormData({
-          nome: client.nome || '',
-          tipo_documento: client.tipo_documento || 'CPF',
-          documento: client.documento || '',
-          telefone: client.telefone || '',
-          email: client.email || '',
-          endereco: client.endereco || '',
-          cidade: client.cidade || '',
-          estado: client.estado || '',
-          cep: client.cep || '',
-          obras_vinculadas: client.obras_vinculadas || [],
-          status: client.status || 'ativo',
-          documentos: client.documentos || [],
-          observacoes: client.observacoes || ''
-        });
-      }
+    if (isEditing && client) {
+      setFormData({
+        nome: client.nome || '',
+        tipo_documento: client.tipo_documento || 'CPF',
+        documento: client.documento || '',
+        telefone: client.telefone || '',
+        email: client.email || '',
+        endereco: client.endereco || '',
+        cidade: client.cidade || '',
+        estado: client.estado || '',
+        cep: client.cep || '',
+        obras_vinculadas: client.obras_vinculadas || [],
+        status: client.status || 'ativo',
+        documentos: client.documentos || [],
+        observacoes: client.observacoes || ''
+      });
     }
-  }, [isEditing, clientId, clients]);
+  }, [isEditing, client]);
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -109,7 +111,7 @@ export default function ClientForm() {
     }));
   };
 
-  if (isEditing && !clients) {
+  if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
