@@ -33,6 +33,9 @@ import { Label } from "@/components/ui/label";
 export default function AccountsPayable() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [costCenterFilter, setCostCenterFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [deleteId, setDeleteId] = useState(null);
   const [paymentDialog, setPaymentDialog] = useState(null);
   const [paymentDate, setPaymentDate] = useState('');
@@ -41,6 +44,11 @@ export default function AccountsPayable() {
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accountsPayable'],
     queryFn: () => base44.entities.AccountPayable.list('-data_vencimento')
+  });
+
+  const { data: costCenters = [] } = useQuery({
+    queryKey: ['costCenters'],
+    queryFn: () => base44.entities.CostCenter.list()
   });
 
   // Atualizar status de atrasados e voltar para em_aberto se vencimento for futuro
@@ -109,13 +117,39 @@ export default function AccountsPayable() {
     }
   });
 
-  const filteredAccounts = accounts.filter(a => {
-    const matchSearch = !search || 
-      a.descricao?.toLowerCase().includes(search.toLowerCase()) ||
-      a.fornecedor_nome?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || a.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filteredAccounts = React.useMemo(() => {
+    let result = accounts.filter(a => {
+      const matchSearch = !search || 
+        a.descricao?.toLowerCase().includes(search.toLowerCase()) ||
+        a.fornecedor_nome?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'all' || a.status === statusFilter;
+      const matchCostCenter = costCenterFilter === 'all' || a.centro_custo_id === costCenterFilter;
+      
+      let matchMonth = true;
+      if (monthFilter !== 'all' && a.data_vencimento) {
+        const dueMonth = a.data_vencimento.substring(0, 7); // YYYY-MM
+        matchMonth = dueMonth === monthFilter;
+      }
+      
+      return matchSearch && matchStatus && matchMonth && matchCostCenter;
+    });
+
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [accounts, search, statusFilter, monthFilter, costCenterFilter, sortConfig]);
 
   // Alertas de vencimento próximo
   const upcomingPayments = accounts.filter(a => {
@@ -133,9 +167,18 @@ export default function AccountsPayable() {
     .filter(a => a.status === 'atrasado')
     .reduce((sum, a) => sum + (a.valor || 0), 0);
 
+  const handleSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   const columns = [
     {
       header: 'Descrição',
+      accessor: 'descricao',
+      sortable: true,
       render: (row) => (
         <div>
           <p className="font-medium text-slate-900">{row.descricao}</p>
@@ -147,6 +190,8 @@ export default function AccountsPayable() {
     },
     {
       header: 'Valor',
+      accessor: 'valor',
+      sortable: true,
       render: (row) => (
         <span className="font-semibold text-slate-900">
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor)}
@@ -155,6 +200,8 @@ export default function AccountsPayable() {
     },
     {
       header: 'Vencimento',
+      accessor: 'data_vencimento',
+      sortable: true,
       render: (row) => {
         const dateParts = row.data_vencimento ? row.data_vencimento.split('-') : [];
         const dateStr = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : row.data_vencimento;
@@ -167,10 +214,14 @@ export default function AccountsPayable() {
     },
     {
       header: 'Centro de Custo',
+      accessor: 'centro_custo_nome',
+      sortable: true,
       render: (row) => <span className="text-slate-600">{row.centro_custo_nome || '-'}</span>
     },
     {
       header: 'Status',
+      accessor: 'status',
+      sortable: true,
       render: (row) => <StatusBadge status={row.status} />
     },
     {
@@ -274,11 +325,32 @@ export default function AccountsPayable() {
               { value: 'atrasado', label: 'Atrasado' },
               { value: 'cancelado', label: 'Cancelado' }
             ]
+          },
+          {
+            value: monthFilter,
+            onChange: setMonthFilter,
+            placeholder: 'Mês',
+            options: Array.from(new Set(accounts.map(a => a.data_vencimento?.substring(0, 7)).filter(Boolean)))
+              .sort()
+              .reverse()
+              .map(month => {
+                const [year, m] = month.split('-');
+                const monthName = new Date(year, parseInt(m) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                return { value: month, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) };
+              })
+          },
+          {
+            value: costCenterFilter,
+            onChange: setCostCenterFilter,
+            placeholder: 'Centro de Custo',
+            options: costCenters.map(c => ({ value: c.id, label: c.nome }))
           }
         ]}
         onClearFilters={() => {
           setSearch('');
           setStatusFilter('all');
+          setMonthFilter('all');
+          setCostCenterFilter('all');
         }}
       />
 
@@ -286,6 +358,9 @@ export default function AccountsPayable() {
         columns={columns}
         data={filteredAccounts}
         isLoading={isLoading}
+        onSort={handleSort}
+        sortColumn={sortConfig.key}
+        sortDirection={sortConfig.direction}
         emptyComponent={
           <EmptyState
             icon={ArrowDownCircle}

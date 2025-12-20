@@ -126,6 +126,18 @@ export default function AccountPayableForm() {
     }
   }, [bankAccounts]);
 
+  // Ajustar data para dia útil (evitar sábado/domingo)
+  const adjustToBusinessDay = (date) => {
+    const d = new Date(date);
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek === 0) { // Domingo
+      d.setDate(d.getDate() + 1);
+    } else if (dayOfWeek === 6) { // Sábado
+      d.setDate(d.getDate() + 2);
+    }
+    return d.toISOString().split('T')[0];
+  };
+
   useEffect(() => {
     if (isInstallment && formData.valor && formData.data_vencimento) {
       const totalValue = parseFloat(formData.valor) || 0;
@@ -140,7 +152,7 @@ export default function AccountPayableForm() {
           valor: i === installmentCount - 1 
             ? totalValue - (installmentValue * (installmentCount - 1))
             : installmentValue,
-          data_vencimento: dueDate.toISOString().split('T')[0]
+          data_vencimento: adjustToBusinessDay(dueDate)
         };
       });
       
@@ -280,7 +292,10 @@ export default function AccountPayableForm() {
                   id="data_vencimento"
                   type="date"
                   value={formData.data_vencimento}
-                  onChange={(e) => handleChange('data_vencimento', e.target.value)}
+                  onChange={(e) => {
+                    const adjusted = adjustToBusinessDay(e.target.value);
+                    handleChange('data_vencimento', adjusted);
+                  }}
                   required
                   className="mt-1.5"
                 />
