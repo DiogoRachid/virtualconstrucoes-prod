@@ -131,8 +131,9 @@ export default function AccountReceivableForm() {
   }, [bankAccounts]);
 
   // Ajustar data para dia útil (evitar sábado/domingo)
-  const adjustToBusinessDay = (date) => {
-    const d = new Date(date);
+  const adjustToBusinessDay = (dateStr) => {
+    // Adicionar T00:00:00 para forçar timezone local e evitar mudança de dia
+    const d = new Date(dateStr + 'T00:00:00');
     const dayOfWeek = d.getDay();
     if (dayOfWeek === 0) { // Domingo
       d.setDate(d.getDate() + 1);
@@ -148,7 +149,7 @@ export default function AccountReceivableForm() {
       const installmentValue = totalValue / installmentCount;
       
       const newInstallments = Array.from({ length: installmentCount }, (_, i) => {
-        const dueDate = new Date(formData.data_vencimento);
+        const dueDate = new Date(formData.data_vencimento + 'T00:00:00');
         dueDate.setMonth(dueDate.getMonth() + i);
         
         return {
@@ -156,7 +157,7 @@ export default function AccountReceivableForm() {
           valor: i === installmentCount - 1 
             ? totalValue - (installmentValue * (installmentCount - 1))
             : installmentValue,
-          data_vencimento: adjustToBusinessDay(dueDate)
+          data_vencimento: adjustToBusinessDay(dueDate.toISOString().split('T')[0])
         };
       });
       
@@ -173,7 +174,7 @@ export default function AccountReceivableForm() {
             ...data,
             descricao: `${data.descricao} - Parcela ${inst.numero}/${installmentCount}`,
             valor: inst.valor,
-            data_vencimento: adjustToBusinessDay(inst.data_vencimento)
+            data_vencimento: inst.data_vencimento
           };
           delete payload.data_recebimento;
           return base44.entities.AccountReceivable.create(payload);
@@ -182,8 +183,7 @@ export default function AccountReceivableForm() {
       } else {
         const payload = {
           ...data,
-          valor: data.valor ? parseFloat(data.valor) : 0,
-          data_vencimento: adjustToBusinessDay(data.data_vencimento)
+          valor: data.valor ? parseFloat(data.valor) : 0
         };
         if (isEdit) {
           return base44.entities.AccountReceivable.update(accountId, payload);
