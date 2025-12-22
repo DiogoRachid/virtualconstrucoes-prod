@@ -396,7 +396,7 @@ export default function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 truncate">{p.descricao}</p>
                       <p className="text-sm text-slate-500">
-                        Vence em {format(new Date(p.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                        Vence em {format(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                       </p>
                     </div>
                     <div className="text-right ml-4">
@@ -435,7 +435,7 @@ export default function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 truncate">{r.descricao}</p>
                       <p className="text-sm text-slate-500">
-                        Previsto para {format(new Date(r.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                        Previsto para {format(new Date(r.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                       </p>
                     </div>
                     <div className="text-right ml-4">

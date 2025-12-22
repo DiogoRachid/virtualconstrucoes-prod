@@ -388,24 +388,45 @@ export default function Investments() {
 
 
 
+  // Fetch transações para incluir no cálculo de variação
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: () => base44.entities.Transaction.list('-data')
+  });
+
   // Cálculo de Variação Diária (comparado com o registro anterior mais recente)
   const sortedHistory = [...history].sort((a,b) => new Date(b.data) - new Date(a.data));
   
-  // Pre-processar histórico para incluir diffs
+  // Pre-processar histórico para incluir diffs e despesas do dia
   const historyWithDiffs = useMemo(() => {
       return sortedHistory.map((item, index) => {
           const prevItem = sortedHistory[index + 1];
           const prevTotal = prevItem ? prevItem.valor_total_atual : 0;
-          const diffValue = prevTotal > 0 ? item.valor_total_atual - prevTotal : 0;
+          
+          // Buscar transações de saída (despesas) do dia do registro
+          const dayTransactions = transactions.filter(t => 
+            t.tipo === 'saida' && t.data === item.data
+          );
+          const dayExpenses = dayTransactions.reduce((sum, t) => sum + (t.valor || 0), 0);
+          
+          // Variação = (Valor Atual - Valor Anterior) + Despesas do Dia
+          const diffValue = prevTotal > 0 ? (item.valor_total_atual - prevTotal) + dayExpenses : 0;
           const diffPercent = prevTotal > 0 ? (diffValue / prevTotal) * 100 : 0;
-          return { ...item, diffValue, diffPercent, prevTotal };
+          
+          return { ...item, diffValue, diffPercent, prevTotal, dayExpenses, dayTransactions };
       });
-  }, [sortedHistory]);
+  }, [sortedHistory, transactions]);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const previousRecord = sortedHistory.find(h => h.data < todayStr);
   const previousValue = previousRecord ? previousRecord.valor_total_atual : 0;
-  const dailyDiffValue = previousValue > 0 ? totalAtual - previousValue : 0;
+  
+  // Despesas de hoje
+  const todayExpenses = transactions
+    .filter(t => t.tipo === 'saida' && t.data === todayStr)
+    .reduce((sum, t) => sum + (t.valor || 0), 0);
+  
+  const dailyDiffValue = previousValue > 0 ? (totalAtual - previousValue) + todayExpenses : 0;
   const dailyDiffPercent = previousValue > 0 ? (dailyDiffValue / previousValue) * 100 : 0;
 
   const previousAssetsMap = useMemo(() => {
@@ -525,9 +546,9 @@ export default function Investments() {
     },
     {
       header: 'Variação vs Anterior',
-      className: 'min-w-[140px]',
+      className: 'min-w-[180px]',
       render: (row) => {
-         const { diffValue, diffPercent, prevTotal } = row;
+         const { diffValue, diffPercent, prevTotal, dayExpenses } = row;
          if (!prevTotal) return <span className="text-slate-300 text-xs">-</span>;
          
          const isPos = diffValue >= 0;
@@ -543,6 +564,11 @@ export default function Investments() {
                <span className="text-xs">
                   {isPos ? '+' : ''}{diffPercent.toFixed(2)}%
                </span>
+               {dayExpenses > 0 && (
+                  <span className="text-xs text-slate-500 mt-0.5">
+                     (+ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dayExpenses)} despesas)
+                  </span>
+               )}
             </div>
          );
       }
@@ -771,19 +797,26 @@ export default function Investments() {
                 <div className="text-2xl font-bold">
                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAtual)}
                 </div>
-                <div className="mt-2 text-xs flex items-center gap-1">
-                   {dailyDiffValue >= 0 ? (
-                      <span className="text-emerald-400 flex items-center bg-emerald-400/10 px-1.5 py-0.5 rounded">
-                         <TrendingUp className="h-3 w-3 mr-1" />
-                         +{dailyDiffPercent.toFixed(2)}%
-                      </span>
-                   ) : (
-                      <span className="text-red-400 flex items-center bg-red-400/10 px-1.5 py-0.5 rounded">
-                         <TrendingDown className="h-3 w-3 mr-1" />
-                         {dailyDiffPercent.toFixed(2)}%
-                      </span>
-                   )}
-                   <span className="text-slate-400">vs dia anterior</span>
+                <div className="mt-2 text-xs flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                     {dailyDiffValue >= 0 ? (
+                        <span className="text-emerald-400 flex items-center bg-emerald-400/10 px-1.5 py-0.5 rounded">
+                           <TrendingUp className="h-3 w-3 mr-1" />
+                           +{dailyDiffPercent.toFixed(2)}%
+                        </span>
+                     ) : (
+                        <span className="text-red-400 flex items-center bg-red-400/10 px-1.5 py-0.5 rounded">
+                           <TrendingDown className="h-3 w-3 mr-1" />
+                           {dailyDiffPercent.toFixed(2)}%
+                        </span>
+                     )}
+                     <span className="text-slate-400">vs dia anterior</span>
+                  </div>
+                  {todayExpenses > 0 && (
+                     <span className="text-slate-400">
+                        (+ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayExpenses)} em despesas)
+                     </span>
+                  )}
                 </div>
              </CardContent>
           </Card>
@@ -1023,7 +1056,7 @@ export default function Investments() {
                      )}
                   </TabsContent>
 
-                  <TabsContent value="table" className="flex-1">
+                  <TabsContent value="table" className="flex-1 overflow-x-auto">
                      <DataTable 
                         columns={historyColumns}
                         data={historyWithDiffs}
@@ -1033,6 +1066,25 @@ export default function Investments() {
                            </div>
                         }
                      />
+
+                     {/* Seção de Transações do Dia */}
+                     {historyWithDiffs.length > 0 && historyWithDiffs[0].dayTransactions?.length > 0 && (
+                        <div className="mt-6 border-t pt-4">
+                           <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                              Despesas do dia {format(new Date(historyWithDiffs[0].data + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                           </h4>
+                           <div className="space-y-2">
+                              {historyWithDiffs[0].dayTransactions.map(t => (
+                                 <div key={t.id} className="flex items-center justify-between p-2 bg-red-50 rounded-lg text-sm">
+                                    <span className="text-slate-700">{t.descricao}</span>
+                                    <span className="font-medium text-red-600">
+                                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}
+                                    </span>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                     )}
                   </TabsContent>
                </Tabs>
            </CardContent>

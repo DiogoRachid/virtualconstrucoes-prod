@@ -1,97 +1,99 @@
-import Suppliers from './pages/Suppliers';
-import SupplierForm from './pages/SupplierForm';
-import SupplierDetail from './pages/SupplierDetail';
-import Clients from './pages/Clients';
-import ClientForm from './pages/ClientForm';
-import ClientDetail from './pages/ClientDetail';
-import Projects from './pages/Projects';
-import ProjectForm from './pages/ProjectForm';
-import BankAccounts from './pages/BankAccounts';
-import BankAccountForm from './pages/BankAccountForm';
-import CostCenters from './pages/CostCenters';
-import CostCenterForm from './pages/CostCenterForm';
-import AccountsPayable from './pages/AccountsPayable';
 import AccountPayableForm from './pages/AccountPayableForm';
-import AccountsReceivable from './pages/AccountsReceivable';
 import AccountReceivableForm from './pages/AccountReceivableForm';
-import Transactions from './pages/Transactions';
-import Dashboard from './pages/Dashboard';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
+import AccountsPayable from './pages/AccountsPayable';
+import AccountsReceivable from './pages/AccountsReceivable';
 import BankAccountDetail from './pages/BankAccountDetail';
-import ProjectDetail from './pages/ProjectDetail';
-import Investments from './pages/Investments';
-import InvestmentForm from './pages/InvestmentForm';
-import InvestmentDetail from './pages/InvestmentDetail';
-import Employees from './pages/Employees';
-import EmployeeForm from './pages/EmployeeForm';
+import BankAccountForm from './pages/BankAccountForm';
+import BankAccounts from './pages/BankAccounts';
+import BenefitAssignment from './pages/BenefitAssignment';
+import Benefits from './pages/Benefits';
+import BudgetForm from './pages/BudgetForm';
+import Budgets from './pages/Budgets';
+import ClientDetail from './pages/ClientDetail';
+import ClientForm from './pages/ClientForm';
+import Clients from './pages/Clients';
+import ContractForm from './pages/ContractForm';
+import CostCenterForm from './pages/CostCenterForm';
+import CostCenters from './pages/CostCenters';
+import Dashboard from './pages/Dashboard';
+import EmployeeContracts from './pages/EmployeeContracts';
 import EmployeeDetail from './pages/EmployeeDetail';
-import Teams from './pages/Teams';
-import TeamForm from './pages/TeamForm';
+import EmployeeForm from './pages/EmployeeForm';
+import Employees from './pages/Employees';
+import HRReports from './pages/HRReports';
+import Home from './pages/Home';
+import Inputs from './pages/Inputs';
+import InvestmentDetail from './pages/InvestmentDetail';
+import InvestmentForm from './pages/InvestmentForm';
+import InvestmentTransactions from './pages/InvestmentTransactions';
+import Investments from './pages/Investments';
+import ProjectDetail from './pages/ProjectDetail';
+import ProjectForm from './pages/ProjectForm';
+import Projects from './pages/Projects';
+import Reports from './pages/Reports';
+import ServiceEditor from './pages/ServiceEditor';
+import Services from './pages/Services';
+import Settings from './pages/Settings';
+import SupplierDetail from './pages/SupplierDetail';
+import SupplierForm from './pages/SupplierForm';
+import Suppliers from './pages/Suppliers';
+import TableImport from './pages/TableImport';
 import TeamDetail from './pages/TeamDetail';
+import TeamForm from './pages/TeamForm';
+import Teams from './pages/Teams';
 import TimeRecords from './pages/TimeRecords';
 import TimeSheet from './pages/TimeSheet';
-import EmployeeContracts from './pages/EmployeeContracts';
-import ContractForm from './pages/ContractForm';
-import Benefits from './pages/Benefits';
-import BenefitAssignment from './pages/BenefitAssignment';
-import HRReports from './pages/HRReports';
-import Inputs from './pages/Inputs';
-import Services from './pages/Services';
-import Budgets from './pages/Budgets';
-import BudgetForm from './pages/BudgetForm';
-import TableImport from './pages/TableImport';
-import ServiceEditor from './pages/ServiceEditor';
-import InvestmentTransactions from './pages/InvestmentTransactions';
+import Transactions from './pages/Transactions';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
-    "Suppliers": Suppliers,
-    "SupplierForm": SupplierForm,
-    "SupplierDetail": SupplierDetail,
-    "Clients": Clients,
-    "ClientForm": ClientForm,
-    "ClientDetail": ClientDetail,
-    "Projects": Projects,
-    "ProjectForm": ProjectForm,
-    "BankAccounts": BankAccounts,
-    "BankAccountForm": BankAccountForm,
-    "CostCenters": CostCenters,
-    "CostCenterForm": CostCenterForm,
-    "AccountsPayable": AccountsPayable,
     "AccountPayableForm": AccountPayableForm,
-    "AccountsReceivable": AccountsReceivable,
     "AccountReceivableForm": AccountReceivableForm,
-    "Transactions": Transactions,
-    "Dashboard": Dashboard,
-    "Reports": Reports,
-    "Settings": Settings,
+    "AccountsPayable": AccountsPayable,
+    "AccountsReceivable": AccountsReceivable,
     "BankAccountDetail": BankAccountDetail,
-    "ProjectDetail": ProjectDetail,
-    "Investments": Investments,
-    "InvestmentForm": InvestmentForm,
-    "InvestmentDetail": InvestmentDetail,
-    "Employees": Employees,
-    "EmployeeForm": EmployeeForm,
+    "BankAccountForm": BankAccountForm,
+    "BankAccounts": BankAccounts,
+    "BenefitAssignment": BenefitAssignment,
+    "Benefits": Benefits,
+    "BudgetForm": BudgetForm,
+    "Budgets": Budgets,
+    "ClientDetail": ClientDetail,
+    "ClientForm": ClientForm,
+    "Clients": Clients,
+    "ContractForm": ContractForm,
+    "CostCenterForm": CostCenterForm,
+    "CostCenters": CostCenters,
+    "Dashboard": Dashboard,
+    "EmployeeContracts": EmployeeContracts,
     "EmployeeDetail": EmployeeDetail,
-    "Teams": Teams,
-    "TeamForm": TeamForm,
+    "EmployeeForm": EmployeeForm,
+    "Employees": Employees,
+    "HRReports": HRReports,
+    "Home": Home,
+    "Inputs": Inputs,
+    "InvestmentDetail": InvestmentDetail,
+    "InvestmentForm": InvestmentForm,
+    "InvestmentTransactions": InvestmentTransactions,
+    "Investments": Investments,
+    "ProjectDetail": ProjectDetail,
+    "ProjectForm": ProjectForm,
+    "Projects": Projects,
+    "Reports": Reports,
+    "ServiceEditor": ServiceEditor,
+    "Services": Services,
+    "Settings": Settings,
+    "SupplierDetail": SupplierDetail,
+    "SupplierForm": SupplierForm,
+    "Suppliers": Suppliers,
+    "TableImport": TableImport,
     "TeamDetail": TeamDetail,
+    "TeamForm": TeamForm,
+    "Teams": Teams,
     "TimeRecords": TimeRecords,
     "TimeSheet": TimeSheet,
-    "EmployeeContracts": EmployeeContracts,
-    "ContractForm": ContractForm,
-    "Benefits": Benefits,
-    "BenefitAssignment": BenefitAssignment,
-    "HRReports": HRReports,
-    "Inputs": Inputs,
-    "Services": Services,
-    "Budgets": Budgets,
-    "BudgetForm": BudgetForm,
-    "TableImport": TableImport,
-    "ServiceEditor": ServiceEditor,
-    "InvestmentTransactions": InvestmentTransactions,
+    "Transactions": Transactions,
 }
 
 export const pagesConfig = {
