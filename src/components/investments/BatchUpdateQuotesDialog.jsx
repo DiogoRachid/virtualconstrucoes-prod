@@ -37,8 +37,9 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
     const isQuoteBased = (inv) => {
         if (!inv.quantidade || inv.quantidade <= 0) return false;
         
-        const typesToCheck = ['Ação', 'BDR', 'ETF', 'FII', 'Bitcoin', 'Stock', 'REIT', 'Ethereum', 'Altcoin', 'Crypto'];
-        const categoriesToCheck = ['renda_variavel_br', 'renda_variavel_int', 'crypto'];
+        // Removido renda_variavel_int - ativos internacionais serão por valor total
+        const typesToCheck = ['Ação', 'BDR', 'ETF', 'FII', 'Bitcoin', 'Ethereum', 'Altcoin', 'Crypto'];
+        const categoriesToCheck = ['renda_variavel_br', 'crypto'];
         
         return typesToCheck.some(t => inv.tipo?.includes(t)) || categoriesToCheck.includes(inv.categoria);
     };
@@ -75,26 +76,24 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
                 if (isNaN(inputVal)) return null;
                 
                 let valorAtual, cotacaoAtual, valorAtualUSD, cotacaoAtualUSD;
-                // Removed 'crypto' from isIntl to treat it as BRL
                 const isIntl = ['renda_variavel_int'].includes(inv.categoria);
                 const dolar = parseFloat(indicators.dolar) || 0;
                 
                 if (isQuoteBased(inv)) {
-                    // Se for internacional e tiver dólar, o input é considerado em USD (ou moeda original)
-                    if (isIntl && dolar > 0) {
-                        cotacaoAtualUSD = inputVal;
-                        valorAtualUSD = inputVal * inv.quantidade;
-                        // Converte para BRL
-                        cotacaoAtual = cotacaoAtualUSD * dolar;
-                        valorAtual = valorAtualUSD * dolar;
-                    } else {
-                        cotacaoAtual = inputVal;
-                        valorAtual = inputVal * inv.quantidade;
-                    }
+                    // Cotação unitária em BRL
+                    cotacaoAtual = inputVal;
+                    valorAtual = inputVal * inv.quantidade;
                 } else {
+                    // Valor total em BRL
                     valorAtual = inputVal;
-                    // Tenta calcular cotação reversa se houver quantidade
+                    // Calcula cotação reversa se houver quantidade
                     cotacaoAtual = inv.quantidade > 0 ? valorAtual / inv.quantidade : (inv.cotacao_atual || 0);
+                }
+
+                // Se for internacional e tiver dólar, calcula os valores em USD
+                if (isIntl && dolar > 0) {
+                    valorAtualUSD = valorAtual / dolar;
+                    cotacaoAtualUSD = cotacaoAtual / dolar;
                 }
 
                 const valorInvestido = inv.valor_investido || 0;
@@ -109,7 +108,7 @@ export default function BatchUpdateQuotesDialog({ open, onOpenChange, investment
                     ultima_atualizacao: new Date().toISOString()
                 };
 
-                if (isIntl && dolar > 0) {
+                if (isIntl && dolar > 0 && valorAtualUSD && cotacaoAtualUSD) {
                     payload.valor_atual_usd = valorAtualUSD;
                     payload.cotacao_atual_usd = cotacaoAtualUSD;
                 }
