@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownCircle, MoreHorizontal, Pencil, Trash2, Eye, AlertTriangle, CheckCircle, CalendarCheck } from 'lucide-react';
+import { ArrowDownCircle, MoreHorizontal, Pencil, Trash2, Eye, AlertTriangle, CheckCircle, CalendarCheck, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
@@ -40,6 +40,8 @@ export default function AccountsPayable() {
   const [deleteId, setDeleteId] = useState(null);
   const [paymentDialog, setPaymentDialog] = useState(null);
   const [paymentDate, setPaymentDate] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [batchPaymentDialog, setBatchPaymentDialog] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: accounts = [], isLoading } = useQuery({
@@ -166,6 +168,50 @@ export default function AccountsPayable() {
     }
   });
 
+  const batchPayMutation = useMutation({
+    mutationFn: async (date) => {
+      const accountsToPay = accounts.filter(a => selectedIds.includes(a.id));
+      
+      for (const account of accountsToPay) {
+        await base44.entities.AccountPayable.update(account.id, { 
+          status: 'pago',
+          data_pagamento: date
+        });
+        
+        if (account.conta_bancaria_id) {
+          const [bankAccount] = await base44.entities.BankAccount.filter({ id: account.conta_bancaria_id });
+          if (bankAccount) {
+            await base44.entities.BankAccount.update(account.conta_bancaria_id, {
+              saldo_atual: (bankAccount.saldo_atual || 0) - account.valor
+            });
+          }
+        }
+        
+        await base44.entities.Transaction.create({
+          tipo: 'saida',
+          descricao: account.descricao,
+          valor: account.valor,
+          data: date,
+          conta_bancaria_id: account.conta_bancaria_id,
+          conta_bancaria_nome: account.conta_bancaria_nome,
+          centro_custo_id: account.centro_custo_id,
+          centro_custo_nome: account.centro_custo_nome,
+          fornecedor_id: account.fornecedor_id,
+          conta_pagar_id: account.id,
+          origem: 'baixa_automatica'
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      queryClient.invalidateQueries({ queryKey: ['bankAccounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setBatchPaymentDialog(false);
+      setSelectedIds([]);
+      toast.success('Pagamentos efetuados com sucesso');
+    }
+  });
+
   const filteredAccounts = React.useMemo(() => {
     let result = accounts.filter(a => {
       const matchSearch = !search || 
@@ -223,7 +269,47 @@ export default function AccountsPayable() {
     }));
   };
 
+  const toggleSelection = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllSelection = () => {
+    const payableIds = filteredAccounts
+      .filter(a => a.status === 'em_aberto' || a.status === 'atrasado')
+      .map(a => a.id);
+    
+    if (selectedIds.length === payableIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(payableIds);
+    }
+  };
+
   const columns = [
+    {
+      header: (
+        <input
+          type="checkbox"
+          onChange={toggleAllSelection}
+          checked={selectedIds.length > 0 && selectedIds.length === filteredAccounts.filter(a => a.status === 'em_aberto' || a.status === 'atrasado').length}
+          className="rounded"
+        />
+      ),
+      className: 'w-12',
+      render: (row) => (
+        (row.status === 'em_aberto' || row.status === 'atrasado') ? (
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(row.id)}
+            onChange={() => toggleSelection(row.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded"
+          />
+        ) : null
+      )
+    },
     {
       header: 'Descrição',
       accessor: 'descricao',
@@ -322,16 +408,30 @@ export default function AccountsPayable() {
         onAction={() => window.location.href = createPageUrl('AccountPayableForm')}
       />
 
-      <div className="mb-4 flex justify-end">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => fixExistingDatesMutation.mutate()}
-          disabled={fixExistingDatesMutation.isPending}
-        >
-          <CalendarCheck className="h-4 w-4 mr-2" />
-{fixExistingDatesMutation.isPending ? 'Corrigindo...' : 'Corrigir Datas Existentes'}
-        </Button>
+      <div className="mb-4 flex justify-between items-center">
+        {selectedIds.length > 0 && (
+          <Button
+            onClick={() => {
+              setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+              setBatchPaymentDialog(true);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Dar Baixa em {selectedIds.length} Selecionadas
+          </Button>
+        )}
+        <div className="ml-auto">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => fixExistingDatesMutation.mutate()}
+            disabled={fixExistingDatesMutation.isPending}
+          >
+            <CalendarCheck className="h-4 w-4 mr-2" />
+            {fixExistingDatesMutation.isPending ? 'Corrigindo...' : 'Corrigir Datas Existentes'}
+          </Button>
+        </div>
       </div>
 
       {/* Alertas */}
@@ -442,7 +542,7 @@ export default function AccountsPayable() {
         description="Tem certeza que deseja excluir esta conta?"
       />
 
-      {/* Dialog de baixa */}
+      {/* Dialog de baixa individual */}
       <Dialog open={!!paymentDialog} onOpenChange={() => setPaymentDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -477,6 +577,49 @@ export default function AccountsPayable() {
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               Confirmar Pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de baixa em lote */}
+      <Dialog open={batchPaymentDialog} onOpenChange={setBatchPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dar Baixa em Múltiplos Pagamentos</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-slate-600 mb-4">
+              Confirmar pagamento de <strong>{selectedIds.length}</strong> contas no valor total de{' '}
+              <strong>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                  accounts.filter(a => selectedIds.includes(a.id)).reduce((sum, a) => sum + (a.valor || 0), 0)
+                )}
+              </strong>
+              ?
+            </p>
+            <div>
+              <Label htmlFor="batchPaymentDate">Data do Pagamento</Label>
+              <Input
+                id="batchPaymentDate"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchPaymentDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => batchPayMutation.mutate(paymentDate)}
+              disabled={batchPayMutation.isPending}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {batchPayMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Pagamentos
             </Button>
           </DialogFooter>
         </DialogContent>

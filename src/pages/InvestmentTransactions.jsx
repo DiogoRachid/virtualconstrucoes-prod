@@ -59,6 +59,9 @@ export default function InvestmentTransactions() {
     .filter(t => ['dividendo', 'jcp', 'rendimento'].includes(t.tipo_operacao))
     .reduce((sum, t) => sum + (t.valor_total || 0), 0);
 
+  // Variação real considerando recebimentos
+  const variacaoReal = totalCompras - totalVendas - totalProventos;
+
   const columns = [
     {
       header: 'Data',
@@ -141,7 +144,7 @@ export default function InvestmentTransactions() {
       />
 
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6 flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-full text-blue-600">
@@ -177,6 +180,19 @@ export default function InvestmentTransactions() {
               <p className="text-sm text-slate-500">Total Proventos</p>
               <p className="text-xl font-bold text-slate-900">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProventos)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6 flex items-center gap-4">
+            <div className={`p-3 rounded-full ${variacaoReal >= 0 ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+              {variacaoReal >= 0 ? <TrendingUp className="h-6 w-6" /> : <TrendingDown className="h-6 w-6" />}
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Variação Real</p>
+              <p className={`text-xl font-bold ${variacaoReal >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(variacaoReal)}
               </p>
             </div>
           </CardContent>

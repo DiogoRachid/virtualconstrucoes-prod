@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Receipt, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Loader2, Plus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
@@ -56,6 +56,13 @@ export default function Transactions() {
     centro_custo_id: '',
     centro_custo_nome: ''
   });
+
+  // Atualizar descrição padrão quando tipo mudar para transferência
+  useEffect(() => {
+    if (newTransaction.tipo === 'transferencia' && !newTransaction.descricao) {
+      setNewTransaction(prev => ({ ...prev, descricao: 'Transferência' }));
+    }
+  }, [newTransaction.tipo]);
   const queryClient = useQueryClient();
 
   const { data: transactions = [], isLoading } = useQuery({

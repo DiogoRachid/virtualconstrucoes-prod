@@ -57,7 +57,6 @@ const menuItems = [
       { title: 'Fornecedores', page: 'Suppliers', icon: Building2 },
       { title: 'Clientes', page: 'Clients', icon: Users },
       { title: 'Obras', page: 'Projects', icon: HardHat },
-      { title: 'Contas Bancárias', page: 'BankAccounts', icon: Landmark },
       { title: 'Centros de Custo', page: 'CostCenters', icon: PieChart },
       { title: 'Insumos', page: 'Inputs', icon: Package },
       { title: 'Serviços (Composições)', page: 'Services', icon: Layers },
@@ -70,14 +69,15 @@ const menuItems = [
       page: 'Budgets'
       },
       {
-      title: 'Financeiro',
-    icon: Wallet,
-    submenu: [
-      { title: 'Contas a Pagar', page: 'AccountsPayable', icon: ArrowDownCircle },
-      { title: 'Contas a Receber', page: 'AccountsReceivable', icon: ArrowUpCircle },
-      { title: 'Transações', page: 'Transactions', icon: Receipt }
-    ]
-  },
+        title: 'Financeiro',
+        icon: Wallet,
+        submenu: [
+          { title: 'Contas Bancárias', page: 'BankAccounts', icon: Landmark },
+          { title: 'Contas a Pagar', page: 'AccountsPayable', icon: ArrowDownCircle },
+          { title: 'Contas a Receber', page: 'AccountsReceivable', icon: ArrowUpCircle },
+          { title: 'Transações', page: 'Transactions', icon: Receipt }
+        ]
+      },
   {
     title: 'RH',
     icon: UsersRound,
