@@ -27,6 +27,8 @@ import InvestmentDetail from './pages/InvestmentDetail';
 import InvestmentForm from './pages/InvestmentForm';
 import InvestmentTransactions from './pages/InvestmentTransactions';
 import Investments from './pages/Investments';
+import PayrollForm from './pages/PayrollForm';
+import Payrolls from './pages/Payrolls';
 import ProjectDetail from './pages/ProjectDetail';
 import ProjectForm from './pages/ProjectForm';
 import Projects from './pages/Projects';
@@ -44,8 +46,6 @@ import Teams from './pages/Teams';
 import TimeRecords from './pages/TimeRecords';
 import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
-import Payrolls from './pages/Payrolls';
-import PayrollForm from './pages/PayrollForm';
 import __Layout from './Layout.jsx';
 
 
@@ -79,6 +79,8 @@ export const PAGES = {
     "InvestmentForm": InvestmentForm,
     "InvestmentTransactions": InvestmentTransactions,
     "Investments": Investments,
+    "PayrollForm": PayrollForm,
+    "Payrolls": Payrolls,
     "ProjectDetail": ProjectDetail,
     "ProjectForm": ProjectForm,
     "Projects": Projects,
@@ -96,8 +98,6 @@ export const PAGES = {
     "TimeRecords": TimeRecords,
     "TimeSheet": TimeSheet,
     "Transactions": Transactions,
-    "Payrolls": Payrolls,
-    "PayrollForm": PayrollForm,
 }
 
 export const pagesConfig = {
