@@ -109,22 +109,19 @@ export const recalculateService = async (serviceId) => {
         if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
         else custoMaterial += totalItem;
       }
-    } else {
-      // Para insumos, usa a categoria do CADASTRO do insumo (corrigido)
+      } else {
+      // Para insumos, PRIORIDADE TOTAL para a categoria do cadastro do INSUMO
       const insumo = await base44.entities.Input.filter({ id: item.item_id }).then(r => r[0]);
       if (insumo) {
-         // Usa a categoria do cadastro do insumo
-         if (insumo.categoria === 'MAO_OBRA') {
-           custoMaoObra += totalItem;
-         } else {
-           custoMaterial += totalItem;
-         }
+         // Se o insumo tem categoria definida, usamos ela
+         if (insumo.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+         else custoMaterial += totalItem;
       } else {
-         // Fallback: se não encontrar o insumo, usa a categoria do item da composição
+         // Fallback se não achar insumo (usa snapshot do item)
          if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
          else custoMaterial += totalItem;
       }
-    }
+      }
       }
 
       const custoTotal = custoMaterial + custoMaoObra;

@@ -158,7 +158,6 @@ export default function Services() {
       }
       
       toast.success(`${total} serviços recalculados com sucesso!`);
-      await createVersionEntry('Recálculo global de custos', 'Todos os serviços foram recalculados');
       refetch();
     } catch (e) {
       toast.error("Erro ao recalcular serviços");
@@ -166,88 +165,6 @@ export default function Services() {
     } finally {
       setRecalculating(false);
       setRecalcProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleRecalculateSelected = async () => {
-    if (selectedIds.size === 0) return toast.error('Selecione serviços para recalcular');
-    if (!confirm(`Recalcular ${selectedIds.size} serviços selecionados?`)) return;
-    
-    setRecalculating(true);
-    const ids = Array.from(selectedIds);
-    setRecalcProgress({ current: 0, total: ids.length });
-    
-    try {
-      for (let i = 0; i < ids.length; i++) {
-        await Engine.recalculateService(ids[i]);
-        setRecalcProgress({ current: i + 1, total: ids.length });
-      }
-      
-      toast.success(`${ids.length} serviços recalculados!`);
-      await createVersionEntry('Recálculo de serviços selecionados', `${ids.length} serviços foram recalculados`);
-      setSelectedIds(new Set());
-      refetch();
-    } catch (e) {
-      toast.error("Erro ao recalcular serviços");
-      console.error(e);
-    } finally {
-      setRecalculating(false);
-      setRecalcProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleRecalculateZeroCost = async () => {
-    const zeroServices = services.filter(s => !s.custo_total || s.custo_total === 0);
-    if (zeroServices.length === 0) return toast.info('Não há serviços com custo zerado');
-    
-    if (!confirm(`Recalcular ${zeroServices.length} serviços com custo zerado?`)) return;
-    
-    setRecalculating(true);
-    setRecalcProgress({ current: 0, total: zeroServices.length });
-    
-    try {
-      for (let i = 0; i < zeroServices.length; i++) {
-        await Engine.recalculateService(zeroServices[i].id);
-        setRecalcProgress({ current: i + 1, total: zeroServices.length });
-      }
-      
-      toast.success(`${zeroServices.length} serviços zerados recalculados!`);
-      await createVersionEntry('Recálculo de serviços zerados', `${zeroServices.length} serviços com custo zero foram recalculados`);
-      refetch();
-    } catch (e) {
-      toast.error("Erro ao recalcular serviços");
-      console.error(e);
-    } finally {
-      setRecalculating(false);
-      setRecalcProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const createVersionEntry = async (titulo, descricao) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const versions = await base44.entities.VersionHistory.list();
-      const todayVersion = versions.find(v => v.data_lancamento === today);
-      
-      if (todayVersion) {
-        // Adicionar alteração ao registro existente
-        const alteracoes = todayVersion.alteracoes || [];
-        alteracoes.push({ tipo: 'melhoria', descricao });
-        await base44.entities.VersionHistory.update(todayVersion.id, { alteracoes });
-      } else {
-        // Criar novo registro
-        const nextVersion = `1.${versions.length + 1}.0`;
-        await base44.entities.VersionHistory.create({
-          versao: nextVersion,
-          data_lancamento: today,
-          titulo,
-          descricao,
-          alteracoes: [{ tipo: 'melhoria', descricao }],
-          status: 'ativo'
-        });
-      }
-    } catch (e) {
-      console.error('Erro ao criar entrada de versão:', e);
     }
   };
 
@@ -343,37 +260,27 @@ export default function Services() {
           onSearchChange={setSearch} 
           placeholder="Buscar serviço..." 
         />
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           {selectedIds.size > 0 && (
-            <>
-              <Button variant="outline" onClick={handleRecalculateSelected} disabled={recalculating}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Recalcular ({selectedIds.size})
-              </Button>
-              <Button variant="destructive" onClick={handleBulkDeleteServices}>
+             <Button variant="destructive" onClick={handleBulkDeleteServices}>
                 <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})
-              </Button>
-            </>
+             </Button>
           )}
-          <Button variant="outline" onClick={handleRecalculateZeroCost} disabled={recalculating}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Recalc. Zerados
-          </Button>
           <Button variant="outline" onClick={handleRecalculateAll} disabled={recalculating}>
               {recalculating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {recalcProgress.current}/{recalcProgress.total}
+                  Recalculando {recalcProgress.current}/{recalcProgress.total}
                 </>
               ) : (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  Recalc. Todos
+                  Recalcular Todos
                 </>
               )}
           </Button>
           <Button variant="outline" onClick={() => setOpenBulk(true)}>
-              <Calendar className="mr-2 h-4 w-4" /> Data Base
+              <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
           </Button>
         </div>
       </div>

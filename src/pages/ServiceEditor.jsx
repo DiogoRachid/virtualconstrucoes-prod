@@ -143,38 +143,9 @@ export default function ServiceEditor() {
     setItems(its.sort((a,b) => a.ordem - b.ordem));
     setService(s);
     
-    // Criar entrada de versão
-    await createVersionEntry('Item adicionado à composição', `Item adicionado ao serviço ${service.codigo}`);
-    
     toast.success("Item adicionado e custos recalculados");
     setNewItem({ ...newItem, id: '', qtd: 1 });
     setSearchQuery('');
-  };
-
-  const createVersionEntry = async (titulo, descricao) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const versions = await base44.entities.VersionHistory.list();
-      const todayVersion = versions.find(v => v.data_lancamento === today);
-      
-      if (todayVersion) {
-        const alteracoes = todayVersion.alteracoes || [];
-        alteracoes.push({ tipo: 'melhoria', descricao });
-        await base44.entities.VersionHistory.update(todayVersion.id, { alteracoes });
-      } else {
-        const nextVersion = `1.${versions.length + 1}.0`;
-        await base44.entities.VersionHistory.create({
-          versao: nextVersion,
-          data_lancamento: today,
-          titulo,
-          descricao,
-          alteracoes: [{ tipo: 'melhoria', descricao }],
-          status: 'ativo'
-        });
-      }
-    } catch (e) {
-      console.error('Erro ao criar entrada de versão:', e);
-    }
   };
 
   const handleDeleteItem = async (itemId) => {
