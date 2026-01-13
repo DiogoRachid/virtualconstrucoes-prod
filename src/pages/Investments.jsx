@@ -403,17 +403,16 @@ export default function Investments() {
           const prevItem = sortedHistory[index + 1];
           const prevTotal = prevItem ? prevItem.valor_total_atual : 0;
           
-          // Buscar transações de saída (despesas) do dia do registro
-          const dayTransactions = transactions.filter(t => 
-            t.tipo === 'saida' && t.data === item.data
-          );
-          const dayExpenses = dayTransactions.reduce((sum, t) => sum + (t.valor || 0), 0);
+          // Buscar transações do dia do registro
+          const dayTransactions = transactions.filter(t => t.data === item.data);
+          const dayExpenses = dayTransactions.filter(t => t.tipo === 'saida').reduce((sum, t) => sum + (t.valor || 0), 0);
+          const dayIncome = dayTransactions.filter(t => t.tipo === 'entrada').reduce((sum, t) => sum + (t.valor || 0), 0);
           
-          // Variação = (Valor Atual - Valor Anterior) + Despesas do Dia
-          const diffValue = prevTotal > 0 ? (item.valor_total_atual - prevTotal) + dayExpenses : 0;
+          // Variação Real = (Valor Atual - Valor Anterior) + Despesas - Recebimentos
+          const diffValue = prevTotal > 0 ? (item.valor_total_atual - prevTotal) + dayExpenses - dayIncome : 0;
           const diffPercent = prevTotal > 0 ? (diffValue / prevTotal) * 100 : 0;
           
-          return { ...item, diffValue, diffPercent, prevTotal, dayExpenses, dayTransactions };
+          return { ...item, diffValue, diffPercent, prevTotal, dayExpenses, dayIncome, dayTransactions };
       });
   }, [sortedHistory, transactions]);
 
@@ -421,12 +420,15 @@ export default function Investments() {
   const previousRecord = sortedHistory.find(h => h.data < todayStr);
   const previousValue = previousRecord ? previousRecord.valor_total_atual : 0;
   
-  // Despesas de hoje
+  // Transações de hoje
   const todayExpenses = transactions
     .filter(t => t.tipo === 'saida' && t.data === todayStr)
     .reduce((sum, t) => sum + (t.valor || 0), 0);
+  const todayIncome = transactions
+    .filter(t => t.tipo === 'entrada' && t.data === todayStr)
+    .reduce((sum, t) => sum + (t.valor || 0), 0);
   
-  const dailyDiffValue = previousValue > 0 ? (totalAtual - previousValue) + todayExpenses : 0;
+  const dailyDiffValue = previousValue > 0 ? (totalAtual - previousValue) + todayExpenses - todayIncome : 0;
   const dailyDiffPercent = previousValue > 0 ? (dailyDiffValue / previousValue) * 100 : 0;
 
   const previousAssetsMap = useMemo(() => {
@@ -546,9 +548,9 @@ export default function Investments() {
     },
     {
       header: 'Variação vs Anterior',
-      className: 'min-w-[180px]',
+      className: 'min-w-[200px]',
       render: (row) => {
-         const { diffValue, diffPercent, prevTotal, dayExpenses } = row;
+         const { diffValue, diffPercent, prevTotal, dayExpenses, dayIncome } = row;
          if (!prevTotal) return <span className="text-slate-300 text-xs">-</span>;
          
          const isPos = diffValue >= 0;
@@ -564,9 +566,11 @@ export default function Investments() {
                <span className="text-xs">
                   {isPos ? '+' : ''}{diffPercent.toFixed(2)}%
                </span>
-               {dayExpenses > 0 && (
+               {(dayExpenses > 0 || dayIncome > 0) && (
                   <span className="text-xs text-slate-500 mt-0.5">
-                     (+ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dayExpenses)} despesas)
+                     {dayExpenses > 0 && `(+ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dayExpenses)} desp.)`}
+                     {dayExpenses > 0 && dayIncome > 0 && ' '}
+                     {dayIncome > 0 && `(- ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dayIncome)} receb.)`}
                   </span>
                )}
             </div>
