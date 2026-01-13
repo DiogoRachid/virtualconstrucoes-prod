@@ -136,57 +136,6 @@ export default function Services() {
     }
   };
 
-  const handleRecalculateSelected = async () => {
-    if (selectedIds.size === 0) return toast.error("Selecione serviços para recalcular");
-    if (!confirm(`Recalcular ${selectedIds.size} serviço(s) selecionado(s)?`)) return;
-    
-    setRecalculating(true);
-    const ids = Array.from(selectedIds);
-    setRecalcProgress({ current: 0, total: ids.length });
-    
-    try {
-      for (let i = 0; i < ids.length; i++) {
-        await Engine.recalculateService(ids[i]);
-        setRecalcProgress({ current: i + 1, total: ids.length });
-      }
-      
-      toast.success(`${ids.length} serviços recalculados!`);
-      setSelectedIds(new Set());
-      refetch();
-    } catch (e) {
-      toast.error("Erro ao recalcular serviços");
-      console.error(e);
-    } finally {
-      setRecalculating(false);
-      setRecalcProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleRecalculateZeroed = async () => {
-    const zeroedServices = services.filter(s => !s.custo_total || s.custo_total === 0);
-    if (zeroedServices.length === 0) return toast.error("Não há serviços com valor zerado");
-    if (!confirm(`Recalcular ${zeroedServices.length} serviço(s) com valor zerado?`)) return;
-    
-    setRecalculating(true);
-    setRecalcProgress({ current: 0, total: zeroedServices.length });
-    
-    try {
-      for (let i = 0; i < zeroedServices.length; i++) {
-        await Engine.recalculateService(zeroedServices[i].id);
-        setRecalcProgress({ current: i + 1, total: zeroedServices.length });
-      }
-      
-      toast.success(`${zeroedServices.length} serviços recalculados!`);
-      refetch();
-    } catch (e) {
-      toast.error("Erro ao recalcular serviços");
-      console.error(e);
-    } finally {
-      setRecalculating(false);
-      setRecalcProgress({ current: 0, total: 0 });
-    }
-  };
-
   const handleRecalculateAll = async () => {
     if (!confirm('Recalcular TODOS os custos de serviços? Isso pode demorar alguns minutos.')) return;
     
@@ -311,27 +260,17 @@ export default function Services() {
           onSearchChange={setSearch} 
           placeholder="Buscar serviço..." 
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           {selectedIds.size > 0 && (
-             <>
-               <Button variant="destructive" onClick={handleBulkDeleteServices}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})
-               </Button>
-               <Button variant="outline" onClick={handleRecalculateSelected} disabled={recalculating}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Recalcular Selecionados
-               </Button>
-             </>
+             <Button variant="destructive" onClick={handleBulkDeleteServices}>
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})
+             </Button>
           )}
-          <Button variant="outline" onClick={handleRecalculateZeroed} disabled={recalculating}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Recalcular Zerados
-          </Button>
           <Button variant="outline" onClick={handleRecalculateAll} disabled={recalculating}>
               {recalculating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {recalcProgress.current}/{recalcProgress.total}
+                  Recalculando {recalcProgress.current}/{recalcProgress.total}
                 </>
               ) : (
                 <>
@@ -341,7 +280,7 @@ export default function Services() {
               )}
           </Button>
           <Button variant="outline" onClick={() => setOpenBulk(true)}>
-              <Calendar className="mr-2 h-4 w-4" /> Data Base Global
+              <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
           </Button>
         </div>
       </div>

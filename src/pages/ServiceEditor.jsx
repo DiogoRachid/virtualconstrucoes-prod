@@ -448,7 +448,7 @@ export default function ServiceEditor() {
                                   <SelectTrigger><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                      <SelectItem value="MATERIAL">Material</SelectItem>
-                                     <SelectItem value="MAO_OBRA">Mão de Obra</SelectItem>
+                                     <SelectItem value="MAO_DE_OBRA">Mão de Obra</SelectItem>
                                   </SelectContent>
                                </Select>
                             </div>
