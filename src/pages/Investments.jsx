@@ -825,12 +825,14 @@ export default function Investments() {
                         </span>
                      )}
                      <span className="text-slate-400">vs dia anterior</span>
-                  </div>
-                  {todayExpenses > 0 && (
+                     </div>
+                     {(todayExpenses > 0 || todayIncome > 0) && (
                      <span className="text-slate-400">
-                        (+ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayExpenses)} em despesas)
+                        {todayExpenses > 0 && `(+ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayExpenses)} desp.)`}
+                        {todayExpenses > 0 && todayIncome > 0 && ' '}
+                        {todayIncome > 0 && `(- ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayIncome)} receb.)`}
                      </span>
-                  )}
+                     )}
                 </div>
              </CardContent>
           </Card>
