@@ -33,8 +33,6 @@ import ProjectDetail from './pages/ProjectDetail';
 import ProjectForm from './pages/ProjectForm';
 import Projects from './pages/Projects';
 import Reports from './pages/Reports';
-import ServiceEditor from './pages/ServiceEditor';
-import Services from './pages/Services';
 import Settings from './pages/Settings';
 import SupplierDetail from './pages/SupplierDetail';
 import SupplierForm from './pages/SupplierForm';
@@ -48,6 +46,8 @@ import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
+import ServiceEditor from './pages/ServiceEditor';
+import Services from './pages/Services';
 import __Layout from './Layout.jsx';
 
 
@@ -87,8 +87,6 @@ export const PAGES = {
     "ProjectForm": ProjectForm,
     "Projects": Projects,
     "Reports": Reports,
-    "ServiceEditor": ServiceEditor,
-    "Services": Services,
     "Settings": Settings,
     "SupplierDetail": SupplierDetail,
     "SupplierForm": SupplierForm,
@@ -102,6 +100,8 @@ export const PAGES = {
     "Transactions": Transactions,
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
+    "ServiceEditor": ServiceEditor,
+    "Services": Services,
 }
 
 export const pagesConfig = {
