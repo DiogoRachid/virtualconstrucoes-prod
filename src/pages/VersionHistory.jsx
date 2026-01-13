@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tantml/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
 import { History, Plus, Edit2, Trash2, Package, Sparkles, Wrench, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
