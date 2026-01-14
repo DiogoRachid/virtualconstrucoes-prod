@@ -20,7 +20,8 @@ import {
   Globe,
   Building,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Settings
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchFilter from '@/components/shared/SearchFilter';
@@ -75,7 +76,15 @@ export default function Investments() {
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
   const [indicators, setIndicators] = useState(null);
   const [loadingIndicators, setLoadingIndicators] = useState(false);
+  const [showAjusteDialog, setShowAjusteDialog] = useState(false);
   const queryClient = useQueryClient();
+
+  // Ajuste de rentabilidade inicial (salvo no localStorage)
+  const [rentabilidadeAjuste, setRentabilidadeAjuste] = useState(() => {
+    const saved = localStorage.getItem('rentabilidade_ajuste_inicial');
+    return saved ? parseFloat(saved) : 0;
+  });
+  const [tempAjuste, setTempAjuste] = useState(rentabilidadeAjuste);
 
   const { data: investments = [], isLoading } = useQuery({
     queryKey: ['investments'],
@@ -254,9 +263,9 @@ export default function Investments() {
   }, 0);
   
   const totalAtual = totalInvestimentos + totalBankBalance;
-  // Rentabilidade considera apenas investimentos para não distorcer com saldo em conta
-  const totalRentabilidade = totalInvestimentos - totalInvestido;
-  const rentabilidadePercent = totalInvestido > 0 ? ((totalInvestimentos / totalInvestido) - 1) * 100 : 0;
+  // Rentabilidade considera apenas investimentos + ajuste inicial
+  const totalRentabilidade = (totalInvestimentos - totalInvestido) + rentabilidadeAjuste;
+  const rentabilidadePercent = totalInvestido > 0 ? (((totalInvestimentos + rentabilidadeAjuste) / totalInvestido) - 1) * 100 : 0;
 
   // Totais por categoria
   const totalsByCategory = useMemo(() => {
@@ -968,16 +977,28 @@ export default function Investments() {
                 </TabsContent>
              </Tabs>
              
-             <div className="mt-6 pt-4 border-t border-slate-100">
-                <Button
-                   variant="outline"
-                   size="sm"
-                   className="w-full"
-                   onClick={() => setShowBatchUpdate(true)}
-                >
-                   <Pencil className="h-4 w-4 mr-2" />
-                   Atualizar Cotações Manualmente
-                </Button>
+             <div className="mt-6 pt-4 border-t border-slate-100 space-y-2">
+               <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowBatchUpdate(true)}
+               >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Atualizar Cotações Manualmente
+               </Button>
+               <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setTempAjuste(rentabilidadeAjuste);
+                    setShowAjusteDialog(true);
+                  }}
+               >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Ajustar Rentabilidade
+               </Button>
              </div>
            </CardContent>
         </Card>
@@ -1180,6 +1201,47 @@ export default function Investments() {
         onOpenChange={setShowBatchUpdate}
         investments={filteredInvestments.length > 0 ? filteredInvestments : investments}
       />
+
+      {/* Dialog de Ajuste de Rentabilidade */}
+      <Dialog open={showAjusteDialog} onOpenChange={setShowAjusteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajustar Rentabilidade Inicial</DialogTitle>
+            <DialogDescription>
+              Informe o valor da rentabilidade já acumulada anteriormente para ajustar o cálculo total
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>Rentabilidade Inicial (R$)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={tempAjuste}
+              onChange={(e) => setTempAjuste(parseFloat(e.target.value) || 0)}
+              className="mt-2"
+              placeholder="0.00"
+            />
+            <p className="text-xs text-slate-500 mt-2">
+              Este valor será somado à rentabilidade atual para mostrar o total acumulado
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAjusteDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                setRentabilidadeAjuste(tempAjuste);
+                localStorage.setItem('rentabilidade_ajuste_inicial', tempAjuste.toString());
+                setShowAjusteDialog(false);
+                toast.success('Ajuste salvo');
+              }}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
