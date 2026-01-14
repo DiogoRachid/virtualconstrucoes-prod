@@ -55,7 +55,6 @@ export default function InvestmentForm() {
     preco_medio_usd: '',
     valor_investido: '',
     valor_investido_usd: '',
-    rentabilidade_inicial: 0,
     cotacao_atual: '',
     cotacao_atual_usd: '',
     valor_atual: '',
@@ -129,7 +128,6 @@ export default function InvestmentForm() {
         preco_medio_usd: investment.preco_medio_usd || '',
         valor_investido: investment.valor_investido || '',
         valor_investido_usd: investment.valor_investido_usd || '',
-        rentabilidade_inicial: investment.rentabilidade_inicial || 0,
         cotacao_atual: investment.cotacao_atual || '',
         cotacao_atual_usd: investment.cotacao_atual_usd || '',
         valor_atual: investment.valor_atual || '',
@@ -197,9 +195,8 @@ export default function InvestmentForm() {
     mutationFn: (data) => {
       const valorInvestido = parseFloat(data.valor_investido) || 0;
       const valorAtual = parseFloat(data.valor_atual) || valorInvestido;
-      const rentabilidadeInicial = parseFloat(data.rentabilidade_inicial) || 0;
-      const rentabilidadeValor = (valorAtual - valorInvestido) + rentabilidadeInicial;
-      const rentabilidadePercent = valorInvestido > 0 ? (((valorAtual + rentabilidadeInicial) / valorInvestido) - 1) * 100 : 0;
+      const rentabilidadeValor = valorAtual - valorInvestido;
+      const rentabilidadePercent = valorInvestido > 0 ? ((valorAtual / valorInvestido) - 1) * 100 : 0;
 
       const isUSDMoeda = data.moeda === 'USD';
       const isIntl = ['renda_variavel_int', 'crypto'].includes(data.categoria);
@@ -211,7 +208,6 @@ export default function InvestmentForm() {
         preco_medio_usd: (isUSDMoeda && isIntl && data.preco_medio) ? parseFloat(data.preco_medio) : null,
         valor_investido: valorInvestido,
         valor_investido_usd: (isUSDMoeda && isIntl) ? parseFloat(data.valor_investido_usd) || null : null,
-        rentabilidade_inicial: rentabilidadeInicial,
         cotacao_atual: data.cotacao_atual ? parseFloat(data.cotacao_atual) : null,
         cotacao_atual_usd: (isUSDMoeda && isIntl && data.cotacao_atual) ? parseFloat(data.cotacao_atual) : null,
         valor_atual: valorAtual,
@@ -520,21 +516,6 @@ export default function InvestmentForm() {
                     ≈ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.valor_investido)}
                   </p>
                 )}
-              </div>
-
-              <div>
-                <Label>Rentabilidade Inicial (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.rentabilidade_inicial}
-                  onChange={(e) => handleChange('rentabilidade_inicial', e.target.value)}
-                  className="mt-1.5"
-                  placeholder="0.00"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Ajuste para rentabilidade já acumulada
-                </p>
               </div>
 
               {needsTicker && (
