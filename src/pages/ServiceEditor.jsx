@@ -80,8 +80,16 @@ export default function ServiceEditor() {
       window.location.href = createPageUrl(`ServiceEditor?id=${id}`);
       return;
     } else {
-      await base44.entities.Service.update(id, service);
-      toast.success("Cabeçalho salvo");
+      // Recalcular custos antes de salvar para garantir que estão atualizados
+      await Engine.recalculateService(id);
+      
+      // Recarregar os dados atualizados
+      const updatedService = await base44.entities.Service.filter({ id }).then(r => r[0]);
+      if (updatedService) {
+        setService(updatedService);
+      }
+      
+      toast.success("Cabeçalho salvo e custos atualizados");
     }
   };
 
