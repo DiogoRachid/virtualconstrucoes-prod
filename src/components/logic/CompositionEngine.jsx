@@ -57,7 +57,7 @@ const parseDate = (str) => {
   return new Date(parseInt(ano), parseInt(mes) - 1, 1);
 };
 
-export const recalculateService = async (serviceId) => {
+export const recalculateService = async (serviceId, forceUpdate = false) => {
   // 1. Buscar itens
   const items = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
   
@@ -82,8 +82,12 @@ export const recalculateService = async (serviceId) => {
 
     const totalItem = item.quantidade * unitCost;
 
-    // Atualizar item se mudou
-    if (item.custo_unitario_snapshot !== unitCost || item.custo_total_item !== totalItem) {
+    // Atualizar item sempre (ou se mudou e não é forceUpdate)
+    const needsUpdate = forceUpdate || 
+      Math.abs(item.custo_unitario_snapshot - unitCost) > 0.0001 || 
+      Math.abs(item.custo_total_item - totalItem) > 0.0001;
+      
+    if (needsUpdate) {
       try {
         await base44.entities.ServiceItem.update(item.id, {
           custo_unitario_snapshot: unitCost,
@@ -126,16 +130,21 @@ export const recalculateService = async (serviceId) => {
 
       const custoTotal = custoMaterial + custoMaoObra;
 
-      // 6. Salvar no serviço
-      await base44.entities.Service.update(serviceId, {
-      custo_material: custoMaterial,
-      custo_mao_obra: custoMaoObra,
-      custo_total: custoTotal,
-      nivel_max_dependencia: maxNivelDep
-      // data_base removido para não sobrescrever
-      });
+      // 6. Salvar no serviço - SEMPRE atualiza para garantir sincronização
+      try {
+        await base44.entities.Service.update(serviceId, {
+          custo_material: custoMaterial,
+          custo_mao_obra: custoMaoObra,
+          custo_total: custoTotal,
+          nivel_max_dependencia: maxNivelDep
+          // data_base removido para não sobrescrever
+        });
+      } catch (e) {
+        console.error('Erro ao atualizar serviço', serviceId, e);
+        throw e;
+      }
 
-  return { custo_total: custoTotal };
+  return { custo_total: custoTotal, custo_material: custoMaterial, custo_mao_obra: custoMaoObra };
 };
 
 // --- PROMPT 3: ATUALIZAÇÃO EM CASCATA ---

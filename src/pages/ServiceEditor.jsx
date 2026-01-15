@@ -137,11 +137,11 @@ export default function ServiceEditor() {
     });
 
     // PROMPT 2 & 3: RECALCULAR E CASCATA
-    await Engine.recalculateService(serviceId);
+    const result = await Engine.recalculateService(serviceId, true);
     await Engine.updateDependents('SERVICO', serviceId);
 
     // Reload - pequeno delay para garantir commit no banco
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     
     const [its, s] = await Promise.all([
       base44.entities.ServiceItem.filter({ servico_id: serviceId }),
@@ -151,18 +151,18 @@ export default function ServiceEditor() {
     setItems(its.sort((a,b) => a.ordem - b.ordem));
     setService(s);
     
-    toast.success("Item adicionado e custos recalculados");
+    toast.success("Item adicionado e custos atualizados automaticamente");
     setNewItem({ ...newItem, id: '', qtd: 1 });
     setSearchQuery('');
   };
 
   const handleDeleteItem = async (itemId) => {
     await base44.entities.ServiceItem.delete(itemId);
-    await Engine.recalculateService(serviceId);
+    await Engine.recalculateService(serviceId, true);
     await Engine.updateDependents('SERVICO', serviceId);
     
     // Reload
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     
     const [its, s] = await Promise.all([
       base44.entities.ServiceItem.filter({ servico_id: serviceId }),
@@ -171,6 +171,7 @@ export default function ServiceEditor() {
     
     setItems(its);
     setService(s);
+    toast.success("Item removido e custos atualizados");
   };
 
   // PROMPT 6: DESCRIÇÃO DIRETA (Helper para exibir)
@@ -213,11 +214,11 @@ export default function ServiceEditor() {
       custo_total_item: total
     });
 
-    await Engine.recalculateService(serviceId);
+    await Engine.recalculateService(serviceId, true);
     await Engine.updateDependents('SERVICO', serviceId);
 
     // Reload
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     
     const [its, s] = await Promise.all([
       base44.entities.ServiceItem.filter({ servico_id: serviceId }),
@@ -227,7 +228,7 @@ export default function ServiceEditor() {
     setItems(its.sort((a,b) => a.ordem - b.ordem));
     setService(s);
     setEditingItem(null);
-    toast.success("Item atualizado");
+    toast.success("Item atualizado e custos recalculados");
   };
 
   return (
