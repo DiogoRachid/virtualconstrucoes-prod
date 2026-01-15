@@ -110,11 +110,11 @@ export default function ServiceEditor() {
         return;
       }
 
-      // PROMPT 4: BLOQUEIO CIRCULAR
+      // PROMPT 4: BLOQUEIO CIRCULAR (DAG)
       if (newItem.type === 'SERVICO') {
         const hasCycle = await Engine.checkCircularDependency(serviceId, newItem.id);
         if (hasCycle) {
-          toast.error("Dependência circular não permitida.");
+          toast.error("❌ Dependência circular detectada! Este serviço não pode conter outro serviço que já o contém direta ou indiretamente.");
           return;
         }
       }
