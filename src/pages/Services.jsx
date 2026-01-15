@@ -151,10 +151,37 @@ export default function Services() {
       // Ordenar por nível de dependência (bottom-up)
       allServices.sort((a, b) => (a.nivel_max_dependencia || 0) - (b.nivel_max_dependencia || 0));
       
-      // Recalcular cada um
-      for (let i = 0; i < allServices.length; i++) {
-        await Engine.recalculateService(allServices[i].id);
-        setRecalcProgress({ current: i + 1, total });
+      // Processar em lotes de 5 serviços
+      const BATCH_SIZE = 5;
+      const DELAY_BETWEEN_BATCHES = 5000; // 5 segundos
+      const RATE_LIMIT_DELAY = 20000; // 20 segundos
+      
+      for (let i = 0; i < allServices.length; i += BATCH_SIZE) {
+        const batch = allServices.slice(i, Math.min(i + BATCH_SIZE, allServices.length));
+        
+        // Processar sequencialmente cada item do lote
+        for (const service of batch) {
+          try {
+            await Engine.recalculateService(service.id);
+            setRecalcProgress({ current: i + batch.indexOf(service) + 1, total });
+          } catch (error) {
+            // Verificar se é rate limit
+            if (error.message?.includes('rate limit') || error.status === 429) {
+              toast.warning('Aguardando rate limit (20s)...');
+              await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+              // Tentar novamente
+              await Engine.recalculateService(service.id);
+              setRecalcProgress({ current: i + batch.indexOf(service) + 1, total });
+            } else {
+              console.error('Erro ao recalcular serviço', service.id, error);
+            }
+          }
+        }
+        
+        // Aguardar 5 segundos entre lotes (exceto no último)
+        if (i + BATCH_SIZE < allServices.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        }
       }
       
       toast.success(`${total} serviços recalculados com sucesso!`);
