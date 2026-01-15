@@ -122,15 +122,24 @@ export default function AccountsPayable() {
   }, [accounts]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.AccountPayable.delete(id),
+    mutationFn: async (id) => {
+      // Primeiro, excluir transações vinculadas
+      const linkedTransactions = await base44.entities.Transaction.filter({ conta_pagar_id: id });
+      for (const transaction of linkedTransactions) {
+        await base44.entities.Transaction.delete(transaction.id);
+      }
+      // Depois, excluir a conta
+      await base44.entities.AccountPayable.delete(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       toast.success('Conta excluída');
       setDeleteId(null);
     },
     onError: (error) => {
       console.error('Erro ao excluir:', error);
-      toast.error('Erro ao excluir conta');
+      toast.error(`Erro ao excluir conta: ${error.message || 'Erro desconhecido'}`);
     }
   });
 
