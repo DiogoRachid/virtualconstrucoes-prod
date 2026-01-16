@@ -215,34 +215,43 @@ export default function Services() {
       const initialTotal = pendingItems.length;
       let currentProcessed = 0;
       let currentFailed = 0;
+      let iterationCount = 0;
+      const maxIterations = 1000; // Segurança contra loop infinito
 
       setQueueStatus({ total: initialTotal, processed: 0, failed: 0 });
       
       // Processar fila continuamente enquanto houver itens pendentes
-      while (pendingItems.length > 0) {
+      while (pendingItems.length > 0 && iterationCount < maxIterations) {
+        iterationCount++;
+        
         const result = await base44.functions.invoke('processRecalculationQueue', {});
 
         if (result.data.processed > 0 || result.data.failed > 0) {
           currentProcessed += result.data.processed;
           currentFailed += result.data.failed || 0;
           
-          setQueueStatus(prev => ({
+          setQueueStatus({
             total: initialTotal,
             processed: currentProcessed,
             failed: currentFailed
-          }));
+          });
         }
+        
+        // Aguardar 2 segundos antes de consultar novamente
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Re-consultar itens pendentes para a próxima iteração
         pendingItems = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
-
-        // Se ainda houver itens pendentes, aguardar um pouco antes do próximo lote
-        if (pendingItems.length > 0) {
-           await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        
+        console.log(`Iteração ${iterationCount}: ${pendingItems.length} itens pendentes, ${currentProcessed} processados, ${currentFailed} falharam`);
       }
       
-      toast.success('Processamento da fila concluído!');
+      if (iterationCount >= maxIterations) {
+        toast.warning(`Processamento pausado após ${maxIterations} iterações. Execute novamente se necessário.`);
+      } else {
+        toast.success(`Processamento concluído! ${currentProcessed} processados, ${currentFailed} falharam.`);
+      }
+      
       refetch();
     } catch (e) {
       toast.error("Erro ao processar fila");
