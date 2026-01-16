@@ -37,6 +37,8 @@ export default function Services() {
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [recalculating, setRecalculating] = useState(false);
   const [recalcProgress, setRecalcProgress] = useState({ current: 0, total: 0 });
+  const [processing, setProcessing] = useState(false);
+  const [queueStatus, setQueueStatus] = useState(null);
 
   const { data: services = [], isLoading, refetch } = useQuery({
     queryKey: ['services'],
@@ -137,7 +139,7 @@ export default function Services() {
   };
 
   const handleRecalculateAll = async () => {
-    if (!confirm('Adicionar TODOS os serviços à fila de recálculo? O processamento será feito em segundo plano.')) return;
+    if (!confirm('Adicionar TODOS os serviços à fila de recálculo?')) return;
     
     setRecalculating(true);
     
@@ -154,7 +156,7 @@ export default function Services() {
         });
       }
       
-      toast.success(`${total} serviços adicionados à fila! A automação processará em segundo plano.`);
+      toast.success(`${total} serviços adicionados à fila!`);
       
       refetch();
     } catch (e) {
@@ -186,7 +188,7 @@ export default function Services() {
         }
       }
       
-      toast.success(`${count} serviços adicionados à fila! A automação processará em segundo plano.`);
+      toast.success(`${count} serviços adicionados à fila!`);
       
       setSelectedIds(new Set());
       refetch();
@@ -195,6 +197,50 @@ export default function Services() {
       console.error(e);
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const handleProcessQueue = async () => {
+    setProcessing(true);
+    
+    try {
+      const queue = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
+      
+      if (queue.length === 0) {
+        toast.info('Nenhum item na fila para processar');
+        setProcessing(false);
+        return;
+      }
+
+      setQueueStatus({ total: queue.length, processed: 0, failed: 0 });
+      
+      // Processar fila continuamente
+      while (true) {
+        const result = await base44.functions.invoke('processRecalculationQueue', {});
+        
+        if (result.data.processed === 0 && result.data.remaining === 0) {
+          // Fila vazia
+          break;
+        }
+        
+        setQueueStatus(prev => ({
+          total: prev.total,
+          processed: prev.processed + result.data.processed,
+          failed: prev.failed + (result.data.failed || 0)
+        }));
+        
+        // Aguardar 2 segundos antes do próximo lote
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      toast.success('Processamento da fila concluído!');
+      refetch();
+    } catch (e) {
+      toast.error("Erro ao processar fila");
+      console.error(e);
+    } finally {
+      setProcessing(false);
+      setQueueStatus(null);
     }
   };
 
@@ -226,7 +272,7 @@ export default function Services() {
         });
       }
       
-      toast.success(`${count} serviços zerados adicionados à fila! A automação processará em segundo plano.`);
+      toast.success(`${count} serviços zerados adicionados à fila!`);
       
       refetch();
     } catch (e) {
@@ -371,6 +417,19 @@ export default function Services() {
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Recalcular Zerados
+                </>
+              )}
+          </Button>
+          <Button onClick={handleProcessQueue} disabled={processing} className="bg-blue-600 hover:bg-blue-700">
+              {processing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {queueStatus ? `Processando ${queueStatus.processed}/${queueStatus.total}` : 'Processando...'}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Processar Fila
                 </>
               )}
           </Button>
