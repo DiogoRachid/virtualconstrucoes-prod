@@ -163,10 +163,14 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
+    console.log('🔄 Iniciando processamento da fila...');
+
     // Buscar itens pendentes da fila ordenados por prioridade (menor = mais prioritário = folhas da árvore)
     const queueItems = await base44.asServiceRole.entities.RecalculationQueue.filter({
       status: 'pending'
     });
+
+    console.log(`📊 Itens pendentes encontrados: ${queueItems.length}`);
 
     if (queueItems.length === 0) {
       return Response.json({ message: 'Nenhum item na fila', processed: 0, failed: 0 });
@@ -181,13 +185,16 @@ Deno.serve(async (req) => {
 
     for (const item of batch) {
       try {
+        console.log(`⚙️ Processando serviço: ${item.service_id} (prioridade: ${item.priority})`);
+        
         // Marcar como processando
         await base44.asServiceRole.entities.RecalculationQueue.update(item.id, {
           status: 'processing'
         });
 
         // Recalcular o serviço
-        await recalculateService(base44, item.service_id);
+        const result = await recalculateService(base44, item.service_id);
+        console.log(`✅ Serviço recalculado: custo_total=${result.custo_total}`);
 
         // Adicionar serviços dependentes à fila
         await enqueueDependents(base44, item.service_id);
@@ -195,9 +202,11 @@ Deno.serve(async (req) => {
         // Remover da fila (sucesso)
         await base44.asServiceRole.entities.RecalculationQueue.delete(item.id);
         processed++;
+        console.log(`✔️ Serviço ${item.service_id} processado com sucesso`);
 
       } catch (error) {
-        console.error(`Erro ao processar serviço ${item.service_id}:`, error);
+        console.error(`❌ Erro ao processar serviço ${item.service_id}:`, error.message);
+        console.error('Stack:', error.stack);
         
         // Incrementar retry_count
         const newRetryCount = (item.retry_count || 0) + 1;
@@ -224,6 +233,8 @@ Deno.serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
+    console.log(`🏁 Processamento finalizado: ${processed} processados, ${failed} falharam`);
+
     return Response.json({
       success: true,
       processed,
@@ -231,7 +242,8 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Erro ao processar fila:', error);
+    console.error('❌ Erro crítico ao processar fila:', error.message);
+    console.error('Stack:', error.stack);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
