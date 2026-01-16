@@ -2,15 +2,15 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Fórmula da Curva S: Y = 1 - [1-n^u]^s
-// n = coeficiente de forma (recomendado 1.5 a 2.5)
-// u = coeficiente logarítmico de inflexão (recomendado 2 a 3)
-// s = número de ordem do período / número total de períodos
-const calculateSCurve = (months, n = 2, u = 2.5) => {
+// Fórmula da Curva S: Y = 1 - (1 - n^u)^s
+// s = coeficiente de forma (adotado 2 conforme imagem)
+// u = coeficiente logarítmico de inflexão (~1.77 para 50% em 50% do tempo)
+// n = período normalizado (mês_atual / duração_total)
+const calculateSCurve = (months, s = 2, u = 1.77) => {
   const data = [];
   for (let i = 1; i <= months; i++) {
-    const s = i / months;
-    const y = 1 - Math.pow(1 - Math.pow(n * s, u), 1);
+    const n = i / months;
+    const y = 1 - Math.pow(1 - Math.pow(n, u), s);
     data.push(y * 100);
   }
   return data;
@@ -52,7 +52,7 @@ const calculateScheduleCurve = (schedule, stages, items, months) => {
 export default function SCurveChart({ schedule, stages, items, months }) {
   const chartData = useMemo(() => {
     const idealCurve = calculateIdealCurve(months);
-    const projectedCurve = calculateSCurve(months, 2, 2.5);
+    const projectedCurve = calculateSCurve(months, 2, 1.77);
     const scheduleCurve = calculateScheduleCurve(schedule, stages, items, months);
     
     return Array.from({ length: months }).map((_, idx) => ({
@@ -79,7 +79,7 @@ export default function SCurveChart({ schedule, stages, items, months }) {
                 label={{ value: 'Avanço Físico (%)', angle: -90, position: 'insideLeft' }}
               />
               <Tooltip 
-                formatter={(value) => `${value.toFixed(2)}%`}
+                formatter={(value) => `${Number(value).toFixed(2)}%`}
                 labelStyle={{ color: '#000' }}
               />
               <Legend />
@@ -123,7 +123,7 @@ export default function SCurveChart({ schedule, stages, items, months }) {
               <div className="w-4 h-0.5 bg-orange-500"></div>
               <span className="font-medium text-sm">Curva S Projetada</span>
             </div>
-            <p className="text-xs text-slate-600">Baseada na fórmula: Y = 1 - [1-n^u]^s</p>
+            <p className="text-xs text-slate-600">Fórmula: Y = 1 - (1-n^u)^s | s=2, u=1.77 (50% em 50% do tempo)</p>
           </div>
 
           <div className="p-4 border rounded-lg">

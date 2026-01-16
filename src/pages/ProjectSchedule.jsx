@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Calendar, TrendingUp, PieChart as PieChartIcon, Users } from 'lucide-react';
+import { toast } from "sonner";
 import ScheduleEditor from '@/components/planner/ScheduleEditor';
 import SCurveChart from '@/components/planner/SCurveChart';
 import ABCAnalysis from '@/components/planner/ABCAnalysis';
@@ -14,6 +15,7 @@ import StaffingCalculator from '@/components/planner/StaffingCalculator';
 export default function ProjectSchedule() {
   const urlParams = new URLSearchParams(window.location.search);
   const budgetId = urlParams.get('budgetId');
+  const queryClient = useQueryClient();
 
   const [schedule, setSchedule] = useState({});
   const [months, setMonths] = useState(12);
@@ -48,6 +50,37 @@ export default function ProjectSchedule() {
   const handleScheduleChange = (newSchedule, newMonths) => {
     setSchedule(newSchedule);
     setMonths(newMonths);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ schedule, months }) => {
+      const updates = [];
+      for (const stageId in schedule) {
+        const stageData = schedule[stageId];
+        const distribuicao_mensal = stageData.percentages.map((percentual, idx) => ({
+          mes: idx + 1,
+          percentual
+        }));
+        updates.push(
+          base44.entities.ProjectStage.update(stageId, {
+            distribuicao_mensal,
+            duracao_meses: months
+          })
+        );
+      }
+      await Promise.all(updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectStages', budgetId] });
+      toast.success('Cronograma salvo com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao salvar cronograma');
+    }
+  });
+
+  const handleSave = (schedule, months) => {
+    saveMutation.mutate({ schedule, months });
   };
 
   if (!budgetId) {
@@ -144,6 +177,8 @@ export default function ProjectSchedule() {
             stages={stages}
             items={items}
             onChange={handleScheduleChange}
+            onSave={handleSave}
+            isSaving={saveMutation.isPending}
           />
         </TabsContent>
 

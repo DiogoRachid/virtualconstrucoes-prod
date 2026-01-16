@@ -5,20 +5,35 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, Save } from 'lucide-react';
 
-export default function ScheduleEditor({ budget, stages, items, onChange }) {
+export default function ScheduleEditor({ budget, stages, items, onChange, onSave, isSaving }) {
   const [months, setMonths] = useState(12);
   const [schedule, setSchedule] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: 'ordem', direction: 'asc' });
 
   useEffect(() => {
-    // Inicializar schedule com as etapas
+    // Inicializar schedule com as etapas (carregando de distribuicao_mensal se existir)
     const initialSchedule = {};
     stages.forEach(stage => {
-      initialSchedule[stage.id] = {
-        percentages: Array(months).fill(0),
-        total: 0
-      };
+      if (stage.distribuicao_mensal && stage.distribuicao_mensal.length > 0) {
+        // Carregar dados salvos
+        const percentages = Array(months).fill(0);
+        stage.distribuicao_mensal.forEach(d => {
+          if (d.mes >= 1 && d.mes <= months) {
+            percentages[d.mes - 1] = d.percentual || 0;
+          }
+        });
+        initialSchedule[stage.id] = {
+          percentages,
+          total: percentages.reduce((sum, p) => sum + p, 0)
+        };
+      } else {
+        initialSchedule[stage.id] = {
+          percentages: Array(months).fill(0),
+          total: 0
+        };
+      }
     });
     setSchedule(initialSchedule);
   }, [stages, months]);
@@ -58,10 +73,34 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
     onChange && onChange(newSchedule, newMonths);
   };
 
+  // Calcular valor da etapa incluindo subetapas recursivamente
   const getStageValue = (stageId) => {
-    return items
+    // Valor direto da etapa
+    let value = items
       .filter(item => item.stage_id === stageId)
       .reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    
+    // Adicionar valores das subetapas
+    const subStages = stages.filter(s => s.parent_stage_id === stageId);
+    subStages.forEach(subStage => {
+      value += getStageValue(subStage.id);
+    });
+    
+    return value;
+  };
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const handleSave = () => {
+    if (onSave) {
+      onSave(schedule, months);
+    }
   };
 
   const getMonthlyValue = (stageId, monthIndex) => {
@@ -86,6 +125,32 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
     return stages.reduce((sum, stage) => sum + getCumulativeValue(stage.id, monthIndex), 0);
   };
 
+  const getCumulativePercentage = (monthIndex) => {
+    const totalBudget = budget?.total_final || 0;
+    if (totalBudget === 0) return 0;
+    return (getTotalCumulative(monthIndex) / totalBudget) * 100;
+  };
+
+  // Filtrar e ordenar etapas principais (sem parent_stage_id) com valor > 0
+  const mainStages = stages
+    .filter(stage => !stage.parent_stage_id && getStageValue(stage.id) > 0)
+    .sort((a, b) => {
+      if (sortConfig.key === 'nome') {
+        return sortConfig.direction === 'asc' 
+          ? a.nome.localeCompare(b.nome)
+          : b.nome.localeCompare(a.nome);
+      }
+      if (sortConfig.key === 'valor') {
+        const valueA = getStageValue(a.id);
+        const valueB = getStageValue(b.id);
+        return sortConfig.direction === 'asc' ? valueA - valueB : valueB - valueA;
+      }
+      // ordem padrão
+      return sortConfig.direction === 'asc' 
+        ? (a.ordem || 0) - (b.ordem || 0)
+        : (b.ordem || 0) - (a.ordem || 0);
+    });
+
   const renderStageRow = (stage, level = 0) => {
     const stageValue = getStageValue(stage.id);
     const stageData = schedule[stage.id];
@@ -93,40 +158,31 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
     const isOverLimit = stageData?.total > 100;
 
     return (
-      <React.Fragment key={stage.id}>
-        <TableRow className={level > 0 ? 'bg-slate-50' : ''}>
-          <TableCell className="font-medium sticky left-0 bg-white z-10">
-            <div style={{ paddingLeft: `${level * 20}px` }}>
-              {level > 0 && <span className="text-slate-400 mr-2">└─</span>}
-              {stage.nome}
-            </div>
+      <TableRow key={stage.id}>
+        <TableCell className="font-medium sticky left-0 bg-white z-10">
+          {stage.nome}
+        </TableCell>
+        <TableCell className="text-right text-sm">
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stageValue)}
+        </TableCell>
+        {Array.from({ length: months }).map((_, idx) => (
+          <TableCell key={idx} className="p-1">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={stageData?.percentages[idx]?.toFixed(2) || '0.00'}
+              onChange={(e) => handlePercentageChange(stage.id, idx, e.target.value)}
+              className="h-8 w-16 text-xs text-center"
+            />
           </TableCell>
-          <TableCell className="text-right text-sm">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stageValue)}
-          </TableCell>
-          {Array.from({ length: months }).map((_, idx) => (
-            <TableCell key={idx} className="p-1">
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={stageData?.percentages[idx] || 0}
-                onChange={(e) => handlePercentageChange(stage.id, idx, e.target.value)}
-                className="h-8 w-16 text-xs text-center"
-              />
-            </TableCell>
-          ))}
-          <TableCell className={`text-right font-bold ${isOverLimit ? 'text-red-600' : isComplete ? 'text-green-600' : 'text-slate-600'}`}>
-            {stageData?.total.toFixed(1)}%
-            {isOverLimit && <AlertCircle className="inline h-4 w-4 ml-1" />}
-          </TableCell>
-        </TableRow>
-        {/* Subetapas */}
-        {stages
-          .filter(s => s.parent_stage_id === stage.id)
-          .map(subStage => renderStageRow(subStage, level + 1))}
-      </React.Fragment>
+        ))}
+        <TableCell className={`text-right font-bold ${isOverLimit ? 'text-red-600' : isComplete ? 'text-green-600' : 'text-slate-600'}`}>
+          {stageData?.total.toFixed(2)}%
+          {isOverLimit && <AlertCircle className="inline h-4 w-4 ml-1" />}
+        </TableCell>
+      </TableRow>
     );
   };
 
@@ -137,21 +193,36 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
           <CardTitle className="text-base">Configuração do Cronograma</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Label>Duração do Projeto (meses):</Label>
-              <Input
-                type="number"
-                min="1"
-                max="60"
-                value={months}
-                onChange={(e) => handleMonthsChange(e.target.value)}
-                className="w-20"
-              />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label>Duração do Projeto (meses):</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={months}
+                  onChange={(e) => handleMonthsChange(e.target.value)}
+                  className="w-20"
+                />
+              </div>
+              <div className="text-sm text-slate-500">
+                Defina os percentuais de execução mensais para cada etapa
+              </div>
             </div>
-            <div className="text-sm text-slate-500">
-              Defina os percentuais de execução mensais para cada etapa
-            </div>
+            <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Salvar Cronograma
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -162,8 +233,18 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-white z-10 min-w-[200px]">Etapa</TableHead>
-                  <TableHead className="text-right min-w-[120px]">Valor Total</TableHead>
+                  <TableHead className="sticky left-0 bg-white z-10 min-w-[200px]">
+                    <Button variant="ghost" onClick={() => handleSort('nome')} className="h-8 px-2 gap-1">
+                      Etapa
+                      <ArrowUpDown className="h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[120px]">
+                    <Button variant="ghost" onClick={() => handleSort('valor')} className="h-8 px-2 gap-1 ml-auto">
+                      Valor Total
+                      <ArrowUpDown className="h-3 w-3" />
+                    </Button>
+                  </TableHead>
                   {Array.from({ length: months }).map((_, idx) => (
                     <TableHead key={idx} className="text-center min-w-[80px]">
                       Mês {idx + 1}
@@ -173,9 +254,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stages
-                  .filter(stage => !stage.parent_stage_id)
-                  .map(stage => renderStageRow(stage))}
+                {mainStages.map(stage => renderStageRow(stage))}
                 
                 {/* Linha de Totais Mensais */}
                 <TableRow className="bg-slate-100 font-bold border-t-2">
@@ -185,7 +264,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
                   </TableCell>
                   {Array.from({ length: months }).map((_, idx) => (
                     <TableCell key={idx} className="text-center text-xs">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(getTotalMonthly(idx))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalMonthly(idx))}
                     </TableCell>
                   ))}
                   <TableCell></TableCell>
@@ -197,7 +276,19 @@ export default function ScheduleEditor({ budget, stages, items, onChange }) {
                   <TableCell></TableCell>
                   {Array.from({ length: months }).map((_, idx) => (
                     <TableCell key={idx} className="text-center text-xs">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(getTotalCumulative(idx))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalCumulative(idx))}
+                    </TableCell>
+                  ))}
+                  <TableCell></TableCell>
+                </TableRow>
+
+                {/* Linha de Percentual Acumulado */}
+                <TableRow className="bg-blue-100 font-bold">
+                  <TableCell className="sticky left-0 bg-blue-100 z-10">% ACUMULADO</TableCell>
+                  <TableCell></TableCell>
+                  {Array.from({ length: months }).map((_, idx) => (
+                    <TableCell key={idx} className="text-center text-xs text-blue-900">
+                      {getCumulativePercentage(idx).toFixed(2)}%
                     </TableCell>
                   ))}
                   <TableCell></TableCell>
