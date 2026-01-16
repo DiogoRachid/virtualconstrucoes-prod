@@ -30,6 +30,12 @@ export default function ProjectSchedule() {
     enabled: !!budgetId
   });
 
+  const { data: stages = [], isLoading: loadingStages } = useQuery({
+    queryKey: ['projectStages', budgetId],
+    queryFn: () => base44.entities.ProjectStage.filter({ orcamento_id: budgetId }),
+    enabled: !!budgetId
+  });
+
   // Carregar duração do projeto do orçamento
   useEffect(() => {
     if (budget?.duracao_meses) {
@@ -42,12 +48,6 @@ export default function ProjectSchedule() {
       }
     }
   }, [budget, stages]);
-
-  const { data: stages = [], isLoading: loadingStages } = useQuery({
-    queryKey: ['projectStages', budgetId],
-    queryFn: () => base44.entities.ProjectStage.filter({ orcamento_id: budgetId }),
-    enabled: !!budgetId
-  });
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ['budgetItems', budgetId],
