@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, Clock, RefreshCw, Trash2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, RefreshCw, Trash2, AlertCircle, Play } from 'lucide-react';
 import { toast } from "sonner";
 import {
   Table,
@@ -23,7 +23,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function QueueManager({ open, onOpenChange }) {
-  const queryClient = useQueryClient();
   const [processing, setProcessing] = useState(false);
   const [processStatus, setProcessStatus] = useState(null);
   
@@ -31,12 +30,13 @@ export default function QueueManager({ open, onOpenChange }) {
     queryKey: ['recalculationQueue'],
     queryFn: () => base44.entities.RecalculationQueue.list(),
     enabled: open,
-    refetchInterval: open ? 3000 : false
+    refetchInterval: open && !processing ? 3000 : false
   });
 
   const { data: services = [] } = useQuery({
     queryKey: ['services'],
-    queryFn: () => base44.entities.Service.list()
+    queryFn: () => base44.entities.Service.list(),
+    enabled: open
   });
 
   const retryMutation = useMutation({
@@ -48,11 +48,7 @@ export default function QueueManager({ open, onOpenChange }) {
       });
     },
     onSuccess: () => {
-      toast.success('Item reenfileirado para processamento');
       refetch();
-    },
-    onError: () => {
-      toast.error('Erro ao reenviar item');
     }
   });
 
@@ -63,9 +59,6 @@ export default function QueueManager({ open, onOpenChange }) {
     onSuccess: () => {
       toast.success('Item removido da fila');
       refetch();
-    },
-    onError: () => {
-      toast.error('Erro ao remover item');
     }
   });
 
@@ -75,13 +68,67 @@ export default function QueueManager({ open, onOpenChange }) {
       await Promise.all(itemsToDelete.map(item => base44.entities.RecalculationQueue.delete(item.id)));
     },
     onSuccess: (_, status) => {
-      toast.success(`Todos os itens ${status === 'failed' ? 'falhados' : status} removidos`);
+      toast.success(`Todos os itens ${status === 'failed' ? 'falhados' : 'concluídos'} removidos`);
       refetch();
-    },
-    onError: () => {
-      toast.error('Erro ao limpar fila');
     }
   });
+
+  const handleProcessQueue = async () => {
+    setProcessing(true);
+    setProcessStatus({ processed: 0, failed: 0 });
+    
+    try {
+      let iterationCount = 0;
+      const maxIterations = 1000;
+      let currentProcessed = 0;
+      let currentFailed = 0;
+      
+      while (iterationCount < maxIterations) {
+        iterationCount++;
+        
+        // Invocar função backend
+        const result = await base44.functions.invoke('processRecalculationQueue', {});
+        
+        if (result.data.processed === 0 && result.data.failed === 0) {
+          // Nenhum item processado, sair do loop
+          break;
+        }
+
+        currentProcessed += result.data.processed || 0;
+        currentFailed += result.data.failed || 0;
+        
+        // Consultar itens pendentes restantes
+        const pendingItems = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
+        
+        setProcessStatus({
+          processed: currentProcessed,
+          failed: currentFailed,
+          remaining: pendingItems.length
+        });
+
+        if (pendingItems.length === 0) {
+          break;
+        }
+
+        // Aguardar antes da próxima iteração
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      
+      if (iterationCount >= maxIterations) {
+        toast.warning(`Processamento pausado após ${maxIterations} iterações`);
+      } else {
+        toast.success(`Processamento concluído! ${currentProcessed} processados, ${currentFailed} falharam`);
+      }
+      
+      refetch();
+    } catch (e) {
+      toast.error("Erro ao processar fila: " + e.message);
+      console.error(e);
+    } finally {
+      setProcessing(false);
+      setProcessStatus(null);
+    }
+  };
 
   const getServiceName = (serviceId) => {
     const service = services.find(s => s.id === serviceId);
@@ -106,63 +153,6 @@ export default function QueueManager({ open, onOpenChange }) {
     );
   };
 
-  const handleProcessQueue = async () => {
-    setProcessing(true);
-    setProcessStatus({ processed: 0, failed: 0 });
-    
-    try {
-      let pendingItems = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
-      
-      if (pendingItems.length === 0) {
-        toast.info('Nenhum item pendente para processar');
-        setProcessing(false);
-        return;
-      }
-
-      let currentProcessed = 0;
-      let currentFailed = 0;
-      let iterationCount = 0;
-      const maxIterations = 1000;
-      
-      while (pendingItems.length > 0 && iterationCount < maxIterations) {
-        iterationCount++;
-        
-        const result = await base44.functions.invoke('processRecalculationQueue', {});
-
-        if (result.data.processed > 0 || result.data.failed > 0) {
-          currentProcessed += result.data.processed;
-          currentFailed += result.data.failed || 0;
-        }
-        
-        pendingItems = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
-        
-        setProcessStatus({
-          processed: currentProcessed,
-          failed: currentFailed,
-          remaining: pendingItems.length
-        });
-
-        if (pendingItems.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-      
-      if (iterationCount >= maxIterations) {
-        toast.warning(`Processamento pausado após ${maxIterations} iterações`);
-      } else {
-        toast.success(`Processamento concluído! ${currentProcessed} processados, ${currentFailed} falharam`);
-      }
-      
-      refetch();
-    } catch (e) {
-      toast.error("Erro ao processar fila");
-      console.error(e);
-    } finally {
-      setProcessing(false);
-      setProcessStatus(null);
-    }
-  };
-
   const pendingCount = queueItems.filter(item => item.status === 'pending').length;
   const processingCount = queueItems.filter(item => item.status === 'processing').length;
   const failedCount = queueItems.filter(item => item.status === 'failed').length;
@@ -175,15 +165,15 @@ export default function QueueManager({ open, onOpenChange }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh]">
+      <DialogContent className="max-w-5xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>Gerenciador de Fila de Recálculo</DialogTitle>
           <DialogDescription>
-            Monitore e gerencie o processamento dos serviços na fila
+            Monitore e gerencie o processamento dos serviços
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-4 gap-3">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
             <div className="flex items-center gap-2 text-yellow-700 mb-1">
               <Clock className="h-4 w-4" />
@@ -217,7 +207,7 @@ export default function QueueManager({ open, onOpenChange }) {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2">
           {pendingCount > 0 && (
             <Button
               size="sm"
@@ -228,12 +218,12 @@ export default function QueueManager({ open, onOpenChange }) {
               {processing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {processStatus ? `Processando ${processStatus.processed} (${processStatus.remaining} restantes)` : 'Processando...'}
+                  {processStatus ? `${processStatus.processed} (${processStatus.remaining} restantes)` : 'Processando...'}
                 </>
               ) : (
                 <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Processar Fila Agora ({pendingCount})
+                  <Play className="h-4 w-4 mr-2" />
+                  Processar Agora ({pendingCount})
                 </>
               )}
             </Button>
@@ -258,13 +248,13 @@ export default function QueueManager({ open, onOpenChange }) {
                   if (confirm(`Reprocessar ${failedCount} itens falhados?`)) {
                     const failedItems = queueItems.filter(item => item.status === 'failed');
                     await Promise.all(failedItems.map(item => retryMutation.mutateAsync(item.id)));
-                    toast.success(`${failedCount} itens reenfileirados. Clique em "Processar Fila Agora" para iniciar.`);
+                    toast.success(`${failedCount} itens reenfileirados`);
                   }
                 }}
                 disabled={processing}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Reprocessar Todos Falhados
+                Reprocessar Falhados
               </Button>
               <Button
                 variant="destructive"
@@ -315,10 +305,9 @@ export default function QueueManager({ open, onOpenChange }) {
                 <TableRow>
                   <TableHead>Serviço</TableHead>
                   <TableHead className="w-32">Status</TableHead>
-                  <TableHead className="w-24">Tentativas</TableHead>
-                  <TableHead className="w-24">Prioridade</TableHead>
+                  <TableHead className="w-20">Tentativas</TableHead>
                   <TableHead>Erro</TableHead>
-                  <TableHead className="w-32">Ações</TableHead>
+                  <TableHead className="w-24">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -330,11 +319,8 @@ export default function QueueManager({ open, onOpenChange }) {
                     <TableCell>
                       {getStatusBadge(item.status)}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center text-xs">
                       {item.retry_count || 0}/3
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item.priority || 0}
                     </TableCell>
                     <TableCell>
                       {item.error_message && (
@@ -346,16 +332,13 @@ export default function QueueManager({ open, onOpenChange }) {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {(item.status === 'failed' || item.status === 'pending') && (
+                        {item.status === 'failed' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={async () => {
-                              await retryMutation.mutateAsync(item.id);
-                              toast.info('Item reenfileirado. Use "Processar Fila Agora" para iniciar.');
-                            }}
-                            disabled={retryMutation.isPending || processing}
-                            title="Reenviar para fila"
+                            onClick={() => retryMutation.mutate(item.id)}
+                            disabled={processing}
+                            title="Reenviar"
                           >
                             <RefreshCw className="h-3 w-3" />
                           </Button>
@@ -368,8 +351,8 @@ export default function QueueManager({ open, onOpenChange }) {
                               deleteMutation.mutate(item.id);
                             }
                           }}
-                          disabled={deleteMutation.isPending || processing}
-                          title="Remover da fila"
+                          disabled={processing}
+                          title="Remover"
                         >
                           <Trash2 className="h-3 w-3 text-red-600" />
                         </Button>
