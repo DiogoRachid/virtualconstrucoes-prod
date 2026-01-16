@@ -84,6 +84,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 const ServiceSelector = ({ services, onSelect, selectedServices = [] }) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -99,45 +100,62 @@ const ServiceSelector = ({ services, onSelect, selectedServices = [] }) => {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[500px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Buscar por nome ou código..." />
+        <Command shouldFilter={false}>
+          <CommandInput 
+            placeholder="Buscar por nome ou código..." 
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
             <CommandEmpty>Nenhum serviço encontrado.</CommandEmpty>
             <CommandGroup>
-              {services.map((service) => {
-                const isSelected = selectedServices.includes(service.id);
-                return (
-                  <CommandItem
-                    key={service.id}
-                    value={`${service.codigo} ${service.descricao}`}
-                    onSelect={() => {
-                      onSelect(service.id);
-                      setOpen(false);
-                    }}
-                    className={isSelected ? 'bg-blue-50' : ''}
-                  >
-                    <Check
+              {services
+                .filter(service => {
+                  if (!search) return true;
+                  const searchLower = search.toLowerCase();
+                  return (
+                    service.codigo?.toLowerCase().includes(searchLower) ||
+                    service.descricao?.toLowerCase().includes(searchLower)
+                  );
+                })
+                .map((service) => {
+                  const isSelected = selectedServices.includes(service.id);
+                  return (
+                    <CommandItem
+                      key={service.id}
+                      value={service.id}
+                      onSelect={(value) => {
+                        onSelect(value);
+                        setOpen(false);
+                        setSearch('');
+                      }}
                       className={cn(
-                        "mr-2 h-4 w-4",
-                        isSelected ? "opacity-100 text-blue-600" : "opacity-0"
+                        "cursor-pointer",
+                        isSelected && 'bg-blue-50'
                       )}
-                    />
-                    <div className="flex flex-col flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{service.descricao}</span>
-                        <span className="text-xs font-semibold text-blue-600 ml-2">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.custo_total)}
-                        </span>
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          isSelected ? "opacity-100 text-blue-600" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex flex-col flex-1 pointer-events-none">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{service.descricao}</span>
+                          <span className="text-xs font-semibold text-blue-600 ml-2">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.custo_total)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">{service.codigo}</span>
+                          <span className="text-xs text-slate-400">•</span>
+                          <span className="text-xs text-slate-500">{service.unidade || 'UN'}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500">{service.codigo}</span>
-                        <span className="text-xs text-slate-400">•</span>
-                        <span className="text-xs text-slate-500">{service.unidade || 'UN'}</span>
-                      </div>
-                    </div>
-                  </CommandItem>
-                );
-              })}
+                    </CommandItem>
+                  );
+                })}
             </CommandGroup>
           </CommandList>
         </Command>
