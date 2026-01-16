@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,24 +23,24 @@ const getAllInputsFromService = async (serviceId, services, serviceItems, inputs
     const itemQuantity = (item.quantidade || 0) * multiplier;
     const itemCost = item.custo_unitario || 0;
     
-    if (item.tipo === 'INPUT' && item.input_id) {
+    if (item.tipo_item === 'INSUMO' && item.item_id) {
       // É um insumo direto
-      const input = inputs.find(inp => inp.id === item.input_id);
+      const input = inputs.find(inp => inp.id === item.item_id);
       if (input) {
         resultInputs.push({
-          id: item.input_id,
-          code: input.codigo || item.codigo,
-          description: input.descricao || item.descricao,
-          unit: input.unidade || item.unidade,
-          category: input.categoria || item.categoria,
+          id: item.item_id,
+          code: input.codigo,
+          description: input.descricao,
+          unit: input.unidade,
+          category: item.categoria,
           quantity: itemQuantity,
-          unitCost: itemCost,
-          value: itemQuantity * itemCost
+          unitCost: item.custo_unitario_snapshot || input.valor_unitario || 0,
+          value: itemQuantity * (item.custo_unitario_snapshot || input.valor_unitario || 0)
         });
       }
-    } else if (item.tipo === 'SERVICE' && item.servico_id) {
+    } else if (item.tipo_item === 'SERVICO' && item.item_id) {
       // É um sub-serviço, buscar recursivamente
-      const subInputs = await getAllInputsFromService(item.servico_id, services, serviceItems, inputs, itemQuantity);
+      const subInputs = await getAllInputsFromService(item.item_id, services, serviceItems, inputs, itemQuantity);
       resultInputs.push(...subInputs);
     }
   }
@@ -158,55 +159,7 @@ export default function ABCAnalysis({ items, services }) {
     return classifyABC(Object.values(serviceMap));
   }, [items]);
 
-  const inputAnalysis = useMemo(() => {
-    const processInputs = async () => {
-      const inputMap = {};
-      
-      // Carregar ServiceItems e Inputs
-      const serviceItems = await base44.entities.ServiceItem.list();
-      const allInputs = await base44.entities.Input.list();
-      
-      for (const budgetItem of items) {
-        const service = services.find(s => s.id === budgetItem.servico_id);
-        if (!service) continue;
-        
-        // Buscar todos os insumos recursivamente
-        const itemInputs = await getAllInputsFromService(
-          budgetItem.servico_id, 
-          services, 
-          serviceItems, 
-          allInputs, 
-          budgetItem.quantidade || 0
-        );
-        
-        // Agregar insumos
-        itemInputs.forEach(input => {
-          const key = `${input.code}_${input.description}`;
-          
-          if (!inputMap[key]) {
-            inputMap[key] = {
-              id: input.id,
-              code: input.code,
-              description: input.description,
-              value: 0,
-              quantity: 0,
-              unit: input.unit,
-              category: input.category
-            };
-          }
-          
-          inputMap[key].value += input.value;
-          inputMap[key].quantity += input.quantity;
-        });
-      }
-      
-      return classifyABC(Object.values(inputMap));
-    };
-    
-    // Como não podemos usar async no useMemo, vamos retornar um array vazio
-    // e usar um useEffect para processar
-    return [];
-  }, [items, services]);
+
 
   const getClassificationStats = (analysis) => {
     const stats = { A: 0, B: 0, C: 0 };
@@ -311,7 +264,20 @@ export default function ABCAnalysis({ items, services }) {
       </TabsContent>
       
       <TabsContent value="inputs" className="space-y-6">
-        {renderAnalysisTable(inputAnalysis, 'Insumos')}
+        {isLoadingInputs ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-slate-600">Carregando análise de insumos...</p>
+            </div>
+          </div>
+        ) : inputAnalysisData.length > 0 ? (
+          renderAnalysisTable(inputAnalysisData, 'Insumos')
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-slate-500">Nenhum insumo encontrado</p>
+          </div>
+        )}
       </TabsContent>
     </Tabs>
   );
