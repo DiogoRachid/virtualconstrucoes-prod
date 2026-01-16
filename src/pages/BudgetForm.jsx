@@ -383,8 +383,8 @@ export default function BudgetForm() {
         savedBudgetId = newBudget.id;
       }
 
-      // Create ProjectStages (não BudgetStage) and Map IDs
-      const stageMap = {}; // tempId -> realId
+      // Create ProjectStages and Map IDs
+      const stageMap = {}; // old/tempId -> realId
       
       // Sort stages to keep order
       const sortedStages = [...stages].sort((a, b) => a.ordem - b.ordem);
@@ -396,31 +396,18 @@ export default function BudgetForm() {
           nome: stage.nome,
           ordem: stage.ordem,
           descricao: stage.descricao || '',
-          duracao_meses: 1,
+          duracao_meses: stage.duracao_meses || 1,
           parent_stage_id: parentId
         });
-        stageMap[stage.id || stage.tempId] = createdStage.id;
+        // Map both the ID and tempId to the new ID
+        if (stage.id) stageMap[stage.id] = createdStage.id;
+        if (stage.tempId) stageMap[stage.tempId] = createdStage.id;
       }
 
       // Create Items with new Stage IDs
       if (items.length > 0) {
         await Promise.all(items.map(item => {
-           const realStageId = item.stage_id ? (stageMap[item.stage_id] || item.stage_id) : null;
-           // If stage_id was null (uncategorized), it stays null.
-           // If stage_id was a tempId from new stage, it gets mapped.
-           // If stage_id was an old ID from deleted stage (if we didn't recreate), we would need care.
-           // Since we recreated everything, we assume item.stage_id refers to one of the objects in `stages` state.
-           // If user added item to "Existing Stage A", item.stage_id is "ID_A".
-           // But we deleted "ID_A" and created new "ID_New_A".
-           // Problem: item.stage_id points to old ID.
-           // Fix: We need to map old IDs to new IDs too?
-           // Easier: Map by index? Or name?
-           // Let's rely on the fact that `stages` state contains the IDs we are mapping.
-           
-           // Actually, since we deleted old stages, we must map EVERYTHING.
-           // But `stageMap` only has mapping for stages in `stages` array.
-           // If `stages` contains objects with old IDs, `stageMap` will have `oldID -> newID`.
-           // So `stageMap[item.stage_id]` should work for both tempIds and oldIds.
+           const realStageId = item.stage_id ? (stageMap[item.stage_id] || null) : null;
            
            return base44.entities.BudgetItem.create({
             orcamento_id: savedBudgetId,
