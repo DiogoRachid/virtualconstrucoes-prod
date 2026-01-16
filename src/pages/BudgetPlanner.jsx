@@ -353,11 +353,12 @@ export default function BudgetPlanner() {
       </div>
 
       <Tabs defaultValue="cronograma" className="space-y-6">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
           <TabsTrigger value="equipes">Equipes</TabsTrigger>
           <TabsTrigger value="curva-abc">Curva ABC</TabsTrigger>
           <TabsTrigger value="etapas">Etapas</TabsTrigger>
+          <TabsTrigger value="config-etapas">Config. Etapas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cronograma" className="space-y-6">
