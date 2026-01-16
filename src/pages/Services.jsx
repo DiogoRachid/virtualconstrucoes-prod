@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Layers, Plus, Search, MoreHorizontal, Pencil, Trash2, Calendar, Loader2, RefreshCw } from 'lucide-react';
+import { Layers, Plus, Search, MoreHorizontal, Pencil, Trash2, Calendar, Loader2, RefreshCw, ListChecks } from 'lucide-react';
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import QueueManager from '@/components/services/QueueManager';
 
 export default function Services() {
   const [search, setSearch] = useState('');
@@ -39,6 +40,7 @@ export default function Services() {
   const [recalcProgress, setRecalcProgress] = useState({ current: 0, total: 0 });
   const [processing, setProcessing] = useState(false);
   const [queueStatus, setQueueStatus] = useState(null);
+  const [queueManagerOpen, setQueueManagerOpen] = useState(false);
 
   const { data: services = [], isLoading, refetch } = useQuery({
     queryKey: ['services'],
@@ -454,6 +456,10 @@ export default function Services() {
                 </>
               )}
           </Button>
+          <Button variant="outline" onClick={() => setQueueManagerOpen(true)}>
+              <ListChecks className="mr-2 h-4 w-4" />
+              Gerenciar Fila
+          </Button>
           <Button variant="outline" onClick={() => setOpenBulk(true)}>
               <Calendar className="mr-2 h-4 w-4" /> Alterar Data Base Global
           </Button>
@@ -499,6 +505,8 @@ export default function Services() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QueueManager open={queueManagerOpen} onOpenChange={setQueueManagerOpen} />
     </div>
   );
 }
