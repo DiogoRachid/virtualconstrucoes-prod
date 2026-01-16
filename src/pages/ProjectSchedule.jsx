@@ -30,6 +30,19 @@ export default function ProjectSchedule() {
     enabled: !!budgetId
   });
 
+  // Carregar duração do projeto do orçamento
+  useEffect(() => {
+    if (budget?.duracao_meses) {
+      setMonths(budget.duracao_meses);
+    } else if (stages.length > 0) {
+      // Tentar carregar da primeira etapa que tiver duracao_meses
+      const stageWithDuration = stages.find(s => s.duracao_meses);
+      if (stageWithDuration) {
+        setMonths(stageWithDuration.duracao_meses);
+      }
+    }
+  }, [budget, stages]);
+
   const { data: stages = [], isLoading: loadingStages } = useQuery({
     queryKey: ['projectStages', budgetId],
     queryFn: () => base44.entities.ProjectStage.filter({ orcamento_id: budgetId }),
@@ -55,6 +68,15 @@ export default function ProjectSchedule() {
   const saveMutation = useMutation({
     mutationFn: async ({ schedule, months }) => {
       const updates = [];
+      
+      // Atualizar duração no orçamento
+      updates.push(
+        base44.entities.Budget.update(budgetId, {
+          duracao_meses: months
+        })
+      );
+      
+      // Atualizar etapas
       for (const stageId in schedule) {
         const stageData = schedule[stageId];
         const distribuicao_mensal = stageData.percentages.map((percentual, idx) => ({
@@ -72,6 +94,7 @@ export default function ProjectSchedule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectStages', budgetId] });
+      queryClient.invalidateQueries({ queryKey: ['budget', budgetId] });
       toast.success('Cronograma salvo com sucesso!');
     },
     onError: () => {

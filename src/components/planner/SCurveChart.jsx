@@ -4,9 +4,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 // Fórmula da Curva S: Y = 1 - (1 - n^u)^s
 // s = coeficiente de forma (adotado 2 conforme imagem)
-// u = coeficiente logarítmico de inflexão (~1.77 para 50% em 50% do tempo)
+// u = coeficiente logarítmico de inflexão (4.24 para 50% em 50% do tempo)
 // n = período normalizado (mês_atual / duração_total)
-const calculateSCurve = (months, s = 2, u = 1.77) => {
+const calculateSCurve = (months, s = 2, u = 4.24) => {
   const data = [];
   for (let i = 1; i <= months; i++) {
     const n = i / months;
@@ -52,7 +52,7 @@ const calculateScheduleCurve = (schedule, stages, items, months) => {
 export default function SCurveChart({ schedule, stages, items, months }) {
   const chartData = useMemo(() => {
     const idealCurve = calculateIdealCurve(months);
-    const projectedCurve = calculateSCurve(months, 2, 1.77);
+    const projectedCurve = calculateSCurve(months, 2, 4.24);
     const scheduleCurve = calculateScheduleCurve(schedule, stages, items, months);
     
     return Array.from({ length: months }).map((_, idx) => ({
@@ -123,7 +123,7 @@ export default function SCurveChart({ schedule, stages, items, months }) {
               <div className="w-4 h-0.5 bg-orange-500"></div>
               <span className="font-medium text-sm">Curva S Projetada</span>
             </div>
-            <p className="text-xs text-slate-600">Fórmula: Y = 1 - (1-n^u)^s | s=2, u=1.77 (50% em 50% do tempo)</p>
+            <p className="text-xs text-slate-600">Fórmula: Y = 1 - (1-n^u)^s | s=2, u=4.24 (50% em 50% do tempo)</p>
           </div>
 
           <div className="p-4 border rounded-lg">

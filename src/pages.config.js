@@ -32,6 +32,7 @@ import PayrollForm from './pages/PayrollForm';
 import Payrolls from './pages/Payrolls';
 import ProjectDetail from './pages/ProjectDetail';
 import ProjectForm from './pages/ProjectForm';
+import ProjectSchedule from './pages/ProjectSchedule';
 import Projects from './pages/Projects';
 import Reports from './pages/Reports';
 import ServiceEditor from './pages/ServiceEditor';
@@ -49,7 +50,6 @@ import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
-import ProjectSchedule from './pages/ProjectSchedule';
 import __Layout from './Layout.jsx';
 
 
@@ -88,6 +88,7 @@ export const PAGES = {
     "Payrolls": Payrolls,
     "ProjectDetail": ProjectDetail,
     "ProjectForm": ProjectForm,
+    "ProjectSchedule": ProjectSchedule,
     "Projects": Projects,
     "Reports": Reports,
     "ServiceEditor": ServiceEditor,
@@ -105,7 +106,6 @@ export const PAGES = {
     "Transactions": Transactions,
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
-    "ProjectSchedule": ProjectSchedule,
 }
 
 export const pagesConfig = {

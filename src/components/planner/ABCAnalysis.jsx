@@ -11,6 +11,41 @@ const COLORS_ABC = {
   C: '#10b981'
 };
 
+// Função recursiva para buscar todos os insumos de um serviço
+const getAllInputsFromService = (service, services, multiplier = 1) => {
+  const inputs = [];
+  
+  if (!service || !service.items_snapshot) return inputs;
+  
+  service.items_snapshot.forEach(item => {
+    const itemQuantity = (item.quantidade || 0) * multiplier;
+    const itemCost = item.custo_unitario || 0;
+    
+    if (item.tipo === 'INPUT' || item.categoria === 'MATERIAL' || item.categoria === 'MAO_OBRA') {
+      // É um insumo direto
+      inputs.push({
+        id: item.input_id || item.id,
+        code: item.codigo,
+        description: item.descricao,
+        unit: item.unidade,
+        category: item.categoria,
+        quantity: itemQuantity,
+        unitCost: itemCost,
+        value: itemQuantity * itemCost
+      });
+    } else if (item.tipo === 'SERVICE' && item.servico_id) {
+      // É um sub-serviço, buscar recursivamente
+      const subService = services.find(s => s.id === item.servico_id);
+      if (subService) {
+        const subInputs = getAllInputsFromService(subService, services, itemQuantity);
+        inputs.push(...subInputs);
+      }
+    }
+  });
+  
+  return inputs;
+};
+
 const classifyABC = (items) => {
   // Ordenar por valor decrescente
   const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -62,29 +97,29 @@ export default function ABCAnalysis({ items, services }) {
     
     items.forEach(budgetItem => {
       const service = services.find(s => s.id === budgetItem.servico_id);
-      if (!service || !service.items_snapshot) return;
+      if (!service) return;
       
-      service.items_snapshot.forEach(serviceItem => {
-        const key = serviceItem.input_id || serviceItem.servico_id;
-        if (!key) return;
+      // Buscar todos os insumos recursivamente
+      const allInputs = getAllInputsFromService(service, services, budgetItem.quantidade || 0);
+      
+      // Agregar insumos
+      allInputs.forEach(input => {
+        const key = `${input.code}_${input.description}`;
         
         if (!inputMap[key]) {
           inputMap[key] = {
-            id: key,
-            code: serviceItem.codigo,
-            description: serviceItem.descricao,
+            id: input.id,
+            code: input.code,
+            description: input.description,
             value: 0,
             quantity: 0,
-            unit: serviceItem.unidade,
-            category: serviceItem.categoria
+            unit: input.unit,
+            category: input.category
           };
         }
         
-        const itemQuantity = (budgetItem.quantidade || 0) * (serviceItem.quantidade || 0);
-        const itemValue = itemQuantity * (serviceItem.custo_unitario || 0);
-        
-        inputMap[key].value += itemValue;
-        inputMap[key].quantity += itemQuantity;
+        inputMap[key].value += input.value;
+        inputMap[key].quantity += input.quantity;
       });
     });
     

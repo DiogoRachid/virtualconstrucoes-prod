@@ -118,11 +118,11 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
   };
 
   const getTotalMonthly = (monthIndex) => {
-    return stages.reduce((sum, stage) => sum + getMonthlyValue(stage.id, monthIndex), 0);
+    return mainStages.reduce((sum, stage) => sum + getMonthlyValue(stage.id, monthIndex), 0);
   };
 
   const getTotalCumulative = (monthIndex) => {
-    return stages.reduce((sum, stage) => sum + getCumulativeValue(stage.id, monthIndex), 0);
+    return mainStages.reduce((sum, stage) => sum + getCumulativeValue(stage.id, monthIndex), 0);
   };
 
   const getCumulativePercentage = (monthIndex) => {
