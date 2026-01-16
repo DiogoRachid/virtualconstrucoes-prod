@@ -218,6 +218,7 @@ export default function ProjectSchedule() {
           <ABCAnalysis
             items={items}
             services={services}
+            budget={budget}
           />
         </TabsContent>
 

@@ -143,7 +143,7 @@ export default function ABCAnalysis({ items, services, budget }) {
     
     items.forEach(item => {
       // Usar custo direto sem BDI
-      const custoDirecto = (item.custo_material || 0) + (item.custo_mao_obra || 0);
+      const custoDirecto = item.custo_direto_total || 0;
       
       if (!serviceMap[item.servico_id]) {
         serviceMap[item.servico_id] = {
@@ -155,7 +155,7 @@ export default function ABCAnalysis({ items, services, budget }) {
           unit: item.unidade
         };
       }
-      serviceMap[item.servico_id].value += custoDirecto * (item.quantidade || 0);
+      serviceMap[item.servico_id].value += custoDirecto;
       serviceMap[item.servico_id].quantity += item.quantidade || 0;
     });
     
