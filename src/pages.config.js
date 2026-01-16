@@ -8,6 +8,7 @@ import BankAccounts from './pages/BankAccounts';
 import BenefitAssignment from './pages/BenefitAssignment';
 import Benefits from './pages/Benefits';
 import BudgetForm from './pages/BudgetForm';
+import BudgetPlanner from './pages/BudgetPlanner';
 import Budgets from './pages/Budgets';
 import ClientDetail from './pages/ClientDetail';
 import ClientForm from './pages/ClientForm';
@@ -48,7 +49,6 @@ import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
-import BudgetPlanner from './pages/BudgetPlanner';
 import __Layout from './Layout.jsx';
 
 
@@ -63,6 +63,7 @@ export const PAGES = {
     "BenefitAssignment": BenefitAssignment,
     "Benefits": Benefits,
     "BudgetForm": BudgetForm,
+    "BudgetPlanner": BudgetPlanner,
     "Budgets": Budgets,
     "ClientDetail": ClientDetail,
     "ClientForm": ClientForm,
@@ -103,7 +104,6 @@ export const PAGES = {
     "Transactions": Transactions,
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
-    "BudgetPlanner": BudgetPlanner,
 }
 
 export const pagesConfig = {

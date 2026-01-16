@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageHeader from '@/components/ui/PageHeader';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Badge } from '@/components/ui/badge';
+import StageServiceDistribution from '@/components/planner/StageServiceDistribution';
 
 const CORES_ABC = {
   A: '#ef4444',
@@ -33,6 +34,7 @@ export default function BudgetPlanner() {
   const [curvaABC_servicos, setCurvaABC_Servicos] = useState([]);
   const [curvaABC_insumos, setCurvaABC_Insumos] = useState([]);
   const [calculando, setCalculando] = useState(false);
+  const [editingStage, setEditingStage] = useState(null);
 
   // Buscar orçamento e itens
   const { data: budget } = useQuery({
@@ -724,6 +726,14 @@ export default function BudgetPlanner() {
                           </div>
                         </div>
                         <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setEditingStage(stage)}
+                        >
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Distribuir Serviços
+                        </Button>
+                        <Button 
                           variant="ghost" 
                           size="icon"
                           onClick={() => {
@@ -756,6 +766,15 @@ export default function BudgetPlanner() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {editingStage && (
+        <StageServiceDistribution
+          stage={editingStage}
+          budget={budget}
+          duracao_meses={duracao_meses}
+          onClose={() => setEditingStage(null)}
+        />
+      )}
     </div>
   );
 }
