@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
     });
 
     if (queueItems.length === 0) {
-      return Response.json({ message: 'Nenhum item na fila', processed: 0 });
+      return Response.json({ message: 'Nenhum item na fila', processed: 0, failed: 0 });
     }
 
     // Ordenar por prioridade e pegar até 5 itens
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
           await base44.asServiceRole.entities.RecalculationQueue.update(item.id, {
             status: 'pending',
             retry_count: newRetryCount,
-            error_message: error.message
+            error_message: null
           });
         }
         failed++;

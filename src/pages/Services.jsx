@@ -216,7 +216,7 @@ export default function Services() {
       let currentProcessed = 0;
       let currentFailed = 0;
       let iterationCount = 0;
-      const maxIterations = 1000; // Segurança contra loop infinito
+      const maxIterations = 1000;
 
       setQueueStatus({ total: initialTotal, processed: 0, failed: 0 });
       
@@ -229,19 +229,22 @@ export default function Services() {
         if (result.data.processed > 0 || result.data.failed > 0) {
           currentProcessed += result.data.processed;
           currentFailed += result.data.failed || 0;
-          
-          setQueueStatus({
-            total: initialTotal,
-            processed: currentProcessed,
-            failed: currentFailed
-          });
         }
         
-        // Aguardar 2 segundos antes de consultar novamente
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Re-consultar itens pendentes para a próxima iteração
+        // Sempre re-consultar o banco de dados para obter os itens pendentes mais atualizados
         pendingItems = await base44.entities.RecalculationQueue.filter({ status: 'pending' });
+        
+        setQueueStatus({
+          total: initialTotal,
+          processed: currentProcessed,
+          failed: currentFailed,
+          remaining: pendingItems.length
+        });
+
+        // Aguardar 2 segundos antes da próxima iteração
+        if (pendingItems.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         
         console.log(`Iteração ${iterationCount}: ${pendingItems.length} itens pendentes, ${currentProcessed} processados, ${currentFailed} falharam`);
       }
@@ -442,7 +445,7 @@ export default function Services() {
               {processing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {queueStatus ? `Processando ${queueStatus.processed}/${queueStatus.total}` : 'Processando...'}
+                  {queueStatus ? `Processando ${queueStatus.processed}/${queueStatus.total} (${queueStatus.remaining} restantes)` : 'Processando...'}
                 </>
               ) : (
                 <>
