@@ -24,6 +24,7 @@ import {
 import { printBudget } from '@/components/budgets/BudgetPrinter';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import BudgetStageEditor from '@/components/planner/BudgetStageEditor';
 import {
   Command,
   CommandEmpty,
@@ -152,6 +153,7 @@ export default function BudgetForm() {
   const [newStageName, setNewStageName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [collapsedStages, setCollapsedStages] = useState({});
+  const [showStageEditor, setShowStageEditor] = useState(false);
 
   // Aux Data
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => base44.entities.Project.list() });
@@ -549,7 +551,9 @@ export default function BudgetForm() {
   }]).filter(d => d.value > 0);
 
   return (
-    <div className="pb-20">
+    <>
+      <BudgetStageEditor open={showStageEditor} onClose={() => setShowStageEditor(false)} />
+      <div className="pb-20">
       {/* Header Toolbar */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -631,9 +635,27 @@ export default function BudgetForm() {
                 <Button 
                   size="sm" 
                   variant="outline"
-                  onClick={() => window.location.href = createPageUrl('BudgetPlanner') + '?tab=config-etapas'}
+                  onClick={() => setShowStageEditor(true)}
                 >
                   <Pencil className="h-4 w-4 mr-2" /> Editar Etapas Padrão
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const defaultStages = await base44.entities.BudgetStage.list();
+                    const mappedStages = defaultStages.sort((a, b) => a.ordem - b.ordem).map(s => ({
+                      tempId: `stage-${s.id}-${Date.now()}`,
+                      nome: s.nome,
+                      ordem: stages.length + s.ordem,
+                      descricao: s.descricao || '',
+                      cor: s.cor
+                    }));
+                    setStages([...stages, ...mappedStages]);
+                    toast.success('Etapas padrão adicionadas');
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Adicionar Todas Etapas Padrão
                 </Button>
               </div>
 
@@ -756,5 +778,6 @@ export default function BudgetForm() {
         </div>
       </div>
     </div>
+    </>
   );
 }
