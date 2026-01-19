@@ -1,12 +1,40 @@
 import { base44 } from '@/api/base44Client';
 
-// --- PROMPT 4: BLOQUEIO DE LOOP ---
+// Cache global para otimização
+let cachedInputs = null;
+let cachedServices = null;
+let cacheTime = null;
+const CACHE_DURATION = 30000; // 30 segundos
+
+// Limpar cache quando necessário
+export const clearCache = () => {
+  cachedInputs = null;
+  cachedServices = null;
+  cacheTime = null;
+};
+
+// Buscar todos os dados com cache
+const getCachedData = async () => {
+  const now = Date.now();
+  if (!cacheTime || (now - cacheTime) > CACHE_DURATION) {
+    const [inputs, services] = await Promise.all([
+      base44.entities.Input.list(),
+      base44.entities.Service.list()
+    ]);
+    cachedInputs = new Map(inputs.map(i => [i.id, i]));
+    cachedServices = new Map(services.map(s => [s.id, s]));
+    cacheTime = now;
+  }
+  return { inputMap: cachedInputs, serviceMap: cachedServices };
+};
+
+// Verificar dependência circular
 export const checkCircularDependency = async (serviceId, targetItemId) => {
-  // Se o item a ser adicionado é o próprio serviço
   if (serviceId === targetItemId) return true;
 
-  // Verificar se targetItemId já depende de serviceId (indireta)
-  // BFS ou DFS na árvore de dependências
+  const { serviceMap } = await getCachedData();
+  const allItems = await base44.entities.ServiceItem.list();
+  
   const visited = new Set();
   const queue = [targetItemId];
 
@@ -14,182 +42,156 @@ export const checkCircularDependency = async (serviceId, targetItemId) => {
     const currentId = queue.shift();
     if (visited.has(currentId)) continue;
     visited.add(currentId);
+    if (currentId === serviceId) return true;
 
-    if (currentId === serviceId) return true; // Loop detectado
-
-    // Buscar itens deste serviço que sejam do tipo SERVICO
-    // Nota: Isso pode ser pesado se não houver backend function, 
-    // mas para MVP frontend-only fazemos via queries.
-    const items = await base44.entities.ServiceItem.filter({
-      servico_id: currentId,
-      tipo_item: 'SERVICO'
-    });
-
+    const items = allItems.filter(i => i.servico_id === currentId && i.tipo_item === 'SERVICO');
     for (const item of items) {
       queue.push(item.item_id);
     }
   }
-
   return false;
 };
 
-// --- PROMPT 2: MOTOR DE CÁLCULO DETERMINÍSTICO ---
-// Helper para buscar tudo (paginação)
-export const fetchAll = async (entityName) => {
-  let allData = [];
-  let page = 0;
-  const limit = 1000;
-  while (true) {
-    const data = await base44.entities[entityName].list('created_date', limit, page * limit);
-    if (!data || data.length === 0) break;
-    allData.push(...data);
-    if (data.length < limit) break;
-    page++;
-  }
-  return allData;
-};
-
-// Helper para parsear data "MM/AAAA"
+// Parser de data
 const parseDate = (str) => {
-  if (!str) return new Date(9999, 11, 31); // Futuro se nulo
+  if (!str) return null;
   const [mes, ano] = str.split('/');
-  if (!mes || !ano) return new Date(9999, 11, 31);
+  if (!mes || !ano) return null;
   return new Date(parseInt(ano), parseInt(mes) - 1, 1);
 };
 
-export const recalculateService = async (serviceId, forceUpdate = false) => {
-  // 1. Buscar itens
+// Recalcular serviço individual
+export const recalculateService = async (serviceId) => {
   const items = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
+  const { inputMap, serviceMap } = await getCachedData();
   
   let custoMaterial = 0;
   let custoMaoObra = 0;
   let maxNivelDep = 0;
+  let dataBaseMaisAntiga = null;
 
-  // Carregar dados de referência (snapshot de valor)
+  // Processar todos os itens
+  const updatePromises = [];
+  
   for (const item of items) {
     let unitCost = 0;
 
     if (item.tipo_item === 'INSUMO') {
-      const insumo = await base44.entities.Input.filter({ id: item.item_id }).then(r => r[0]);
-      unitCost = insumo ? insumo.valor_unitario : 0;
-    } else {
-      const subService = await base44.entities.Service.filter({ id: item.item_id }).then(r => r[0]);
-      unitCost = subService ? subService.custo_total : 0;
-      if (subService && subService.nivel_max_dependencia >= maxNivelDep) {
-        maxNivelDep = subService.nivel_max_dependencia + 1;
+      const insumo = inputMap.get(item.item_id);
+      if (insumo) {
+        unitCost = insumo.valor_unitario || 0;
+        const totalItem = item.quantidade * unitCost;
+
+        if (insumo.categoria === 'MAO_OBRA') {
+          custoMaoObra += totalItem;
+        } else {
+          custoMaterial += totalItem;
+        }
+
+        if (insumo.data_base) {
+          const dataItem = parseDate(insumo.data_base);
+          if (dataItem && (!dataBaseMaisAntiga || dataItem < dataBaseMaisAntiga)) {
+            dataBaseMaisAntiga = dataItem;
+          }
+        }
+      }
+    } else if (item.tipo_item === 'SERVICO') {
+      const subService = serviceMap.get(item.item_id);
+      if (subService) {
+        unitCost = subService.custo_total || 0;
+        const totalItem = item.quantidade * unitCost;
+
+        if (subService.custo_total > 0) {
+          const matRatio = (subService.custo_material || 0) / subService.custo_total;
+          const laborRatio = (subService.custo_mao_obra || 0) / subService.custo_total;
+          custoMaterial += totalItem * matRatio;
+          custoMaoObra += totalItem * laborRatio;
+        }
+
+        const depLevel = subService.nivel_max_dependencia || 0;
+        if (depLevel >= maxNivelDep) {
+          maxNivelDep = depLevel + 1;
+        }
       }
     }
 
     const totalItem = item.quantidade * unitCost;
-
-    // Atualizar item sempre (ou se mudou e não é forceUpdate)
-    const needsUpdate = forceUpdate || 
-      Math.abs(item.custo_unitario_snapshot - unitCost) > 0.0001 || 
-      Math.abs(item.custo_total_item - totalItem) > 0.0001;
-      
-    if (needsUpdate) {
-      try {
-        await base44.entities.ServiceItem.update(item.id, {
+    
+    // Atualizar item se mudou
+    if (Math.abs((item.custo_unitario_snapshot || 0) - unitCost) > 0.0001 || 
+        Math.abs((item.custo_total_item || 0) - totalItem) > 0.0001) {
+      updatePromises.push(
+        base44.entities.ServiceItem.update(item.id, {
           custo_unitario_snapshot: unitCost,
           custo_total_item: totalItem
-        });
-      } catch (e) {
-        // Ignorar se o item foi deletado
-        console.warn('Falha ao atualizar item de serviço', item.id, e);
-      }
-    }
-
-    if (item.tipo_item === 'SERVICO') {
-      // Para sub-serviços, herdamos a quebra de custos proporcional
-      const subService = await base44.entities.Service.filter({ id: item.item_id }).then(r => r[0]);
-      if (subService) {
-        const matRatio = subService.custo_total ? (subService.custo_material / subService.custo_total) : 0;
-        const laborRatio = subService.custo_total ? (subService.custo_mao_obra / subService.custo_total) : 0;
-
-        custoMaterial += totalItem * matRatio;
-        custoMaoObra += totalItem * laborRatio;
-      } else {
-        // Fallback para categoria do item se serviço não encontrado ou vazio
-        if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
-        else custoMaterial += totalItem;
-      }
-    } else {
-      // Para insumos, PRIORIDADE TOTAL para a categoria do cadastro do INSUMO
-      const insumo = await base44.entities.Input.filter({ id: item.item_id }).then(r => r[0]);
-      if (insumo) {
-        // Se o insumo tem categoria definida, usamos ela
-        if (insumo.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
-        else custoMaterial += totalItem;
-      } else {
-        // Fallback se não achar insumo (usa snapshot do item)
-        if (item.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
-        else custoMaterial += totalItem;
-      }
+        }).catch(() => {}) // Ignorar erros de itens deletados
+      );
     }
   }
 
+  // Aguardar todas as atualizações de itens
+  await Promise.all(updatePromises);
+
   const custoTotal = custoMaterial + custoMaoObra;
 
-      // Calcular data_base baseada no insumo mais antigo
-      let dataBaseMaisAntiga = null;
-      const parseDate = (str) => {
-        if (!str) return null;
-        const [mes, ano] = str.split('/');
-        if (!mes || !ano) return null;
-        return new Date(parseInt(ano), parseInt(mes) - 1, 1);
-      };
+  // Formatar data base
+  let dataBaseStr = null;
+  if (dataBaseMaisAntiga) {
+    const mes = String(dataBaseMaisAntiga.getMonth() + 1).padStart(2, '0');
+    const ano = dataBaseMaisAntiga.getFullYear();
+    dataBaseStr = `${mes}/${ano}`;
+  }
 
-      for (const item of items) {
-        if (item.tipo_item === 'INSUMO') {
-          const insumo = await base44.entities.Input.filter({ id: item.item_id }).then(r => r[0]);
-          if (insumo?.data_base) {
-            const dataItem = parseDate(insumo.data_base);
-            if (dataItem && (!dataBaseMaisAntiga || dataItem < dataBaseMaisAntiga)) {
-              dataBaseMaisAntiga = dataItem;
-            }
-          }
-        }
-      }
+  // Atualizar serviço
+  await base44.entities.Service.update(serviceId, {
+    custo_material: custoMaterial,
+    custo_mao_obra: custoMaoObra,
+    custo_total: custoTotal,
+    nivel_max_dependencia: maxNivelDep,
+    data_base: dataBaseStr
+  });
 
-      // Formatar data_base de volta para MM/YYYY
-      let dataBaseStr = null;
-      if (dataBaseMaisAntiga) {
-        const mes = String(dataBaseMaisAntiga.getMonth() + 1).padStart(2, '0');
-        const ano = dataBaseMaisAntiga.getFullYear();
-        dataBaseStr = `${mes}/${ano}`;
-      }
-
-      // 6. Salvar no serviço - SEMPRE atualiza para garantir sincronização
-      try {
-        await base44.entities.Service.update(serviceId, {
-          custo_material: custoMaterial,
-          custo_mao_obra: custoMaoObra,
-          custo_total: custoTotal,
-          nivel_max_dependencia: maxNivelDep,
-          data_base: dataBaseStr
-        });
-      } catch (e) {
-        console.error('Erro ao atualizar serviço', serviceId, e);
-        throw e;
-      }
+  // Atualizar cache
+  const service = serviceMap.get(serviceId);
+  if (service) {
+    service.custo_material = custoMaterial;
+    service.custo_mao_obra = custoMaoObra;
+    service.custo_total = custoTotal;
+    service.nivel_max_dependencia = maxNivelDep;
+    service.data_base = dataBaseStr;
+  }
 
   return { custo_total: custoTotal, custo_material: custoMaterial, custo_mao_obra: custoMaoObra, data_base: dataBaseStr };
 };
 
-// --- PROMPT 3: ATUALIZAÇÃO EM CASCATA ---
+// Atualizar dependentes em cascata
 export const updateDependents = async (itemType, itemId) => {
-  // Localizar serviços que usam este item
-  const dependentItems = await base44.entities.ServiceItem.filter({
-    tipo_item: itemType,
-    item_id: itemId
-  });
-
-  // Obter IDs dos serviços pais únicos
+  const allItems = await base44.entities.ServiceItem.list();
+  const dependentItems = allItems.filter(i => i.tipo_item === itemType && i.item_id === itemId);
   const parentServiceIds = [...new Set(dependentItems.map(d => d.servico_id))];
 
   for (const serviceId of parentServiceIds) {
     await recalculateService(serviceId);
-    // Recursão
     await updateDependents('SERVICO', serviceId);
   }
+};
+
+// Recalcular múltiplos serviços em lote
+export const recalculateMultipleServices = async (serviceIds, onProgress) => {
+  clearCache(); // Limpar cache antes de começar
+  await getCachedData(); // Carregar dados frescos
+  
+  const results = [];
+  for (let i = 0; i < serviceIds.length; i++) {
+    try {
+      const result = await recalculateService(serviceIds[i]);
+      results.push({ serviceId: serviceIds[i], success: true, ...result });
+      if (onProgress) onProgress(i + 1, serviceIds.length);
+    } catch (error) {
+      results.push({ serviceId: serviceIds[i], success: false, error: error.message });
+    }
+  }
+  
+  clearCache(); // Limpar cache no final
+  return results;
 };

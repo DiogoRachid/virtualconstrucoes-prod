@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Layers, MoreHorizontal, Pencil, Trash2, Settings } from 'lucide-react';
+import { Layers, MoreHorizontal, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as Engine from '@/components/logic/CompositionEngine';
@@ -17,15 +17,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import QueueManager from '@/components/services/QueueManager';
-import ServiceActions from '@/components/services/ServiceActions';
 
 export default function Services() {
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [queueManagerOpen, setQueueManagerOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   const { data: services = [], isLoading, refetch } = useQuery({
     queryKey: ['services'],
@@ -91,6 +88,29 @@ export default function Services() {
     } catch(e) {
       toast.error("Erro ao excluir serviços.");
       console.error(e);
+    }
+  };
+
+  const handleRecalculateSelected = async () => {
+    if (selectedIds.size === 0) {
+      toast.error('Selecione ao menos um serviço');
+      return;
+    }
+
+    setRecalculating(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await Engine.recalculateMultipleServices(ids, (current, total) => {
+        toast.loading(`Recalculando ${current}/${total}...`, { id: 'recalc' });
+      });
+      toast.success('Serviços recalculados!', { id: 'recalc' });
+      setSelectedIds(new Set());
+      refetch();
+    } catch (e) {
+      toast.error('Erro ao recalcular');
+      console.error(e);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -187,21 +207,24 @@ export default function Services() {
           placeholder="Buscar serviço..." 
         />
         <div className="flex flex-wrap gap-2">
-          {selectedIds.size > 0 && (
-            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-              <Trash2 className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Excluir ({selectedIds.size})</span>
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setActionsOpen(true)}>
-            <Settings className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Ações em Massa</span>
-          </Button>
-          <Button size="sm" onClick={() => setQueueManagerOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Layers className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Gerenciar Fila</span>
-          </Button>
-        </div>
+            {selectedIds.size > 0 && (
+              <>
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                  <Trash2 className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Excluir ({selectedIds.size})</span>
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleRecalculateSelected}
+                  disabled={recalculating}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <RefreshCw className={`h-4 w-4 sm:mr-2 ${recalculating ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Recalcular ({selectedIds.size})</span>
+                </Button>
+              </>
+            )}
+          </div>
       </div>
 
       <DataTable
@@ -221,14 +244,7 @@ export default function Services() {
         } 
       />
 
-      <QueueManager open={queueManagerOpen} onOpenChange={setQueueManagerOpen} />
-      <ServiceActions 
-        open={actionsOpen} 
-        onOpenChange={setActionsOpen}
-        selectedIds={selectedIds}
-        onClearSelection={() => setSelectedIds(new Set())}
-        onRefresh={refetch}
-      />
+
     </div>
   );
 }
