@@ -93,8 +93,12 @@ export default function StaffingCalculator({ schedule, stages, items, services, 
                   const funcao = descricao || 'Não Identificado';
                   functionsSet.add(funcao);
 
+                  // Quantidade do insumo que será executada neste mês
                   const quantidadeMensal = (input.quantity * percentage) / 100;
-                  const horasMes = quantidadeMensal * (input.horas_por_unidade || 0);
+                  
+                  // Se horas_por_unidade não estiver definido, usar a própria quantidade como horas
+                  const horasPorUnidade = input.horas_por_unidade || 1;
+                  const horasMes = quantidadeMensal * horasPorUnidade;
 
                   hoursByFunction[funcao] = (hoursByFunction[funcao] || 0) + horasMes;
                 }
