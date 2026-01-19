@@ -83,7 +83,7 @@ export default function StaffingCalculator({ schedule, stages, items, services, 
                   const descricao = input.descricao || '';
                   
                   // Filtrar insumos que não são funções (benefícios/custos indiretos)
-                  const palavrasExcluidas = ['alimentação', 'epi', 'exames', 'ferramentas', 'seguro', 'transporte'];
+                  const palavrasExcluidas = ['alimentação', 'alimentacao', 'epi', 'exames', 'ferramentas', 'seguro', 'transporte'];
                   const deveExcluir = palavrasExcluidas.some(palavra => 
                     descricao.toLowerCase().includes(palavra)
                   );
