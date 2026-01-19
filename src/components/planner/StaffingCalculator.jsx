@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,79 +12,126 @@ const COLORS = [
   '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
 ];
 
+// Função recursiva para buscar todos os insumos de um serviço (mesma lógica do ABCAnalysis)
+const getAllInputsFromService = async (serviceId, services, serviceItems, inputs, multiplier = 1) => {
+  const resultInputs = [];
+  
+  const items = serviceItems.filter(si => si.servico_id === serviceId);
+  
+  for (const item of items) {
+    const itemQuantity = (item.quantidade || 0) * multiplier;
+    
+    if (item.tipo_item === 'INSUMO' && item.item_id) {
+      const input = inputs.find(inp => inp.id === item.item_id);
+      if (input) {
+        resultInputs.push({
+          id: item.item_id,
+          descricao: input.descricao,
+          categoria: input.categoria,
+          quantity: itemQuantity,
+          horas_por_unidade: input.horas_por_unidade || 0
+        });
+      }
+    } else if (item.tipo_item === 'SERVICO' && item.item_id) {
+      const subInputs = await getAllInputsFromService(item.item_id, services, serviceItems, inputs, itemQuantity);
+      resultInputs.push(...subInputs);
+    }
+  }
+  
+  return resultInputs;
+};
+
 export default function StaffingCalculator({ schedule, stages, items, services, months }) {
   const [expandedMonths, setExpandedMonths] = useState({});
+  const [staffingData, setStaffingData] = useState({ monthlyData: [], allFunctions: [] });
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Carregar todos os inputs
-  const { data: inputs = [], isLoading } = useQuery({
-    queryKey: ['inputs'],
-    queryFn: () => base44.entities.Input.list()
-  });
+  useEffect(() => {
+    const calculateStaffing = async () => {
+      setIsLoading(true);
+      try {
+        const [allInputs, serviceItems] = await Promise.all([
+          base44.entities.Input.list(),
+          base44.entities.ServiceItem.list()
+        ]);
 
-  const inputMap = useMemo(() => {
-    return new Map(inputs.map(input => [input.id, input]));
-  }, [inputs]);
+        const monthlyData = [];
+        const functionsSet = new Set();
 
-  const staffingData = useMemo(() => {
-    if (!inputs.length) return { monthlyData: [], allFunctions: [] };
+        for (let monthIdx = 0; monthIdx < months; monthIdx++) {
+          const hoursByFunction = {};
 
-    const monthlyData = [];
-    const functionsSet = new Set();
+          for (const stage of stages) {
+            const stageItems = items.filter(item => item.stage_id === stage.id);
+            const percentage = schedule[stage.id]?.percentages[monthIdx] || 0;
 
-    for (let monthIdx = 0; monthIdx < months; monthIdx++) {
-      const hoursByFunction = {};
+            if (percentage === 0) continue;
 
-      stages.forEach(stage => {
-        const stageItems = items.filter(item => item.stage_id === stage.id);
-        const percentage = schedule[stage.id]?.percentages[monthIdx] || 0;
+            for (const budgetItem of stageItems) {
+              // Buscar todos os insumos recursivamente (Curva ABC)
+              const itemInputs = await getAllInputsFromService(
+                budgetItem.servico_id,
+                services,
+                serviceItems,
+                allInputs,
+                budgetItem.quantidade || 0
+              );
 
-        stageItems.forEach(budgetItem => {
-          const service = services.find(s => s.id === budgetItem.servico_id);
-          if (!service || !service.items_snapshot) return;
+              // Processar apenas insumos de mão de obra
+              itemInputs.forEach(input => {
+                if (input.categoria === 'MAO_OBRA') {
+                  const funcao = input.descricao || 'Não Identificado';
+                  functionsSet.add(funcao);
 
-          service.items_snapshot.forEach(serviceItem => {
-            if (serviceItem.categoria === 'MAO_OBRA' && serviceItem.item_id) {
-              const inputDetails = inputMap.get(serviceItem.item_id);
-              const funcao = inputDetails?.descricao || 'Não Identificado';
-              
-              functionsSet.add(funcao);
+                  const quantidadeMensal = (input.quantity * percentage) / 100;
+                  const horasMes = quantidadeMensal * (input.horas_por_unidade || 0);
 
-              const horasPorUnidade = serviceItem.horas_por_unidade || 1;
-              const quantidadeMensal = (budgetItem.quantidade * percentage) / 100;
-              const horasMes = quantidadeMensal * horasPorUnidade;
-
-              hoursByFunction[funcao] = (hoursByFunction[funcao] || 0) + horasMes;
+                  hoursByFunction[funcao] = (hoursByFunction[funcao] || 0) + horasMes;
+                }
+              });
             }
+          }
+
+          const workersByFunction = {};
+          let totalWorkers = 0;
+          let totalHours = 0;
+
+          for (const funcao in hoursByFunction) {
+            const workers = Math.ceil(hoursByFunction[funcao] / HORAS_TRABALHO_MES);
+            workersByFunction[funcao] = workers;
+            totalWorkers += workers;
+            totalHours += hoursByFunction[funcao];
+          }
+
+          monthlyData.push({
+            month: monthIdx + 1,
+            monthName: `Mês ${monthIdx + 1}`,
+            totalHours,
+            totalWorkers,
+            hoursByFunction,
+            workersByFunction
           });
+        }
+
+        setStaffingData({
+          monthlyData,
+          allFunctions: Array.from(functionsSet).sort()
         });
-      });
-
-      const workersByFunction = {};
-      let totalWorkers = 0;
-      let totalHours = 0;
-
-      for (const funcao in hoursByFunction) {
-        const workers = Math.ceil(hoursByFunction[funcao] / HORAS_TRABALHO_MES);
-        workersByFunction[funcao] = workers;
-        totalWorkers += workers;
-        totalHours += hoursByFunction[funcao];
+      } catch (error) {
+        console.error('Erro ao calcular recursos:', error);
+        setStaffingData({ monthlyData: [], allFunctions: [] });
+      } finally {
+        setIsLoading(false);
       }
-
-      monthlyData.push({
-        month: monthIdx + 1,
-        monthName: `Mês ${monthIdx + 1}`,
-        totalHours,
-        totalWorkers,
-        hoursByFunction,
-        workersByFunction
-      });
-    }
-
-    return {
-      monthlyData,
-      allFunctions: Array.from(functionsSet).sort()
     };
-  }, [schedule, stages, items, services, inputs, inputMap, months]);
+
+    if (items.length > 0 && services.length > 0) {
+      calculateStaffing();
+    } else {
+      setStaffingData({ monthlyData: [], allFunctions: [] });
+      setIsLoading(false);
+    }
+  }, [schedule, stages, items, services, months]);
 
   const totalStats = useMemo(() => {
     if (!staffingData.monthlyData.length) return { totalHours: 0, maxWorkers: 0, avgWorkers: 0, functionPeaks: {} };
