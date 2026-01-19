@@ -139,7 +139,7 @@ export default function AccountsPayable() {
         const [bankAccount] = await base44.entities.BankAccount.filter({ id: account.conta_bancaria_id });
         if (bankAccount) {
           await base44.entities.BankAccount.update(account.conta_bancaria_id, {
-            saldo_atual: (bankAccount.saldo_atual || 0) - account.valor
+            saldo_atual: Number(bankAccount.saldo_atual || 0) - Number(account.valor || 0)
           });
         }
       }
@@ -185,7 +185,7 @@ export default function AccountsPayable() {
           const [bankAccount] = await base44.entities.BankAccount.filter({ id: account.conta_bancaria_id });
           if (bankAccount) {
             await base44.entities.BankAccount.update(account.conta_bancaria_id, {
-              saldo_atual: (bankAccount.saldo_atual || 0) - account.valor
+              saldo_atual: Number(bankAccount.saldo_atual || 0) - Number(account.valor || 0)
             });
           }
         }
@@ -259,11 +259,11 @@ export default function AccountsPayable() {
 
   const totalEmAberto = accounts
     .filter(a => a.status === 'em_aberto')
-    .reduce((sum, a) => sum + (a.valor || 0), 0);
+    .reduce((sum, a) => sum + Number(a.valor || 0), 0);
 
   const totalAtrasado = accounts
     .filter(a => a.status === 'atrasado')
-    .reduce((sum, a) => sum + (a.valor || 0), 0);
+    .reduce((sum, a) => sum + Number(a.valor || 0), 0);
 
   const handleSort = (key) => {
     setSortConfig(current => ({
@@ -332,7 +332,7 @@ export default function AccountsPayable() {
       sortable: true,
       render: (row) => (
         <span className="font-semibold text-slate-900">
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor)}
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(row.valor || 0))}
         </span>
       )
     },
@@ -447,7 +447,7 @@ export default function AccountsPayable() {
             </p>
             <p className="text-sm text-amber-600">
               Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                upcomingPayments.reduce((sum, a) => sum + (a.valor || 0), 0)
+                upcomingPayments.reduce((sum, a) => sum + Number(a.valor || 0), 0)
               )}
             </p>
           </div>
@@ -555,7 +555,7 @@ export default function AccountsPayable() {
             <p className="text-slate-600 mb-4">
               Confirmar pagamento de{' '}
               <strong>
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentDialog?.valor || 0)}
+               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(paymentDialog?.valor || 0))}
               </strong>
               ?
             </p>
@@ -597,7 +597,7 @@ export default function AccountsPayable() {
               Confirmar pagamento de <strong>{selectedIds.length}</strong> contas no valor total de{' '}
               <strong>
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                  accounts.filter(a => selectedIds.includes(a.id)).reduce((sum, a) => sum + (a.valor || 0), 0)
+                  accounts.filter(a => selectedIds.includes(a.id)).reduce((sum, a) => sum + Number(a.valor || 0), 0)
                 )}
               </strong>
               ?
