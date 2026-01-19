@@ -80,7 +80,17 @@ export default function StaffingCalculator({ schedule, stages, items, services, 
               // Processar apenas insumos de mão de obra
               itemInputs.forEach(input => {
                 if (input.categoria === 'MAO_OBRA') {
-                  const funcao = input.descricao || 'Não Identificado';
+                  const descricao = input.descricao || '';
+                  
+                  // Filtrar insumos que não são funções (benefícios/custos indiretos)
+                  const palavrasExcluidas = ['alimentação', 'epi', 'exames', 'ferramentas', 'seguro', 'transporte'];
+                  const deveExcluir = palavrasExcluidas.some(palavra => 
+                    descricao.toLowerCase().includes(palavra)
+                  );
+                  
+                  if (deveExcluir) return;
+                  
+                  const funcao = descricao || 'Não Identificado';
                   functionsSet.add(funcao);
 
                   const quantidadeMensal = (input.quantity * percentage) / 100;
