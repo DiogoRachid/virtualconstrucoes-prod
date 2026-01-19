@@ -3,8 +3,10 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { Package, Layers } from 'lucide-react';
+import { Package, Layers, FileText, FileSpreadsheet } from 'lucide-react';
+import { exportToPDF, exportToExcel } from './QuotationMapGenerator';
 
 const COLORS_ABC = {
   A: '#ef4444',
@@ -286,7 +288,46 @@ export default function ABCAnalysis({ items, services, budget }) {
     );
   };
 
+  const prepareQuotationData = () => {
+    return inputAnalysisData.map(item => ({
+      codigo: item.code,
+      descricao: item.description,
+      unidade: item.unit,
+      quantidade_total: item.quantity,
+      valor_unitario: item.quantity > 0 ? item.value / item.quantity : 0,
+      valor_total: item.value,
+      classe: item.classification
+    }));
+  };
+
   return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle>Análise ABC de Custos</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToPDF(prepareQuotationData(), budget)}
+              disabled={isLoadingInputs || inputAnalysisData.length === 0}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Mapa PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToExcel(prepareQuotationData(), budget)}
+              disabled={isLoadingInputs || inputAnalysisData.length === 0}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Mapa Excel
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+      
     <Tabs defaultValue="services" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="services">
@@ -320,5 +361,6 @@ export default function ABCAnalysis({ items, services, budget }) {
         )}
       </TabsContent>
     </Tabs>
+    </div>
   );
 }
