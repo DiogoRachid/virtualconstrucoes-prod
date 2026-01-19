@@ -73,7 +73,7 @@ export default function TableImport() {
   };
 
   const processInputsDirectly = async (lines, separator) => {
-      const allInputs = await Engine.fetchAll('Input');
+      const allInputs = await base44.entities.Input.list();
       const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
       const updates = [];
       const creates = [];
