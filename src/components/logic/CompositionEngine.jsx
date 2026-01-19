@@ -60,6 +60,27 @@ const parseDate = (str) => {
   return new Date(parseInt(ano), parseInt(mes) - 1, 1);
 };
 
+// Buscar recursivamente todos os insumos de um serviço
+const getAllInputsFromService = async (serviceId, allItems, inputMap, serviceMap, visited = new Set()) => {
+  if (visited.has(serviceId)) return [];
+  visited.add(serviceId);
+  
+  const items = allItems.filter(item => item.servico_id === serviceId);
+  const allInputs = [];
+  
+  for (const item of items) {
+    if (item.tipo_item === 'INSUMO') {
+      const insumo = inputMap.get(item.item_id);
+      if (insumo) allInputs.push(insumo);
+    } else if (item.tipo_item === 'SERVICO') {
+      const subInputs = await getAllInputsFromService(item.item_id, allItems, inputMap, serviceMap, visited);
+      allInputs.push(...subInputs);
+    }
+  }
+  
+  return allInputs;
+};
+
 // Recalcular serviço individual
 export const recalculateService = async (serviceId) => {
   const items = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
@@ -70,7 +91,20 @@ export const recalculateService = async (serviceId) => {
   let maxNivelDep = 0;
   let dataBaseMaisAntiga = null;
 
-  // Processar todos os itens
+  // Buscar todos os insumos recursivamente para determinar a data_base
+  const allItems = await base44.entities.ServiceItem.list();
+  const allInputs = await getAllInputsFromService(serviceId, allItems, inputMap, serviceMap);
+  
+  for (const insumo of allInputs) {
+    if (insumo.data_base) {
+      const dataItem = parseDate(insumo.data_base);
+      if (dataItem && (!dataBaseMaisAntiga || dataItem < dataBaseMaisAntiga)) {
+        dataBaseMaisAntiga = dataItem;
+      }
+    }
+  }
+
+  // Processar todos os itens para calcular custos
   const updatePromises = [];
   
   for (const item of items) {
@@ -86,13 +120,6 @@ export const recalculateService = async (serviceId) => {
           custoMaoObra += totalItem;
         } else {
           custoMaterial += totalItem;
-        }
-
-        if (insumo.data_base) {
-          const dataItem = parseDate(insumo.data_base);
-          if (dataItem && (!dataBaseMaisAntiga || dataItem < dataBaseMaisAntiga)) {
-            dataBaseMaisAntiga = dataItem;
-          }
         }
       }
     } else if (item.tipo_item === 'SERVICO') {
@@ -124,17 +151,16 @@ export const recalculateService = async (serviceId) => {
         base44.entities.ServiceItem.update(item.id, {
           custo_unitario_snapshot: unitCost,
           custo_total_item: totalItem
-        }).catch(() => {}) // Ignorar erros de itens deletados
+        }).catch(() => {})
       );
     }
   }
 
-  // Aguardar todas as atualizações de itens
   await Promise.all(updatePromises);
 
   const custoTotal = custoMaterial + custoMaoObra;
 
-  // Formatar data base
+  // Formatar data base herdada dos insumos
   let dataBaseStr = null;
   if (dataBaseMaisAntiga) {
     const mes = String(dataBaseMaisAntiga.getMonth() + 1).padStart(2, '0');
