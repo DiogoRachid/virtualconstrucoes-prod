@@ -12,7 +12,8 @@ import {
   Copy,
   FileText,
   Printer,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 import { printBudget } from '@/components/budgets/BudgetPrinter';
 import PageHeader from '@/components/ui/PageHeader';
@@ -55,10 +56,11 @@ export default function Budgets() {
       const originalBudget = budgets.find(b => b.id === budgetId);
       if (!originalBudget) throw new Error('Orçamento não encontrado');
 
-      // Buscar itens e etapas do orçamento original
-      const [items, stages] = await Promise.all([
+      // Buscar itens, etapas e cronograma do orçamento original
+      const [items, stages, schedules] = await Promise.all([
         base44.entities.BudgetItem.filter({ orcamento_id: budgetId }),
-        base44.entities.BudgetStage.filter({ orcamento_id: budgetId })
+        base44.entities.BudgetStage.filter({ orcamento_id: budgetId }),
+        base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: budgetId })
       ]);
 
       // Criar novo orçamento (cópia)
@@ -99,6 +101,20 @@ export default function Budgets() {
         await base44.entities.BudgetItem.bulkCreate(itemsToCreate);
       }
 
+      // Duplicar cronograma
+      const schedulesToCreate = schedules.map(schedule => ({
+        ...schedule,
+        id: undefined,
+        orcamento_id: newBudget.id,
+        stage_id: schedule.stage_id ? stageMapping[schedule.stage_id] : null,
+        created_date: undefined,
+        updated_date: undefined
+      }));
+
+      if (schedulesToCreate.length > 0) {
+        await base44.entities.ServiceMonthlyDistribution.bulkCreate(schedulesToCreate);
+      }
+
       return newBudget;
     },
     onSuccess: () => {
@@ -107,6 +123,57 @@ export default function Budgets() {
     },
     onError: () => {
       toast.error('Erro ao duplicar orçamento');
+    }
+  });
+
+  const updateDateMutation = useMutation({
+    mutationFn: async (budgetId) => {
+      const budget = budgets.find(b => b.id === budgetId);
+      if (!budget) throw new Error('Orçamento não encontrado');
+
+      // Buscar todos os itens do orçamento
+      const items = await base44.entities.BudgetItem.filter({ orcamento_id: budgetId });
+      
+      // Atualizar data_referencia do orçamento
+      const today = new Date().toISOString().split('T')[0];
+      await base44.entities.Budget.update(budgetId, {
+        data_referencia: today
+      });
+
+      // Buscar custos atualizados dos serviços
+      const serviceIds = [...new Set(items.map(item => item.servico_id).filter(Boolean))];
+      const services = await Promise.all(
+        serviceIds.map(id => base44.entities.Service.filter({ id }))
+      );
+      
+      const serviceMap = {};
+      services.flat().forEach(s => {
+        serviceMap[s.id] = s;
+      });
+
+      // Atualizar custos dos itens
+      for (const item of items) {
+        if (item.servico_id && serviceMap[item.servico_id]) {
+          const service = serviceMap[item.servico_id];
+          await base44.entities.BudgetItem.update(item.id, {
+            custo_unitario_material: service.custo_material || 0,
+            custo_unitario_mao_obra: service.custo_mao_obra || 0,
+            custo_unitario_total: service.custo_total || 0,
+            custo_direto_total: (service.custo_total || 0) * item.quantidade,
+            custo_com_bdi_unitario: (service.custo_total || 0) * (1 + (item.bdi_percentual || 0) / 100),
+            subtotal: (service.custo_total || 0) * item.quantidade * (1 + (item.bdi_percentual || 0) / 100)
+          });
+        }
+      }
+
+      return budgetId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      toast.success('Orçamento atualizado para data base atual!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar orçamento');
     }
   });
 
@@ -181,6 +248,17 @@ export default function Budgets() {
                 <Copy className="h-4 w-4 mr-2" />
               )}
               Duplicar
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => updateDateMutation.mutate(row.id)}
+              disabled={updateDateMutation.isPending}
+            >
+              {updateDateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Atualizar Data Base
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDeleteId(row.id)} className="text-red-600">
               <Trash2 className="h-4 w-4 mr-2" />
