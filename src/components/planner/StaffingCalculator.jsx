@@ -77,14 +77,14 @@ export default function StaffingCalculator({ schedule, stages, items, services, 
                 budgetItem.quantidade || 0
               );
 
-              // Processar apenas insumos de mão de obra com horas definidas
+              // Processar apenas insumos de mão de obra
               itemInputs.forEach(input => {
-                if (input.categoria === 'MAO_OBRA' && input.horas_por_unidade > 0) {
+                if (input.categoria === 'MAO_OBRA') {
                   const funcao = input.descricao || 'Não Identificado';
                   functionsSet.add(funcao);
 
                   const quantidadeMensal = (input.quantity * percentage) / 100;
-                  const horasMes = quantidadeMensal * input.horas_por_unidade;
+                  const horasMes = quantidadeMensal * (input.horas_por_unidade || 0);
 
                   hoursByFunction[funcao] = (hoursByFunction[funcao] || 0) + horasMes;
                 }
@@ -185,13 +185,7 @@ export default function StaffingCalculator({ schedule, stages, items, services, 
         <CardContent className="pt-6">
           <div className="text-sm text-amber-800">
             <strong>Atenção:</strong> Nenhum insumo de mão de obra encontrado no cronograma.
-            <br />
-            Certifique-se de que:
-            <ul className="list-disc ml-5 mt-2">
-              <li>Os serviços possuem insumos do tipo "MAO_OBRA"</li>
-              <li>Os insumos de mão de obra têm o campo "horas_por_unidade" preenchido</li>
-              <li>O cronograma possui distribuição mensal definida</li>
-            </ul>
+            Certifique-se de que os serviços possuem insumos do tipo "MAO_OBRA" e que o cronograma possui distribuição mensal definida.
           </div>
         </CardContent>
       </Card>
