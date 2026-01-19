@@ -394,10 +394,10 @@ export default function MeasurementFormPage() {
                         <TableCell className="text-sm">{item.descricao}</TableCell>
                         <TableCell className="text-xs">{item.unidade}</TableCell>
                         <TableCell className="text-right text-sm">
-                          {item.quantidade_orcamento?.toFixed(2)}
+                          {(Number(item.quantidade_orcamento) || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right text-sm text-blue-600">
-                          {item.quantidade_prevista_mes?.toFixed(2)}
+                          {(Number(item.quantidade_prevista_mes) || 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
