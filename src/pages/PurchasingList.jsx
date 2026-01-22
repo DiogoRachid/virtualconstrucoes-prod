@@ -34,7 +34,7 @@ export default function PurchasingListPage() {
         workId: selectedWork,
         abcFilter: abcFilter || null
       });
-      return response.data;
+      return response.data.data;
     },
     onSuccess: (data) => {
       setListData(data);
