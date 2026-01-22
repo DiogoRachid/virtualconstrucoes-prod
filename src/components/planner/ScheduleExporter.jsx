@@ -454,3 +454,19 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
     return { success: false, message: 'Erro: ' + error.message };
   }
 }
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0);
+}
+
+function formatCurrencyShort(value) {
+  if (value >= 1000000) {
+    return `R$ ${(value / 1000000).toFixed(1)}M`;
+  } else if (value >= 1000) {
+    return `R$ ${(value / 1000).toFixed(1)}K`;
+  }
+  return `R$ ${value.toFixed(0)}`;
+}
