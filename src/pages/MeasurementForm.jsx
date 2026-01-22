@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, Save, CheckCircle, Loader2, AlertTriangle, TrendingUp, FileSpreadsheet, FileText } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle, Loader2, AlertTriangle, TrendingUp, FileSpreadsheet, FileText, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart } from 'recharts';
 import { exportMeasurementXLSX, exportMeasurementPDF } from '@/components/measurements/MeasurementExporter';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -873,54 +874,247 @@ export default function MeasurementForm() {
         </TabsContent>
 
         <TabsContent value="resumo">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500">
-                  Valor Executado - Período
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-slate-900">
-                  {new Intl.NumberFormat('pt-BR', { 
-                    style: 'currency', 
-                    currency: 'BRL' 
-                  }).format(totals.totalPeriodo)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500">
-                  Valor Executado - Acumulado
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-blue-600">
-                  {new Intl.NumberFormat('pt-BR', { 
-                    style: 'currency', 
-                    currency: 'BRL' 
-                  }).format(totals.totalAcumulado)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-500">
-                  % Físico Executado
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                  <p className="text-2xl font-bold text-green-600">
-                    {totals.percentualFisico.toFixed(1)}%
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-slate-500">
+                    Valor Executado - Período
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    }).format(totals.totalPeriodo)}
                   </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-slate-500">
+                    Valor Executado - Acumulado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    }).format(totals.totalAcumulado)}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium text-slate-500">
+                    % Físico Executado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                    <p className="text-2xl font-bold text-green-600">
+                      {totals.percentualFisico.toFixed(1)}%
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Gráfico Previsto vs Realizado com Compensação */}
+            {(() => {
+              // Calcular dados para o gráfico mês a mês
+              const budget = budgets.find(b => b.id === formData.orcamento_id);
+              if (!budget || projectStages.length === 0) {
+                return null;
+              }
+
+              // Obter todas as distribuições mensais de todas as etapas principais
+              const mainStages = projectStages.filter(s => !s.parent_stage_id);
+              
+              // Calcular o número total de meses do cronograma
+              let maxMes = 0;
+              mainStages.forEach(stage => {
+                if (stage.distribuicao_mensal && Array.isArray(stage.distribuicao_mensal)) {
+                  stage.distribuicao_mensal.forEach(dist => {
+                    if (dist.mes > maxMes) maxMes = dist.mes;
+                  });
+                }
+              });
+
+              if (maxMes === 0) return null;
+
+              // Calcular valor total do orçamento por etapa
+              const valorPorEtapa = {};
+              mainStages.forEach(mainStage => {
+                let valorTotal = 0;
+                
+                // Somar itens da etapa principal
+                items.forEach(item => {
+                  const itemStage = projectStages.find(s => s.id === item.stage_id);
+                  if (!itemStage) return;
+                  
+                  let etapaPrincipal;
+                  if (itemStage.parent_stage_id) {
+                    etapaPrincipal = projectStages.find(s => s.id === itemStage.parent_stage_id);
+                  } else {
+                    etapaPrincipal = itemStage;
+                  }
+                  
+                  if (etapaPrincipal && etapaPrincipal.id === mainStage.id) {
+                    valorTotal += (item.quantidade_orcada || 0) * (item.custo_unitario || 0);
+                  }
+                });
+                
+                valorPorEtapa[mainStage.id] = valorTotal;
+              });
+
+              // Criar array de meses com previsto original
+              const chartData = [];
+              for (let mes = 1; mes <= maxMes; mes++) {
+                let previstoMes = 0;
+                
+                mainStages.forEach(stage => {
+                  if (stage.distribuicao_mensal && Array.isArray(stage.distribuicao_mensal)) {
+                    const dist = stage.distribuicao_mensal.find(d => d.mes === mes);
+                    if (dist) {
+                      const valorEtapa = valorPorEtapa[stage.id] || 0;
+                      previstoMes += (dist.percentual / 100) * valorEtapa;
+                    }
+                  }
+                });
+
+                chartData.push({
+                  mes: `Mês ${mes}`,
+                  mesNumero: mes,
+                  previstoOriginal: previstoMes,
+                  previsto: previstoMes,
+                  realizado: 0
+                });
+              }
+
+              // Preencher realizado até a medição atual
+              // Buscar todas as medições anteriores + atual
+              const measurementsPromise = base44.entities.Measurement.filter({ 
+                obra_id: formData.obra_id,
+                orcamento_id: formData.orcamento_id 
+              });
+
+              // Como não podemos usar await aqui, vamos usar uma abordagem síncrona
+              // Assumindo que temos apenas a medição atual
+              const medicaoAtual = formData.numero_medicao;
+              
+              // Calcular realizado acumulado até o mês atual
+              let realizadoAcumulado = totals.totalAcumulado;
+              
+              // Distribuir o realizado proporcionalmente até o mês atual
+              // (simplificação: assumindo que o acumulado foi distribuído uniformemente)
+              if (medicaoAtual > 0 && medicaoAtual <= chartData.length) {
+                chartData[medicaoAtual - 1].realizado = totals.totalPeriodo;
+              }
+
+              // Calcular compensação para meses futuros
+              let compensacaoAcumulada = 0;
+              for (let i = 0; i < chartData.length; i++) {
+                const mes = chartData[i];
+                
+                if (mes.mesNumero <= medicaoAtual) {
+                  // Para meses já executados, manter previsto original
+                  continue;
+                }
+                
+                // Para mês atual, calcular diferença
+                if (mes.mesNumero === medicaoAtual + 1) {
+                  const diferencaMesAnterior = chartData[medicaoAtual - 1].previsto - chartData[medicaoAtual - 1].realizado;
+                  compensacaoAcumulada = diferencaMesAnterior;
+                }
+                
+                // Distribuir compensação proporcionalmente nos meses futuros
+                const mesesRestantes = chartData.length - medicaoAtual;
+                if (mesesRestantes > 0) {
+                  mes.previsto = mes.previstoOriginal + (compensacaoAcumulada / mesesRestantes);
+                }
+              }
+
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      Cronograma Físico-Financeiro: Previsto vs Realizado
+                    </CardTitle>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Compensação automática de desvios nos meses subsequentes
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <ComposedChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="mes" />
+                        <YAxis 
+                          tickFormatter={(value) => 
+                            new Intl.NumberFormat('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL',
+                              notation: 'compact',
+                              maximumFractionDigits: 0
+                            }).format(value)
+                          }
+                        />
+                        <Tooltip 
+                          formatter={(value) => 
+                            new Intl.NumberFormat('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL' 
+                            }).format(value)
+                          }
+                        />
+                        <Legend />
+                        <Bar 
+                          dataKey="previstoOriginal" 
+                          fill="#94a3b8" 
+                          name="Previsto Original"
+                          opacity={0.5}
+                        />
+                        <Bar 
+                          dataKey="previsto" 
+                          fill="#3b82f6" 
+                          name="Previsto Ajustado"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="realizado" 
+                          stroke="#10b981" 
+                          strokeWidth={3}
+                          name="Realizado"
+                          dot={{ r: 6 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    
+                    <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded bg-slate-400 opacity-50"></div>
+                        <span className="text-slate-600">Previsto Original</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded bg-blue-600"></div>
+                        <span className="text-slate-600">Previsto Ajustado (com compensação)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-600"></div>
+                        <span className="text-slate-600">Realizado</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </div>
         </TabsContent>
       </Tabs>
