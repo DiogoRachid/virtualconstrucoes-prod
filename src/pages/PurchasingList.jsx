@@ -42,7 +42,7 @@ export default function PurchasingListPage() {
   });
 
   const exportPDF = () => {
-    if (!listData) return;
+    if (!displayData) return;
 
     const doc = new jsPDF();
     const work = works.find(w => w.id === selectedWork);
@@ -53,11 +53,16 @@ export default function PurchasingListPage() {
     
     doc.setFontSize(10);
     doc.text(`Obra: ${work?.nome}`, 14, 25);
-    doc.text(`Total de Períodos: ${listData.total_meses}`, 14, 32);
-    doc.text(`Data de Geração: ${listData.data_geracao}`, 14, 39);
+    if (selectedMonth !== 'all') {
+      doc.text(`Período: Mês ${selectedMonth}`, 14, 32);
+      doc.text(`Data de Geração: ${displayData.data_geracao}`, 14, 39);
+    } else {
+      doc.text(`Total de Períodos: ${displayData.total_meses}`, 14, 32);
+      doc.text(`Data de Geração: ${displayData.data_geracao}`, 14, 39);
+    }
 
     // Tabela
-    const tableData = listData.itens.map(item => [
+    const tableData = displayData.itens.map(item => [
       item.abc_class,
       item.descricao,
       item.unidade,
@@ -78,7 +83,7 @@ export default function PurchasingListPage() {
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
-    doc.text(`VALOR TOTAL: R$ ${listData.total_valor.toFixed(2)}`, 14, finalY);
+    doc.text(`VALOR TOTAL: R$ ${displayData.total_geral_valor.toFixed(2)}`, 14, finalY);
 
     doc.save(`lista_compras_${selectedWork}.pdf`);
   };
