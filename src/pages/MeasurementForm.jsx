@@ -213,6 +213,7 @@ export default function MeasurementForm() {
         mes: formData.numero_medicao
       });
       setScheduleData(monthlyDistributions);
+      setProjectStages(projectStages);
 
       setItems(newItems);
       const quantities = {};
