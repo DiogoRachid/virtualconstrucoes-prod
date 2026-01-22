@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     }
 
     // Buscar todas as ProjectStages deste orçamento
-    const stages = await base44.asServiceRole.entities.ProjectStage.filter({ orcamento_id: budgetId });
+    const stages = await base44.asServiceRole.entities.ProjectStage.filter({ orcamento_id: finalBudgetId });
 
     console.log(`[DEBUG] Total de stages encontradas: ${stages.length}`);
 
