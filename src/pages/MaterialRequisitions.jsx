@@ -15,10 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import EmptyState from '@/components/ui/EmptyState';
+import RequisitionItemForm from '@/components/requisitions/RequisitionItemForm';
 
 export default function MaterialRequisitionsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ numero_pedido: '', obra_id: '', total_itens: 0, valor_total: 0, status: 'rascunho' });
+  const [formData, setFormData] = useState({ numero_pedido: '', obra_id: '', status: 'rascunho' });
+  const [items, setItems] = useState([]);
   const queryClient = useQueryClient();
 
   const { data: requisitions = [] } = useQuery({
@@ -31,12 +33,32 @@ export default function MaterialRequisitionsPage() {
     queryFn: () => base44.entities.Project.list()
   });
 
+  const { data: inputs = [] } = useQuery({
+    queryKey: ['inputs'],
+    queryFn: () => base44.entities.Input.list()
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.MaterialRequisition.create(data),
+    mutationFn: async (data) => {
+      const requisition = await base44.entities.MaterialRequisition.create(data.requisition);
+      
+      // Criar items se houver
+      if (data.items && data.items.length > 0) {
+        for (const item of data.items) {
+          await base44.entities.MaterialRequisitionItem.create({
+            ...item,
+            requisicao_id: requisition.id
+          });
+        }
+      }
+      
+      return requisition;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materialRequisitions'] });
       setShowForm(false);
-      setFormData({ numero_pedido: '', obra_id: '', total_itens: 0, valor_total: 0, status: 'rascunho' });
+      setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
+      setItems([]);
     }
   });
 
@@ -44,9 +66,14 @@ export default function MaterialRequisitionsPage() {
     if (!formData.numero_pedido || !formData.obra_id) return;
     const selectedWork = works.find(w => w.id === formData.obra_id);
     createMutation.mutate({
-      ...formData,
-      data_pedido: new Date().toISOString().split('T')[0],
-      obra_nome: selectedWork?.nome
+      requisition: {
+        ...formData,
+        data_pedido: new Date().toISOString().split('T')[0],
+        obra_nome: selectedWork?.nome,
+        total_itens: items.length,
+        valor_total: 0
+      },
+      items
     });
   };
 
@@ -61,57 +88,68 @@ export default function MaterialRequisitionsPage() {
       />
 
       {showForm && (
-        <Card className="mb-6 bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-base">Novo Pedido de Material</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="numero">Número do Pedido</Label>
-                <Input
-                  id="numero"
-                  placeholder="Ex: PED-001"
-                  value={formData.numero_pedido}
-                  onChange={(e) => setFormData({ ...formData, numero_pedido: e.target.value })}
-                />
+        <div className="space-y-4 mb-6">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-base">Novo Pedido de Material</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="numero">Número do Pedido</Label>
+                  <Input
+                    id="numero"
+                    placeholder="Ex: PED-001"
+                    value={formData.numero_pedido}
+                    onChange={(e) => setFormData({ ...formData, numero_pedido: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="obra">Obra</Label>
+                  <Select value={formData.obra_id} onValueChange={(value) => setFormData({ ...formData, obra_id: value })}>
+                    <SelectTrigger id="obra">
+                      <SelectValue placeholder="Selecione a obra" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {works.map(work => (
+                        <SelectItem key={work.id} value={work.id}>
+                          {work.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="obra">Obra</Label>
-                <Select value={formData.obra_id} onValueChange={(value) => setFormData({ ...formData, obra_id: value })}>
-                  <SelectTrigger id="obra">
-                    <SelectValue placeholder="Selecione a obra" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {works.map(work => (
-                      <SelectItem key={work.id} value={work.id}>
-                        {work.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button
-                onClick={handleCreateRequisition}
-                disabled={!formData.numero_pedido || !formData.obra_id || createMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {createMutation.isPending ? 'Salvando...' : 'Criar Pedido'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowForm(false);
-                  setFormData({ numero_pedido: '', obra_id: '', total_itens: 0, valor_total: 0, status: 'rascunho' });
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <RequisitionItemForm
+            inputs={inputs}
+            items={items}
+            onAddItem={(item) => setItems([...items, item])}
+            onRemoveItem={(idx) => setItems(items.filter((_, i) => i !== idx))}
+          />
+
+          <div className="flex gap-3">
+            <Button
+              onClick={handleCreateRequisition}
+              disabled={!formData.numero_pedido || !formData.obra_id || createMutation.isPending || items.length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {createMutation.isPending ? 'Salvando...' : 'Criar Pedido'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowForm(false);
+                setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
+                setItems([]);
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
       )}
 
       {requisitions.length === 0 && !showForm ? (
@@ -145,8 +183,8 @@ export default function MaterialRequisitionsPage() {
                     <p className="font-medium capitalize">{req.status}</p>
                   </div>
                   <div>
-                    <p className="text-slate-600">Valor Total</p>
-                    <p className="font-medium">R$ {req.valor_total.toFixed(2)}</p>
+                    <p className="text-slate-600">Data Entrega Prevista</p>
+                    <p className="font-medium">{req.data_entrega_prevista || '-'}</p>
                   </div>
                 </div>
               </CardContent>

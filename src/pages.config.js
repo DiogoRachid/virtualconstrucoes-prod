@@ -23,11 +23,15 @@ import EmployeeForm from './pages/EmployeeForm';
 import Employees from './pages/Employees';
 import HRReports from './pages/HRReports';
 import Home from './pages/Home';
+import ImportInvoice from './pages/ImportInvoice';
+import ImportInvoiceMapping from './pages/ImportInvoiceMapping';
+import InputPurchaseHistory from './pages/InputPurchaseHistory';
 import Inputs from './pages/Inputs';
 import InvestmentDetail from './pages/InvestmentDetail';
 import InvestmentForm from './pages/InvestmentForm';
 import InvestmentTransactions from './pages/InvestmentTransactions';
 import Investments from './pages/Investments';
+import MaterialRequisitions from './pages/MaterialRequisitions';
 import MeasurementForm from './pages/MeasurementForm';
 import Measurements from './pages/Measurements';
 import PayrollForm from './pages/PayrollForm';
@@ -37,6 +41,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import ProjectForm from './pages/ProjectForm';
 import ProjectSchedule from './pages/ProjectSchedule';
 import Projects from './pages/Projects';
+import PurchasingList from './pages/PurchasingList';
 import Reports from './pages/Reports';
 import ServiceEditor from './pages/ServiceEditor';
 import Services from './pages/Services';
@@ -53,11 +58,6 @@ import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
-import ImportInvoice from './pages/ImportInvoice';
-import ImportInvoiceMapping from './pages/ImportInvoiceMapping';
-import InputPurchaseHistory from './pages/InputPurchaseHistory';
-import PurchasingList from './pages/PurchasingList';
-import MaterialRequisitions from './pages/MaterialRequisitions';
 import __Layout from './Layout.jsx';
 
 
@@ -87,11 +87,15 @@ export const PAGES = {
     "Employees": Employees,
     "HRReports": HRReports,
     "Home": Home,
+    "ImportInvoice": ImportInvoice,
+    "ImportInvoiceMapping": ImportInvoiceMapping,
+    "InputPurchaseHistory": InputPurchaseHistory,
     "Inputs": Inputs,
     "InvestmentDetail": InvestmentDetail,
     "InvestmentForm": InvestmentForm,
     "InvestmentTransactions": InvestmentTransactions,
     "Investments": Investments,
+    "MaterialRequisitions": MaterialRequisitions,
     "MeasurementForm": MeasurementForm,
     "Measurements": Measurements,
     "PayrollForm": PayrollForm,
@@ -101,6 +105,7 @@ export const PAGES = {
     "ProjectForm": ProjectForm,
     "ProjectSchedule": ProjectSchedule,
     "Projects": Projects,
+    "PurchasingList": PurchasingList,
     "Reports": Reports,
     "ServiceEditor": ServiceEditor,
     "Services": Services,
@@ -117,11 +122,6 @@ export const PAGES = {
     "Transactions": Transactions,
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
-    "ImportInvoice": ImportInvoice,
-    "ImportInvoiceMapping": ImportInvoiceMapping,
-    "InputPurchaseHistory": InputPurchaseHistory,
-    "PurchasingList": PurchasingList,
-    "MaterialRequisitions": MaterialRequisitions,
 }
 
 export const pagesConfig = {
