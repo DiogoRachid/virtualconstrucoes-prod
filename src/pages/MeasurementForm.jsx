@@ -615,36 +615,48 @@ export default function MeasurementForm() {
             </CardHeader>
             <CardContent>
               {(() => {
-                // Agrupar execução por etapa e período
+                // Agrupar execução por etapa
                 const executionByStage = {};
                 items.forEach(item => {
                   const stage = item.stage_nome || 'Sem Etapa';
                   if (!executionByStage[stage]) {
                     executionByStage[stage] = {
-                      previsto: 0,
-                      executado: item.valor_executado_acumulado || 0
+                      previsto_periodo: 0,
+                      executado_periodo: item.valor_executado_periodo || 0,
+                      previsto_acumulado: 0,
+                      executado_acumulado: item.valor_executado_acumulado || 0
                     };
                   } else {
-                    executionByStage[stage].executado += item.valor_executado_acumulado || 0;
+                    executionByStage[stage].executado_periodo += item.valor_executado_periodo || 0;
+                    executionByStage[stage].executado_acumulado += item.valor_executado_acumulado || 0;
                   }
                 });
 
-                // Buscar dados previstos do cronograma
+                // Buscar dados previstos do cronograma para este período
                 scheduleData.forEach(dist => {
-                  const stage = dist.stage_nome || 'Sem Etapa';
-                  if (executionByStage[stage]) {
-                    executionByStage[stage].previsto += dist.valor_mensal || 0;
+                  // Buscar a project stage para obter o nome correto
+                  const projectStage = projectStages.find(ps => ps.id === dist.project_stage_id);
+                  const stageName = projectStage?.nome || 'Sem Etapa';
+                  
+                  if (!executionByStage[stageName]) {
+                    executionByStage[stageName] = {
+                      previsto_periodo: 0,
+                      executado_periodo: 0,
+                      previsto_acumulado: 0,
+                      executado_acumulado: 0
+                    };
                   }
+                  executionByStage[stageName].previsto_periodo += dist.valor_mes || 0;
                 });
 
                 return (
                   <div className="space-y-6">
                     {Object.entries(executionByStage).map(([stage, data]) => {
-                      const percentExecuted = data.previsto > 0 
-                        ? (data.executado / data.previsto) * 100 
+                      const percentPeriodo = data.previsto_periodo > 0 
+                        ? (data.executado_periodo / data.previsto_periodo) * 100 
                         : 0;
-                      const isOnTrack = percentExecuted >= 95;
-                      const isBehind = percentExecuted < 80;
+                      const isOnTrack = percentPeriodo >= 95;
+                      const isBehind = percentPeriodo < 80;
 
                       return (
                         <div key={stage} className="space-y-2">
@@ -654,27 +666,27 @@ export default function MeasurementForm() {
                               isOnTrack ? 'text-green-600' : 
                               isBehind ? 'text-red-600' : 'text-yellow-600'
                             }`}>
-                              {percentExecuted.toFixed(1)}%
+                              {percentPeriodo.toFixed(1)}%
                             </span>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="grid grid-cols-2 gap-4 text-sm mb-2">
                             <div>
-                              <span className="text-slate-500">Previsto:</span>
+                              <span className="text-slate-500">Previsto Período:</span>
                               <span className="ml-2 font-medium">
                                 {new Intl.NumberFormat('pt-BR', { 
                                   style: 'currency', 
                                   currency: 'BRL' 
-                                }).format(data.previsto)}
+                                }).format(data.previsto_periodo)}
                               </span>
                             </div>
                             <div>
-                              <span className="text-slate-500">Executado:</span>
+                              <span className="text-slate-500">Executado Período:</span>
                               <span className="ml-2 font-medium text-blue-600">
                                 {new Intl.NumberFormat('pt-BR', { 
                                   style: 'currency', 
                                   currency: 'BRL' 
-                                }).format(data.executado)}
+                                }).format(data.executado_periodo)}
                               </span>
                             </div>
                           </div>
@@ -685,8 +697,16 @@ export default function MeasurementForm() {
                                 isOnTrack ? 'bg-green-500' : 
                                 isBehind ? 'bg-red-500' : 'bg-yellow-500'
                               }`}
-                              style={{ width: `${Math.min(percentExecuted, 100)}%` }}
+                              style={{ width: `${Math.min(percentPeriodo, 100)}%` }}
                             />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 mt-1">
+                            <div>Acumulado: {new Intl.NumberFormat('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL',
+                              minimumFractionDigits: 0
+                            }).format(data.executado_acumulado)}</div>
                           </div>
                         </div>
                       );
