@@ -69,6 +69,9 @@ Deno.serve(async (req) => {
     if (projectStages.length > 0) {
       const firstStage = projectStages[0];
       
+      console.log(`[DEBUG] First Stage - mes_inicio: ${firstStage.mes_inicio}, mes_fim: ${firstStage.mes_fim}`);
+      console.log(`[DEBUG] First Stage - distribuicao_mensal:`, JSON.stringify(firstStage.distribuicao_mensal));
+      
       // Se há distribuição mensal definida, usar ela
       if (firstStage.distribuicao_mensal && Array.isArray(firstStage.distribuicao_mensal) && firstStage.distribuicao_mensal.length > 0) {
         distribuicaoMensalGlobal = firstStage.distribuicao_mensal;
@@ -90,6 +93,8 @@ Deno.serve(async (req) => {
         distribuicaoMensalGlobal.push({ mes, percentual: percentualPorMes });
       }
     }
+    
+    console.log(`[DEBUG] Distribuição global:`, JSON.stringify(distribuicaoMensalGlobal));
 
     // Buscar insumos para obter dados completos
     const allInputs = await base44.asServiceRole.entities.Input.list();
