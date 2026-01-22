@@ -47,16 +47,27 @@ export async function exportMeasurementXLSX(measurementId) {
     // Criar planilha única
     const data = [];
     
-    // Logo e cabeçalho
+    // Formatar datas
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('pt-BR');
+    };
+
+    // Cabeçalho formatado
     data.push(['MEDIÇÃO DE OBRA']);
     data.push([]);
+    data.push(['DADOS DA OBRA']);
     data.push(['Obra:', measurement.obra_nome]);
     data.push(['Endereço:', project?.endereco || '-']);
     data.push(['Cidade/Estado:', `${project?.cidade || ''} / ${project?.estado || ''}`]);
+    data.push([]);
+    data.push(['DADOS DA MEDIÇÃO']);
     data.push(['Medição Nº:', measurement.numero_medicao]);
     data.push(['Período:', measurement.periodo_referencia]);
-    data.push(['Data Início:', measurement.data_inicio || '-']);
-    data.push(['Data Fim:', measurement.data_fim || '-']);
+    data.push(['Data Início:', formatDate(measurement.data_inicio)]);
+    data.push(['Data Fim:', formatDate(measurement.data_fim)]);
+    data.push(['Emissão:', new Date().toLocaleDateString('pt-BR')]);
     data.push([]);
     
     // Cabeçalho da tabela
@@ -112,9 +123,8 @@ export async function exportMeasurementXLSX(measurementId) {
     data.push(['', '', '', '', `BDI (${bdiPercentual}%):`, '', '', valorBDIPeriodo]);
     data.push(['', '', '', '', 'TOTAL COM BDI:', '', '', totalComBDIPeriodo]);
     data.push([]);
-    data.push(['', '', '', '', 'Para Nota Fiscal:', '', '', '']);
-    data.push(['', '', '', '', 'Material:', '', '', totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100)]);
-    data.push(['', '', '', '', 'Mão de Obra:', '', '', totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100)]);
+    data.push(['', '', '', '', 'Material com BDI:', '', '', totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100)]);
+    data.push(['', '', '', '', 'Mão de Obra com BDI:', '', '', totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100)]);
 
     // Criar worksheet
     const ws = XLSX.utils.aoa_to_sheet(data);
@@ -188,14 +198,21 @@ export async function exportMeasurementPDF(measurementId) {
     const valorBDIPeriodo = subtotalPeriodo * (bdiPercentual / 100);
     const totalComBDIPeriodo = subtotalPeriodo + valorBDIPeriodo;
 
+    // Formatar datas
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('pt-BR');
+    };
+
     const doc = new jsPDF('landscape');
     const pageWidth = doc.internal.pageSize.getWidth();
     let yPos = 15;
 
-    // Logo
+    // Logo (tamanho maior)
     const logoUrl = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
     try {
-      doc.addImage(logoUrl, 'JPEG', 15, yPos, 40, 15);
+      doc.addImage(logoUrl, 'JPEG', 15, yPos, 60, 25);
     } catch (e) {
       console.log('Logo não carregada');
     }
@@ -203,9 +220,9 @@ export async function exportMeasurementPDF(measurementId) {
     // Título
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
-    doc.text('MEDIÇÃO DE OBRA', pageWidth / 2, yPos + 7, { align: 'center' });
+    doc.text('MEDIÇÃO DE OBRA', pageWidth / 2, yPos + 10, { align: 'center' });
     
-    yPos += 25;
+    yPos += 30;
     
     // Cabeçalho com dados da obra
     doc.setFontSize(10);
@@ -230,8 +247,8 @@ export async function exportMeasurementPDF(measurementId) {
     doc.text(`Medição Nº: ${measurement.numero_medicao}`, 15, yPos);
     doc.text(`Período: ${measurement.periodo_referencia}`, 100, yPos);
     yPos += 5;
-    doc.text(`Data Início: ${measurement.data_inicio || '-'}`, 15, yPos);
-    doc.text(`Data Fim: ${measurement.data_fim || '-'}`, 100, yPos);
+    doc.text(`Data Início: ${formatDate(measurement.data_inicio)}`, 15, yPos);
+    doc.text(`Data Fim: ${formatDate(measurement.data_fim)}`, 100, yPos);
     doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')}`, 180, yPos);
     
     yPos += 12;
@@ -334,14 +351,12 @@ export async function exportMeasurementPDF(measurementId) {
 
     yPos += 12;
     doc.setFillColor(220, 240, 255);
-    doc.rect(10, yPos, 277, 15, 'F');
+    doc.rect(10, yPos, 277, 10, 'F');
     doc.setFontSize(9);
     yPos += 6;
-    doc.text('PARA NOTA FISCAL:', 15, yPos);
-    yPos += 6;
-    doc.text('Material (com BDI):', 20, yPos);
+    doc.text('Material com BDI:', 20, yPos);
     doc.text(formatCurrency(totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100)), 90, yPos);
-    doc.text('Mão de Obra (com BDI):', 150, yPos);
+    doc.text('Mão de Obra com BDI:', 150, yPos);
     doc.text(formatCurrency(totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100)), 230, yPos);
 
     // Rodapé em todas as páginas
