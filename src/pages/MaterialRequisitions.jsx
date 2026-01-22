@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileInput, Plus, Edit2, Trash2 } from 'lucide-react';
+import { FileInput, Plus, Edit2, Trash2, Download } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import EmptyState from '@/components/ui/EmptyState';
 import RequisitionItemForm from '@/components/requisitions/RequisitionItemForm';
+import { exportRequisitionToXLSX, exportRequisitionToPDF } from '@/components/requisitions/RequisitionExporter';
 
 export default function MaterialRequisitionsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -122,6 +123,15 @@ export default function MaterialRequisitionsPage() {
     setShowForm(true);
   };
 
+  const handleExport = async (requisition, format) => {
+    const itemsData = await base44.entities.MaterialRequisitionItem.filter({ requisicao_id: requisition.id });
+    if (format === 'xlsx') {
+      exportRequisitionToXLSX(requisition, itemsData);
+    } else {
+      exportRequisitionToPDF(requisition, itemsData);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader
@@ -226,14 +236,23 @@ export default function MaterialRequisitionsPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => handleExport(req, 'xlsx')}
+                      className="text-green-600 hover:text-green-700 transition"
+                      title="Exportar como Excel"
+                    >
+                      <Download className="h-5 w-5" />
+                    </button>
+                    <button
                       onClick={() => openEdit(req)}
                       className="text-blue-600 hover:text-blue-700 transition"
+                      title="Editar"
                     >
                       <Edit2 className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => deleteMutation.mutate(req.id)}
                       className="text-red-600 hover:text-red-700 transition"
+                      title="Excluir"
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
