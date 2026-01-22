@@ -19,24 +19,13 @@ Deno.serve(async (req) => {
       }, { status: 400 });
     }
 
-    // Buscar medições para calcular meses
-    const measurements = await base44.asServiceRole.entities.Measurement.filter({ obra_id: workId });
-    let months = 0;
-    
-    if (measurements.length > 0) {
-      // Calcular meses a partir das medições
-      const meses = measurements.map(m => {
-        const [mes, ano] = m.periodo_referencia.split('/');
-        return parseInt(mes);
-      });
-      months = Math.max(...meses);
-    } else if (project.data_inicio && project.data_previsao) {
-      // Fallback para calcular a partir das datas
-      const startDate = new Date(project.data_inicio);
-      const endDate = new Date(project.data_previsao);
-      months = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24 * 30.44));
-    } else {
-      months = 12; // Default
+    // Buscar cronograma (ProjectStage) para calcular meses
+    const projectStages = await base44.asServiceRole.entities.ProjectStage.filter({ orcamento_id: budgets[0]?.id });
+    let months = budgets[0]?.duracao_meses || 12;
+
+    if (projectStages.length > 0) {
+      const maxMesFim = Math.max(...projectStages.map(s => s.mes_fim || 0));
+      months = maxMesFim > 0 ? maxMesFim : months;
     }
 
     // Buscar orçamentos da obra
