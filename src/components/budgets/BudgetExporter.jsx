@@ -221,7 +221,9 @@ export async function exportBudgetXLSX(budgetId) {
       }
       currentRow++;
       
-      stageData.items.forEach((item, itemIdx) => {
+      // Só adicionar itens se a etapa realmente tiver itens
+      if (stageData.items && stageData.items.length > 0) {
+        stageData.items.forEach((item, itemIdx) => {
         const row = worksheet.getRow(currentRow);
         const itemIndent = '  '.repeat(stageData.level + 1);
         row.getCell(1).value = `${itemIndent}${stageData.number}.${itemIdx + 1}`;
