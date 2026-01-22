@@ -224,7 +224,7 @@ export default function PurchasingListPage() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-sm text-slate-600">Total de Itens</p>
-                <p className="text-2xl font-bold">{listData?.itens?.length || 0}</p>
+                <p className="text-2xl font-bold">{displayData?.itens?.length || 0}</p>
               </CardContent>
             </Card>
             <Card>
@@ -248,7 +248,7 @@ export default function PurchasingListPage() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-sm text-slate-600">Valor Total</p>
-                <p className="text-2xl font-bold">R$ {(listData?.total_valor || 0).toFixed(2)}</p>
+                <p className="text-2xl font-bold">R$ {(displayData?.total_geral_valor || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
           </div>
