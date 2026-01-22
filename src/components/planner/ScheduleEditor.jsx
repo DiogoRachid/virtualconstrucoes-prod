@@ -365,7 +365,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                   <TableCell></TableCell>
                   {Array.from({ length: months }).map((_, idx) => (
                     <TableCell key={idx} className="text-center text-xs">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalCumulative(idx))}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalCumulativeByService(idx))}
                     </TableCell>
                   ))}
                   <TableCell></TableCell>
@@ -377,7 +377,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                   <TableCell></TableCell>
                   {Array.from({ length: months }).map((_, idx) => (
                     <TableCell key={idx} className="text-center text-xs text-blue-900">
-                      {getCumulativePercentage(idx).toFixed(2)}%
+                      {getCumulativePercentageByService(idx).toFixed(2)}%
                     </TableCell>
                   ))}
                   <TableCell></TableCell>
