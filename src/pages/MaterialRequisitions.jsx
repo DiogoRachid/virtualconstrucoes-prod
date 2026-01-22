@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileInput, Plus } from 'lucide-react';
+import { FileInput, Plus, Edit2, Trash2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,8 @@ export default function MaterialRequisitionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ numero_pedido: '', obra_id: '', status: 'rascunho' });
   const [items, setItems] = useState([]);
+  const [editingRequisition, setEditingRequisition] = useState(null);
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: requisitions = [] } = useQuery({
@@ -28,53 +30,96 @@ export default function MaterialRequisitionsPage() {
     queryFn: () => base44.entities.MaterialRequisition?.list?.() || Promise.resolve([])
   });
 
+  const { data: requisitionItems = [] } = useQuery({
+    queryKey: ['requisitionItems', editingRequisition?.id],
+    queryFn: () => editingRequisition 
+      ? base44.entities.MaterialRequisitionItem.filter({ requisicao_id: editingRequisition.id })
+      : Promise.resolve([]),
+    enabled: !!editingRequisition
+  });
+
   const { data: works = [] } = useQuery({
     queryKey: ['works'],
     queryFn: () => base44.entities.Project.list()
   });
 
-  const { data: inputs = [] } = useQuery({
-    queryKey: ['inputs'],
-    queryFn: () => base44.entities.Input.list()
-  });
-
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async (data) => {
-      const requisition = await base44.entities.MaterialRequisition.create(data.requisition);
-      
-      // Criar items se houver
-      if (data.items && data.items.length > 0) {
-        for (const item of data.items) {
-          await base44.entities.MaterialRequisitionItem.create({
-            ...item,
-            requisicao_id: requisition.id
-          });
+      if (editingRequisition) {
+        await base44.entities.MaterialRequisition.update(editingRequisition.id, data.requisition);
+        
+        // Deletar items antigos
+        for (const item of requisitionItems) {
+          await base44.entities.MaterialRequisitionItem.delete(item.id);
+        }
+        
+        // Criar novos items
+        if (data.items && data.items.length > 0) {
+          for (const item of data.items) {
+            await base44.entities.MaterialRequisitionItem.create({
+              ...item,
+              requisicao_id: editingRequisition.id
+            });
+          }
+        }
+      } else {
+        const requisition = await base44.entities.MaterialRequisition.create(data.requisition);
+        if (data.items && data.items.length > 0) {
+          for (const item of data.items) {
+            await base44.entities.MaterialRequisitionItem.create({
+              ...item,
+              requisicao_id: requisition.id
+            });
+          }
         }
       }
-      
-      return requisition;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materialRequisitions'] });
+      queryClient.invalidateQueries({ queryKey: ['requisitionItems'] });
       setShowForm(false);
+      setEditingRequisition(null);
       setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
       setItems([]);
+      setEditingItemIndex(null);
     }
   });
 
-  const handleCreateRequisition = async () => {
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.MaterialRequisition.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materialRequisitions'] });
+    }
+  });
+
+  const handleSaveRequisition = async () => {
     if (!formData.numero_pedido || !formData.obra_id) return;
     const selectedWork = works.find(w => w.id === formData.obra_id);
-    createMutation.mutate({
+    saveMutation.mutate({
       requisition: {
         ...formData,
-        data_pedido: new Date().toISOString().split('T')[0],
+        data_pedido: editingRequisition?.data_pedido || new Date().toISOString().split('T')[0],
         obra_nome: selectedWork?.nome,
         total_itens: items.length,
         valor_total: 0
       },
       items
     });
+  };
+
+  const openEdit = (requisition) => {
+    setEditingRequisition(requisition);
+    setFormData({
+      numero_pedido: requisition.numero_pedido,
+      obra_id: requisition.obra_id,
+      status: requisition.status
+    });
+    setItems(requisitionItems.map(i => ({
+      insumo_nome: i.insumo_nome,
+      unidade: i.unidade,
+      quantidade_solicitada: i.quantidade_solicitada
+    })));
+    setShowForm(true);
   };
 
   return (
@@ -124,26 +169,35 @@ export default function MaterialRequisitionsPage() {
           </Card>
 
           <RequisitionItemForm
-            inputs={inputs}
             items={items}
+            editingIndex={editingItemIndex}
             onAddItem={(item) => setItems([...items, item])}
-            onRemoveItem={(idx) => setItems(items.filter((_, i) => i !== idx))}
+            onEditItem={(idx, item) => {
+              setItems(items.map((i, index) => index === idx ? { ...item } : i));
+              setEditingItemIndex(null);
+            }}
+            onRemoveItem={(idx) => {
+              setItems(items.filter((_, i) => i !== idx));
+              setEditingItemIndex(null);
+            }}
           />
 
           <div className="flex gap-3">
             <Button
-              onClick={handleCreateRequisition}
-              disabled={!formData.numero_pedido || !formData.obra_id || createMutation.isPending || items.length === 0}
+              onClick={handleSaveRequisition}
+              disabled={!formData.numero_pedido || !formData.obra_id || saveMutation.isPending || items.length === 0}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {createMutation.isPending ? 'Salvando...' : 'Criar Pedido'}
+              {saveMutation.isPending ? 'Salvando...' : editingRequisition ? 'Atualizar Pedido' : 'Criar Pedido'}
             </Button>
             <Button
               variant="outline"
               onClick={() => {
                 setShowForm(false);
+                setEditingRequisition(null);
                 setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
                 setItems([]);
+                setEditingItemIndex(null);
               }}
             >
               Cancelar
@@ -165,8 +219,26 @@ export default function MaterialRequisitionsPage() {
           {requisitions.map((req) => (
             <Card key={req.id}>
               <CardHeader>
-                <CardTitle className="text-base">{req.numero_pedido}</CardTitle>
-                <p className="text-sm text-slate-600 mt-1">{req.obra_nome}</p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-base">{req.numero_pedido}</CardTitle>
+                    <p className="text-sm text-slate-600 mt-1">{req.obra_nome}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEdit(req)}
+                      className="text-blue-600 hover:text-blue-700 transition"
+                    >
+                      <Edit2 className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => deleteMutation.mutate(req.id)}
+                      className="text-red-600 hover:text-red-700 transition"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-4 gap-4 text-sm">
