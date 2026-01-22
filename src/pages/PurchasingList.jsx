@@ -156,38 +156,55 @@ export default function PurchasingListPage() {
           <CardTitle className="text-base">Parâmetros da Lista</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Obra</label>
-              <Select value={selectedWork} onValueChange={setSelectedWork}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a obra" />
-                </SelectTrigger>
-                <SelectContent>
-                  {works.map(work => (
-                    <SelectItem key={work.id} value={work.id}>
-                      {work.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+             <div className="space-y-2">
+               <label className="text-sm font-medium">Obra</label>
+               <Select value={selectedWork} onValueChange={setSelectedWork}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="Selecione a obra" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {works.map(work => (
+                     <SelectItem key={work.id} value={work.id}>
+                       {work.nome}
+                     </SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Filtro ABC</label>
-              <Select value={abcFilter} onValueChange={setAbcFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>Todos</SelectItem>
-                  <SelectItem value="A">Classe A (Alto valor)</SelectItem>
-                  <SelectItem value="B">Classe B (Médio valor)</SelectItem>
-                  <SelectItem value="C">Classe C (Baixo valor)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+             <div className="space-y-2">
+               <label className="text-sm font-medium">Período</label>
+               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="Todos" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">Todos os Meses</SelectItem>
+                   {listData?.periodos?.map(p => (
+                     <SelectItem key={p.mes} value={p.mes.toString()}>
+                       {p.periodo}
+                     </SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+
+             <div className="space-y-2">
+               <label className="text-sm font-medium">Filtro ABC</label>
+               <Select value={abcFilter} onValueChange={setAbcFilter}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="Todos" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value={null}>Todos</SelectItem>
+                   <SelectItem value="A">Classe A (Alto valor)</SelectItem>
+                   <SelectItem value="B">Classe B (Médio valor)</SelectItem>
+                   <SelectItem value="C">Classe C (Baixo valor)</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+           </div>
 
           <Button
             onClick={() => generateMutation.mutate()}
