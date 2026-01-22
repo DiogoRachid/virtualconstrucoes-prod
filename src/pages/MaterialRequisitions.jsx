@@ -1,284 +1,144 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileInput, Plus, Edit2, Trash2, Download } from 'lucide-react';
+import { createPageUrl } from '@/utils';
+import { FileInput, Plus, Pencil, Trash2, MoreHorizontal, Download } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import DataTable from '@/components/shared/DataTable';
+import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
-import RequisitionItemForm from '@/components/requisitions/RequisitionItemForm';
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { exportRequisitionToPDF } from '@/components/requisitions/RequisitionExporter';
+import { toast } from "sonner";
 
 export default function MaterialRequisitionsPage() {
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ numero_pedido: '', obra_id: '', status: 'rascunho' });
-  const [items, setItems] = useState([]);
-  const [editingRequisition, setEditingRequisition] = useState(null);
-  const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
   const queryClient = useQueryClient();
 
-  const { data: requisitions = [] } = useQuery({
+  const { data: requisitions = [], isLoading } = useQuery({
     queryKey: ['materialRequisitions'],
-    queryFn: () => base44.entities.MaterialRequisition?.list?.() || Promise.resolve([])
-  });
-
-  const { data: requisitionItems = [] } = useQuery({
-    queryKey: ['requisitionItems', editingRequisition?.id],
-    queryFn: () => editingRequisition 
-      ? base44.entities.MaterialRequisitionItem.filter({ requisicao_id: editingRequisition.id })
-      : Promise.resolve([]),
-    enabled: !!editingRequisition
-  });
-
-  const { data: works = [] } = useQuery({
-    queryKey: ['works'],
-    queryFn: () => base44.entities.Project.list()
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async (data) => {
-      if (editingRequisition) {
-        await base44.entities.MaterialRequisition.update(editingRequisition.id, data.requisition);
-        
-        // Deletar items antigos
-        for (const item of requisitionItems) {
-          await base44.entities.MaterialRequisitionItem.delete(item.id);
-        }
-        
-        // Criar novos items
-        if (data.items && data.items.length > 0) {
-          for (const item of data.items) {
-            await base44.entities.MaterialRequisitionItem.create({
-              ...item,
-              requisicao_id: editingRequisition.id
-            });
-          }
-        }
-      } else {
-        const requisition = await base44.entities.MaterialRequisition.create(data.requisition);
-        if (data.items && data.items.length > 0) {
-          for (const item of data.items) {
-            await base44.entities.MaterialRequisitionItem.create({
-              ...item,
-              requisicao_id: requisition.id
-            });
-          }
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['materialRequisitions'] });
-      queryClient.invalidateQueries({ queryKey: ['requisitionItems'] });
-      setShowForm(false);
-      setEditingRequisition(null);
-      setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
-      setItems([]);
-      setEditingItemIndex(null);
-    }
+    queryFn: () => base44.entities.MaterialRequisition.list()
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.MaterialRequisition.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materialRequisitions'] });
+      setDeleteId(null);
+      toast.success('Pedido excluído!');
     }
   });
-
-  const handleSaveRequisition = async () => {
-    if (!formData.numero_pedido || !formData.obra_id) return;
-    const selectedWork = works.find(w => w.id === formData.obra_id);
-    saveMutation.mutate({
-      requisition: {
-        ...formData,
-        data_pedido: editingRequisition?.data_pedido || new Date().toISOString().split('T')[0],
-        obra_nome: selectedWork?.nome,
-        total_itens: items.length,
-        valor_total: 0
-      },
-      items
-    });
-  };
-
-  const openEdit = (requisition) => {
-    setEditingRequisition(requisition);
-    setFormData({
-      numero_pedido: requisition.numero_pedido,
-      obra_id: requisition.obra_id,
-      status: requisition.status
-    });
-    setItems(requisitionItems.map(i => ({
-      insumo_nome: i.insumo_nome,
-      unidade: i.unidade,
-      quantidade_solicitada: i.quantidade_solicitada
-    })));
-    setShowForm(true);
-  };
 
   const handleExport = async (requisition) => {
     const itemsData = await base44.entities.MaterialRequisitionItem.filter({ requisicao_id: requisition.id });
     exportRequisitionToPDF(requisition, itemsData);
+    toast.success('PDF exportado!');
   };
 
+  const columns = [
+    { 
+      header: 'Pedido / Obra', 
+      accessor: 'numero_pedido', 
+      render: (row) => (
+        <div>
+          <p className="font-medium text-slate-900">{row.numero_pedido}</p>
+          <p className="text-xs text-slate-500">{row.obra_nome}</p>
+        </div>
+      )
+    },
+    { 
+      header: 'Data', 
+      accessor: 'data_pedido',
+      className: 'w-28 text-center',
+      render: (row) => row.data_pedido
+    },
+    { 
+      header: 'Itens', 
+      accessor: 'total_itens',
+      className: 'w-20 text-center',
+      render: (row) => row.total_itens
+    },
+    { 
+      header: 'Status', 
+      accessor: 'status',
+      className: 'w-32',
+      render: (row) => (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+          ${row.status === 'enviado' ? 'bg-blue-100 text-blue-800' : 
+            row.status === 'recebido' ? 'bg-green-100 text-green-800' :
+            row.status === 'rascunho' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
+          {row.status}
+        </span>
+      )
+    },
+    {
+      header: '',
+      className: 'w-12',
+      render: (row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => window.location.href = createPageUrl(`MaterialRequisitionForm?id=${row.id}`)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport(row)}>
+              <Download className="h-4 w-4 mr-2" />
+              Exportar PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setDeleteId(row.id)} className="text-red-600">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    }
+  ];
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div>
       <PageHeader
         title="Pedidos de Materiais"
         subtitle="Gerencie pedidos de materiais para as obras"
         icon={FileInput}
         actionLabel="Novo Pedido"
-        onAction={() => setShowForm(true)}
+        onAction={() => window.location.href = createPageUrl('MaterialRequisitionForm')}
       />
 
-      {showForm && (
-        <div className="space-y-4 mb-6">
-          <Card className="bg-blue-50 border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-base">Novo Pedido de Material</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="numero">Número do Pedido</Label>
-                  <Input
-                    id="numero"
-                    placeholder="Ex: PED-001"
-                    value={formData.numero_pedido}
-                    onChange={(e) => setFormData({ ...formData, numero_pedido: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="obra">Obra</Label>
-                  <Select value={formData.obra_id} onValueChange={(value) => setFormData({ ...formData, obra_id: value })}>
-                    <SelectTrigger id="obra">
-                      <SelectValue placeholder="Selecione a obra" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {works.map(work => (
-                        <SelectItem key={work.id} value={work.id}>
-                          {work.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <RequisitionItemForm
-            items={items}
-            editingIndex={editingItemIndex}
-            onAddItem={(item) => setItems([...items, item])}
-            onEditItem={(idx, item) => {
-              setItems(items.map((i, index) => index === idx ? { ...item } : i));
-              setEditingItemIndex(null);
-            }}
-            onRemoveItem={(idx) => {
-              setItems(items.filter((_, i) => i !== idx));
-              setEditingItemIndex(null);
-            }}
+      <DataTable
+        columns={columns}
+        data={requisitions}
+        isLoading={isLoading}
+        emptyComponent={
+          <EmptyState
+            icon={FileInput}
+            title="Nenhum pedido registrado"
+            description="Crie seu primeiro pedido de material para começar"
+            actionLabel="Novo Pedido"
+            onAction={() => window.location.href = createPageUrl('MaterialRequisitionForm')}
           />
+        }
+      />
 
-          <div className="flex gap-3">
-            <Button
-              onClick={handleSaveRequisition}
-              disabled={!formData.numero_pedido || !formData.obra_id || saveMutation.isPending || items.length === 0}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {saveMutation.isPending ? 'Salvando...' : editingRequisition ? 'Atualizar Pedido' : 'Criar Pedido'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowForm(false);
-                setEditingRequisition(null);
-                setFormData({ numero_pedido: '', obra_id: '', status: 'rascunho' });
-                setItems([]);
-                setEditingItemIndex(null);
-              }}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {requisitions.length === 0 && !showForm ? (
-        <EmptyState
-          icon={FileInput}
-          title="Nenhum pedido registrado"
-          description="Crie um novo pedido de material para começar"
-          actionLabel="Novo Pedido"
-          onAction={() => setShowForm(true)}
-        />
-      ) : requisitions.length > 0 && (
-        <div className="grid gap-4">
-          {requisitions.map((req) => (
-            <Card key={req.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-base">{req.numero_pedido}</CardTitle>
-                    <p className="text-sm text-slate-600 mt-1">{req.obra_nome}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleExport(req)}
-                      className="text-green-600 hover:text-green-700 transition"
-                      title="Exportar como PDF"
-                    >
-                      <Download className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => openEdit(req)}
-                      className="text-blue-600 hover:text-blue-700 transition"
-                      title="Editar"
-                    >
-                      <Edit2 className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate(req.id)}
-                      className="text-red-600 hover:text-red-700 transition"
-                      title="Excluir"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="text-slate-600">Data</p>
-                    <p className="font-medium">{req.data_pedido}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-600">Itens</p>
-                    <p className="font-medium">{req.total_itens}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-600">Status</p>
-                    <p className="font-medium capitalize">{req.status}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-600">Data Entrega Prevista</p>
-                    <p className="font-medium">{req.data_entrega_prevista || '-'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <DeleteConfirmDialog
+        open={!!deleteId}
+        onOpenChange={() => setDeleteId(null)}
+        onConfirm={() => deleteMutation.mutate(deleteId)}
+        isDeleting={deleteMutation.isPending}
+        title="Excluir Pedido"
+        description="Tem certeza? Este pedido será removido permanentemente."
+      />
     </div>
   );
 }
