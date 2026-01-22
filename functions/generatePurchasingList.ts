@@ -35,10 +35,21 @@ Deno.serve(async (req) => {
       allBudgetItems.push(...items);
     }
 
+    if (!allBudgetItems.length) {
+      return Response.json({ 
+        success: false, 
+        error: 'Nenhum item de orçamento encontrado' 
+      }, { status: 400 });
+    }
+
     // Buscar distribuição mensal dos serviços
     const distributions = await base44.asServiceRole.entities.ServiceMonthlyDistribution.filter({ 
       obra_id: workId 
     });
+
+    if (!distributions.length) {
+      console.warn(`Nenhuma distribuição mensal encontrada para obra ${workId}`);
+    }
 
     // Mapa de distribuição por serviço e mês
     const distributionMap = new Map();
@@ -51,17 +62,13 @@ Deno.serve(async (req) => {
     const periodsMap = new Map(); // periodo -> { itens, valor_total }
 
     for (const item of allBudgetItems) {
-      // Buscar histórico de compra para curva ABC
-      const history = await base44.asServiceRole.entities.InputPurchaseHistory.filter({ 
-        insumo_id: item.servico_id 
-      });
-
-      const totalValue = history.reduce((sum, h) => sum + (h.valor_total || 0), 0);
-      
-      // Classificar ABC
+      // Se não há histórico, usa a quantidade total do orçamento para classificação
       let abcClass = 'C';
-      if (totalValue > 5000) abcClass = 'A';
-      else if (totalValue > 1000) abcClass = 'B';
+      const totalOrcado = item.quantidade_orcada * item.custo_unitario;
+      
+      // Classificar ABC baseado no valor total do item no orçamento
+      if (totalOrcado > 10000) abcClass = 'A';
+      else if (totalOrcado > 1000) abcClass = 'B';
 
       // Aplicar filtro ABC
       if (abcFilter && abcFilter !== abcClass) continue;
