@@ -125,12 +125,41 @@ export async function exportBudgetXLSX(budgetId) {
     });
     currentRow++;
 
-    // Agrupar por etapa
+    // Criar hierarquia de etapas com numeração
+    const createHierarchy = (stages) => {
+      const mainStages = stages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
+      const hierarchy = [];
+      
+      mainStages.forEach((mainStage, mainIdx) => {
+        hierarchy.push({
+          ...mainStage,
+          level: 0,
+          number: `${mainIdx + 1}.`
+        });
+        
+        const subStages = stages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+        subStages.forEach((subStage, subIdx) => {
+          hierarchy.push({
+            ...subStage,
+            level: 1,
+            number: `${mainIdx + 1}.${subIdx + 1}`
+          });
+        });
+      });
+      
+      return hierarchy;
+    };
+
+    const hierarchyStages = createHierarchy(stages);
+    
+    // Mapear itens com numeração
     const itemsByStage = {};
-    stages.forEach(stage => {
+    hierarchyStages.forEach(stage => {
       itemsByStage[stage.id] = {
         nome: stage.nome,
         ordem: stage.ordem,
+        level: stage.level,
+        number: stage.number,
         items: []
       };
     });
@@ -147,24 +176,51 @@ export async function exportBudgetXLSX(budgetId) {
       itemsByStage['uncategorized'] = {
         nome: 'Sem Etapa',
         ordem: 999,
+        level: 0,
+        number: '',
         items: uncategorized
       };
     }
 
     // Adicionar itens
-    Object.keys(itemsByStage)
-      .sort((a, b) => itemsByStage[a].ordem - itemsByStage[b].ordem)
-      .forEach(stageId => {
-        const stage = itemsByStage[stageId];
-        if (stage.items.length === 0) return;
+    hierarchyStages.forEach(stage => {
+      const stageData = itemsByStage[stage.id];
+      if (!stageData || stageData.items.length === 0) return;
+      
+      // Linha da etapa
+      const stageRow = worksheet.getRow(currentRow);
+      const indent = '  '.repeat(stageData.level);
+      stageRow.getCell(1).value = `${indent}${stageData.number} ${stageData.nome}`;
+      stageRow.getCell(1).font = { bold: true };
+      stageRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: stageData.level === 0 ? 'FFE0E0E0' : 'FFF0F0F0' } };
+      for (let i = 1; i <= 8; i++) {
+        stageRow.getCell(i).border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+      currentRow++;
+      
+      stageData.items.forEach((item, itemIdx) => {
+        const row = worksheet.getRow(currentRow);
+        const itemIndent = '  '.repeat(stageData.level + 1);
+        row.getCell(1).value = `${itemIndent}${stageData.number}.${itemIdx + 1}`;
+        row.getCell(2).value = item.codigo;
+        row.getCell(3).value = item.descricao;
+        row.getCell(4).value = item.unidade;
+        row.getCell(5).value = parseFloat(item.quantidade.toFixed(2));
+        row.getCell(5).numFmt = '0.00';
+        row.getCell(6).value = parseFloat(item.valor_material.toFixed(2));
+        row.getCell(6).numFmt = 'R$ #,##0.00';
+        row.getCell(7).value = parseFloat(item.valor_mao_obra.toFixed(2));
+        row.getCell(7).numFmt = 'R$ #,##0.00';
+        row.getCell(8).value = parseFloat((item.subtotal || 0).toFixed(2));
+        row.getCell(8).numFmt = 'R$ #,##0.00';
         
-        // Linha da etapa
-        const stageRow = worksheet.getRow(currentRow);
-        stageRow.getCell(1).value = stage.nome;
-        stageRow.getCell(1).font = { bold: true };
-        stageRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
         for (let i = 1; i <= 8; i++) {
-          stageRow.getCell(i).border = {
+          row.getCell(i).border = {
             top: { style: 'thin' },
             left: { style: 'thin' },
             bottom: { style: 'thin' },
@@ -172,32 +228,51 @@ export async function exportBudgetXLSX(budgetId) {
           };
         }
         currentRow++;
-        
-        stage.items.forEach(item => {
-          const row = worksheet.getRow(currentRow);
-          row.getCell(2).value = item.codigo;
-          row.getCell(3).value = item.descricao;
-          row.getCell(4).value = item.unidade;
-          row.getCell(5).value = parseFloat(item.quantidade.toFixed(2));
-          row.getCell(5).numFmt = '0.00';
-          row.getCell(6).value = parseFloat(item.valor_material.toFixed(2));
-          row.getCell(6).numFmt = 'R$ #,##0.00';
-          row.getCell(7).value = parseFloat(item.valor_mao_obra.toFixed(2));
-          row.getCell(7).numFmt = 'R$ #,##0.00';
-          row.getCell(8).value = parseFloat((item.subtotal || 0).toFixed(2));
-          row.getCell(8).numFmt = 'R$ #,##0.00';
-          
-          for (let i = 1; i <= 8; i++) {
-            row.getCell(i).border = {
-              top: { style: 'thin' },
-              left: { style: 'thin' },
-              bottom: { style: 'thin' },
-              right: { style: 'thin' }
-            };
-          }
-          currentRow++;
-        });
       });
+    });
+    
+    // Itens não categorizados
+    if (uncategorized.length > 0) {
+      const stageRow = worksheet.getRow(currentRow);
+      stageRow.getCell(1).value = 'Sem Etapa';
+      stageRow.getCell(1).font = { bold: true };
+      stageRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+      for (let i = 1; i <= 8; i++) {
+        stageRow.getCell(i).border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+      currentRow++;
+      
+      uncategorized.forEach((item, itemIdx) => {
+        const row = worksheet.getRow(currentRow);
+        row.getCell(1).value = `  ${itemIdx + 1}`;
+        row.getCell(2).value = item.codigo;
+        row.getCell(3).value = item.descricao;
+        row.getCell(4).value = item.unidade;
+        row.getCell(5).value = parseFloat(item.quantidade.toFixed(2));
+        row.getCell(5).numFmt = '0.00';
+        row.getCell(6).value = parseFloat(item.valor_material.toFixed(2));
+        row.getCell(6).numFmt = 'R$ #,##0.00';
+        row.getCell(7).value = parseFloat(item.valor_mao_obra.toFixed(2));
+        row.getCell(7).numFmt = 'R$ #,##0.00';
+        row.getCell(8).value = parseFloat((item.subtotal || 0).toFixed(2));
+        row.getCell(8).numFmt = 'R$ #,##0.00';
+        
+        for (let i = 1; i <= 8; i++) {
+          row.getCell(i).border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        }
+        currentRow++;
+      });
+    }
 
     currentRow += 2;
 
@@ -350,12 +425,41 @@ export async function exportBudgetPDF(budgetId) {
     
     yPos += 12;
 
-    // Agrupar por etapa
+    // Criar hierarquia de etapas com numeração
+    const createHierarchy = (stages) => {
+      const mainStages = stages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
+      const hierarchy = [];
+      
+      mainStages.forEach((mainStage, mainIdx) => {
+        hierarchy.push({
+          ...mainStage,
+          level: 0,
+          number: `${mainIdx + 1}.`
+        });
+        
+        const subStages = stages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+        subStages.forEach((subStage, subIdx) => {
+          hierarchy.push({
+            ...subStage,
+            level: 1,
+            number: `${mainIdx + 1}.${subIdx + 1}`
+          });
+        });
+      });
+      
+      return hierarchy;
+    };
+
+    const hierarchyStages = createHierarchy(stages);
+    
+    // Mapear itens
     const itemsByStage = {};
-    stages.forEach(stage => {
+    hierarchyStages.forEach(stage => {
       itemsByStage[stage.id] = {
         nome: stage.nome,
         ordem: stage.ordem,
+        level: stage.level,
+        number: stage.number,
         items: []
       };
     });
@@ -367,13 +471,6 @@ export async function exportBudgetPDF(budgetId) {
     });
 
     const uncategorized = itemsEnriquecidos.filter(i => !i.stage_id);
-    if (uncategorized.length > 0) {
-      itemsByStage['uncategorized'] = {
-        nome: 'Sem Etapa',
-        ordem: 999,
-        items: uncategorized
-      };
-    }
 
     // Cabeçalho da tabela
     doc.setFillColor(41, 98, 255);
@@ -392,62 +489,112 @@ export async function exportBudgetPDF(budgetId) {
 
     // Renderizar itens
     doc.setTextColor(0, 0, 0);
-    Object.keys(itemsByStage)
-      .sort((a, b) => itemsByStage[a].ordem - itemsByStage[b].ordem)
-      .forEach(stageId => {
-        const stage = itemsByStage[stageId];
-        if (stage.items.length === 0) return;
+    hierarchyStages.forEach(stage => {
+      const stageData = itemsByStage[stage.id];
+      if (!stageData || stageData.items.length === 0) return;
 
-        if (yPos > 180) {
+      if (yPos > 180) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Nome da etapa
+      const indent = stageData.level * 3;
+      doc.setFillColor(stageData.level === 0 ? 230 : 240, stageData.level === 0 ? 230 : 240, stageData.level === 0 ? 230 : 240);
+      doc.rect(10, yPos, 277, 6, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(8);
+      doc.text(`${stageData.number} ${stageData.nome}`, 12 + indent, yPos + 4);
+      yPos += 7;
+
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7);
+      
+      stageData.items.forEach((item, itemIdx) => {
+        if (yPos > 185) {
           doc.addPage();
           yPos = 20;
         }
 
-        // Nome da etapa
-        doc.setFillColor(230, 230, 230);
-        doc.rect(10, yPos, 277, 6, 'F');
+        // Número do item
+        const itemNumber = `${stageData.number}.${itemIdx + 1}`;
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(8);
-        doc.text(stage.nome, 12, yPos + 4);
-        yPos += 7;
-
+        doc.setFontSize(6);
+        doc.text(itemNumber, 12 + indent + 3, yPos + 4);
+        
         doc.setFont(undefined, 'normal');
         doc.setFontSize(7);
         
-        stage.items.forEach(item => {
-          if (yPos > 185) {
-            doc.addPage();
-            yPos = 20;
-          }
+        // Código
+        doc.text(item.codigo || '', 22 + indent, yPos + 4);
+        
+        // Descrição (com wrapping)
+        const descMaxWidth = 115 - indent;
+        const descLines = doc.splitTextToSize(item.descricao || '', descMaxWidth);
+        doc.text(descLines.slice(0, 2), 32 + indent, yPos + 4);
+        
+        // Unidade
+        doc.text(item.unidade || '', 160, yPos + 4);
+        
+        // Quantidade
+        doc.text((item.quantidade || 0).toFixed(2), 175, yPos + 4, { align: 'right' });
+        
+        // Material
+        doc.text(formatCurrency(item.valor_material), 205, yPos + 4, { align: 'right' });
+        
+        // Mão de Obra
+        doc.text(formatCurrency(item.valor_mao_obra), 240, yPos + 4, { align: 'right' });
+        
+        // Total
+        doc.text(formatCurrency(item.subtotal || 0), 277, yPos + 4, { align: 'right' });
 
-          // Código
-          doc.text(item.codigo || '', 12, yPos + 4);
-          
-          // Descrição (com wrapping)
-          const descMaxWidth = 125;
-          const descLines = doc.splitTextToSize(item.descricao || '', descMaxWidth);
-          doc.text(descLines.slice(0, 2), 32, yPos + 4); // Max 2 linhas
-          
-          // Unidade
-          doc.text(item.unidade || '', 160, yPos + 4);
-          
-          // Quantidade
-          doc.text((item.quantidade || 0).toFixed(2), 175, yPos + 4, { align: 'right' });
-          
-          // Material
-          doc.text(formatCurrency(item.valor_material), 205, yPos + 4, { align: 'right' });
-          
-          // Mão de Obra
-          doc.text(formatCurrency(item.valor_mao_obra), 240, yPos + 4, { align: 'right' });
-          
-          // Total
-          doc.text(formatCurrency(item.subtotal || 0), 277, yPos + 4, { align: 'right' });
-
-          yPos += descLines.length > 1 ? 7 : 5;
-        });
-
-        yPos += 3;
+        yPos += descLines.length > 1 ? 7 : 5;
       });
+
+      yPos += 3;
+    });
+    
+    // Itens não categorizados
+    if (uncategorized.length > 0) {
+      if (yPos > 180) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      doc.setFillColor(230, 230, 230);
+      doc.rect(10, yPos, 277, 6, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(8);
+      doc.text('Sem Etapa', 12, yPos + 4);
+      yPos += 7;
+      
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7);
+      
+      uncategorized.forEach((item, itemIdx) => {
+        if (yPos > 185) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.text(`${itemIdx + 1}`, 12, yPos + 4);
+        doc.text(item.codigo || '', 22, yPos + 4);
+        
+        const descMaxWidth = 125;
+        const descLines = doc.splitTextToSize(item.descricao || '', descMaxWidth);
+        doc.text(descLines.slice(0, 2), 32, yPos + 4);
+        
+        doc.text(item.unidade || '', 160, yPos + 4);
+        doc.text((item.quantidade || 0).toFixed(2), 175, yPos + 4, { align: 'right' });
+        doc.text(formatCurrency(item.valor_material), 205, yPos + 4, { align: 'right' });
+        doc.text(formatCurrency(item.valor_mao_obra), 240, yPos + 4, { align: 'right' });
+        doc.text(formatCurrency(item.subtotal || 0), 277, yPos + 4, { align: 'right' });
+
+        yPos += descLines.length > 1 ? 7 : 5;
+      });
+      
+      yPos += 3;
+    }
 
     // Totais
     if (yPos > 150) {
