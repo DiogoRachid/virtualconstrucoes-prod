@@ -52,19 +52,26 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     return stage.servicos_ids;
   };
 
-  const handlePercentageChange = (stageId, monthIndex, value) => {
-    const newSchedule = { ...schedule };
+  const handleServicePercentageChange = (serviceId, monthIndex, value) => {
+    const newSchedule = { ...serviceSchedule };
     const percentage = parseFloat(value) || 0;
     
-    newSchedule[stageId].percentages[monthIndex] = percentage;
-    newSchedule[stageId].total = newSchedule[stageId].percentages.reduce((sum, p) => sum + p, 0);
+    if (!newSchedule[serviceId]) {
+      newSchedule[serviceId] = {
+        percentages: Array(months).fill(0),
+        total: 0
+      };
+    }
     
-    if (newSchedule[stageId].total > 100) {
-      toast.error(`A etapa não pode ultrapassar 100% de execução`);
+    newSchedule[serviceId].percentages[monthIndex] = percentage;
+    newSchedule[serviceId].total = newSchedule[serviceId].percentages.reduce((sum, p) => sum + p, 0);
+    
+    if (newSchedule[serviceId].total > 100) {
+      toast.error(`O serviço não pode ultrapassar 100% de execução`);
       return;
     }
     
-    setSchedule(newSchedule);
+    setServiceSchedule(newSchedule);
     onChange && onChange(newSchedule, months);
   };
 
