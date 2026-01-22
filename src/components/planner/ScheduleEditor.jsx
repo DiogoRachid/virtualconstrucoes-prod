@@ -182,33 +182,72 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     const stageData = schedule[stage.id];
     const isComplete = stageData?.total === 100;
     const isOverLimit = stageData?.total > 100;
+    const isExpanded = expandedStages.has(stage.id);
+    const stageServices = getStageServices(stage.id);
 
     return (
-      <TableRow key={stage.id}>
-        <TableCell className="font-medium sticky left-0 bg-white z-10">
-          {stage.nome}
-        </TableCell>
-        <TableCell className="text-right text-sm">
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stageValue)}
-        </TableCell>
-        {Array.from({ length: months }).map((_, idx) => (
-          <TableCell key={idx} className="p-1">
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={stageData?.percentages[idx]?.toFixed(2) || '0.00'}
-              onChange={(e) => handlePercentageChange(stage.id, idx, e.target.value)}
-              className="h-8 w-16 text-xs text-center"
-            />
+      <React.Fragment key={stage.id}>
+        <TableRow>
+          <TableCell className="font-medium sticky left-0 bg-white z-10">
+            <div className="flex items-center gap-2">
+              {stageServices.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 p-0"
+                  onClick={() => toggleStageExpanded(stage.id)}
+                >
+                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+              )}
+              {stageServices.length === 0 && <div className="w-6"></div>}
+              <span>{stage.nome}</span>
+            </div>
           </TableCell>
-        ))}
-        <TableCell className={`text-right font-bold ${isOverLimit ? 'text-red-600' : isComplete ? 'text-green-600' : 'text-slate-600'}`}>
-          {stageData?.total.toFixed(2)}%
-          {isOverLimit && <AlertCircle className="inline h-4 w-4 ml-1" />}
-        </TableCell>
-      </TableRow>
+          <TableCell className="text-right text-sm">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stageValue)}
+          </TableCell>
+          {Array.from({ length: months }).map((_, idx) => (
+            <TableCell key={idx} className="p-1">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={stageData?.percentages[idx]?.toFixed(2) || '0.00'}
+                onChange={(e) => handlePercentageChange(stage.id, idx, e.target.value)}
+                className="h-8 w-16 text-xs text-center"
+              />
+            </TableCell>
+          ))}
+          <TableCell className={`text-right font-bold ${isOverLimit ? 'text-red-600' : isComplete ? 'text-green-600' : 'text-slate-600'}`}>
+            {stageData?.total.toFixed(2)}%
+            {isOverLimit && <AlertCircle className="inline h-4 w-4 ml-1" />}
+          </TableCell>
+        </TableRow>
+        
+        {isExpanded && stageServices.length > 0 && stageServices.map(serviceId => {
+          const service = items.find(i => i.servico_id === serviceId);
+          if (!service) return null;
+          
+          return (
+            <TableRow key={`service-${serviceId}`} className="bg-slate-50">
+              <TableCell className="sticky left-0 bg-slate-50 z-10 pl-12 text-sm text-slate-600">
+                {service.descricao || 'Sem descrição'}
+              </TableCell>
+              <TableCell className="text-right text-sm text-slate-600">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.subtotal || 0)}
+              </TableCell>
+              {Array.from({ length: months }).map((_, idx) => (
+                <TableCell key={idx} className="p-1">
+                  <span className="text-xs text-slate-500 text-center block">-</span>
+                </TableCell>
+              ))}
+              <TableCell></TableCell>
+            </TableRow>
+          );
+        })}
+      </React.Fragment>
     );
   };
 
