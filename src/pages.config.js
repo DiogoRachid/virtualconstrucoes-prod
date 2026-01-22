@@ -56,6 +56,8 @@ import VersionHistoryForm from './pages/VersionHistoryForm';
 import ImportInvoice from './pages/ImportInvoice';
 import ImportInvoiceMapping from './pages/ImportInvoiceMapping';
 import InputPurchaseHistory from './pages/InputPurchaseHistory';
+import PurchasingList from './pages/PurchasingList';
+import MaterialRequisitions from './pages/MaterialRequisitions';
 import __Layout from './Layout.jsx';
 
 
@@ -118,6 +120,8 @@ export const PAGES = {
     "ImportInvoice": ImportInvoice,
     "ImportInvoiceMapping": ImportInvoiceMapping,
     "InputPurchaseHistory": InputPurchaseHistory,
+    "PurchasingList": PurchasingList,
+    "MaterialRequisitions": MaterialRequisitions,
 }
 
 export const pagesConfig = {
