@@ -72,6 +72,11 @@ const menuItems = [
         page: 'Budgets'
       },
       {
+        title: 'Planejamento',
+        icon: Calendar,
+        page: 'Plannings'
+      },
+      {
         title: 'Medições',
         icon: Ruler,
         page: 'Measurements'
