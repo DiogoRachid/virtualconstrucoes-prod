@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import EmptyState from '@/components/ui/EmptyState';
 import RequisitionItemForm from '@/components/requisitions/RequisitionItemForm';
-import { exportRequisitionToXLSX, exportRequisitionToPDF } from '@/components/requisitions/RequisitionExporter';
+import { exportRequisitionToPDF } from '@/components/requisitions/RequisitionExporter';
 
 export default function MaterialRequisitionsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -123,13 +123,9 @@ export default function MaterialRequisitionsPage() {
     setShowForm(true);
   };
 
-  const handleExport = async (requisition, format) => {
+  const handleExport = async (requisition) => {
     const itemsData = await base44.entities.MaterialRequisitionItem.filter({ requisicao_id: requisition.id });
-    if (format === 'xlsx') {
-      exportRequisitionToXLSX(requisition, itemsData);
-    } else {
-      exportRequisitionToPDF(requisition, itemsData);
-    }
+    exportRequisitionToPDF(requisition, itemsData);
   };
 
   return (
@@ -236,9 +232,9 @@ export default function MaterialRequisitionsPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleExport(req, 'xlsx')}
+                      onClick={() => handleExport(req)}
                       className="text-green-600 hover:text-green-700 transition"
-                      title="Exportar como Excel"
+                      title="Exportar como PDF"
                     >
                       <Download className="h-5 w-5" />
                     </button>
