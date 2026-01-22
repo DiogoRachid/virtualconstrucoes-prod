@@ -22,17 +22,34 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
   }, [budget?.duracao_meses]);
 
   useEffect(() => {
-    // Inicializar schedule com serviços (cada serviço tem sua própria distribuição)
-    const initialServiceSchedule = {};
-    items.forEach(item => {
-      if (item.servico_id) {
-        initialServiceSchedule[item.servico_id] = {
-          percentages: Array(months).fill(0),
-          total: 0
-        };
-      }
+    // Inicializar schedule com serviços, mantendo valores anteriores
+    setServiceSchedule(prevSchedule => {
+      const newSchedule = { ...prevSchedule };
+      
+      items.forEach(item => {
+        if (item.servico_id) {
+          // Se já existe, manter os percentuais
+          if (!newSchedule[item.servico_id]) {
+            newSchedule[item.servico_id] = {
+              percentages: Array(months).fill(0),
+              total: 0
+            };
+          } else {
+            // Ajustar tamanho do array se months mudou
+            const current = newSchedule[item.servico_id].percentages;
+            if (current.length > months) {
+              newSchedule[item.servico_id].percentages = current.slice(0, months);
+            } else if (current.length < months) {
+              newSchedule[item.servico_id].percentages = [...current, ...Array(months - current.length).fill(0)];
+            }
+            // Recalcular total
+            newSchedule[item.servico_id].total = newSchedule[item.servico_id].percentages.reduce((sum, p) => sum + p, 0);
+          }
+        }
+      });
+      
+      return newSchedule;
     });
-    setServiceSchedule(initialServiceSchedule);
   }, [items, months]);
 
   const toggleStageExpanded = (stageId) => {
