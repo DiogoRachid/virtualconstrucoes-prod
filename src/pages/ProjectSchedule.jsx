@@ -12,7 +12,7 @@ import SCurveChart from '@/components/planner/SCurveChart';
 import ABCAnalysis from '@/components/planner/ABCAnalysis';
 import StaffingCalculator from '@/components/planner/StaffingCalculator';
 
-export default function ProjectSchedule() {
+export default function BudgetPlanner() {
   const urlParams = new URLSearchParams(window.location.search);
   const budgetId = urlParams.get('budgetId');
   const queryClient = useQueryClient();
@@ -144,7 +144,7 @@ export default function ProjectSchedule() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-slate-600">Nenhum orçamento selecionado.</p>
-            <Button onClick={() => window.location.href = createPageUrl('Budgets')} className="mt-4">
+            <Button onClick={() => window.location.href = createPageUrl('BudgetForm')} className="mt-4">
               Voltar para Orçamentos
             </Button>
           </CardContent>
@@ -169,7 +169,7 @@ export default function ProjectSchedule() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => window.location.href = createPageUrl('Budgets')}>
+          <Button variant="ghost" size="icon" onClick={() => window.location.href = createPageUrl('BudgetForm') + `?id=${budgetId}`}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>

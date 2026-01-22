@@ -659,6 +659,9 @@ export default function BudgetForm() {
         <div className="flex gap-2">
           {budgetId && (
             <>
+              <Button variant="outline" onClick={() => window.location.href = createPageUrl('BudgetPlanner') + `?budgetId=${budgetId}`}>
+                <Calendar className="h-4 w-4 mr-2" /> Planejamento
+              </Button>
               <Button variant="outline" onClick={handleExportXLSX}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar XLSX
               </Button>

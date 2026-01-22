@@ -253,6 +253,7 @@ export default function ABCAnalysis({ items, services, budget }) {
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-20">Unid</TableHead>
                     <TableHead className="text-right w-24">Qtd</TableHead>
+                    <TableHead className="text-right w-28">Valor Unit.</TableHead>
                     <TableHead className="text-right w-32">Valor Total</TableHead>
                     <TableHead className="text-right w-24">% Total</TableHead>
                     <TableHead className="text-right w-24">% Acum.</TableHead>
@@ -273,6 +274,9 @@ export default function ABCAnalysis({ items, services, budget }) {
                       <TableCell className="text-sm">{item.description}</TableCell>
                       <TableCell className="text-xs">{item.unit}</TableCell>
                       <TableCell className="text-right text-sm">{item.quantity.toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-sm">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity > 0 ? item.value / item.quantity : 0)}
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.value)}
                       </TableCell>

@@ -230,10 +230,7 @@ export default function Budgets() {
               <Pencil className="h-4 w-4 mr-2" />
               Editar
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => window.location.href = createPageUrl('ProjectSchedule') + `?budgetId=${row.id}`}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Planejamento e Cronograma
-            </DropdownMenuItem>
+
             <DropdownMenuItem onClick={async () => {
               const result = await exportBudgetXLSX(row.id);
               if (result.success) toast.success(result.message);
