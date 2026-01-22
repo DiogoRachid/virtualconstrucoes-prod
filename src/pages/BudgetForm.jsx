@@ -20,7 +20,8 @@ import {
   FolderPlus,
   Check,
   ChevronsUpDown,
-  Pencil
+  Pencil,
+  Calendar
 } from 'lucide-react';
 import { exportBudgetPDF, exportBudgetXLSX } from '@/components/budgets/BudgetExporter';
 import { Button } from "@/components/ui/button";
