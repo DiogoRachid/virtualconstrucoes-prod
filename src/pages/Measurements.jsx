@@ -98,7 +98,7 @@ export default function Measurements() {
           <p className="text-sm">{row.periodo_referencia}</p>
           {row.data_inicio && row.data_fim && (
             <p className="text-xs text-slate-500">
-              {format(new Date(row.data_inicio), 'dd/MM')} - {format(new Date(row.data_fim), 'dd/MM')}
+              {format(new Date(row.data_inicio + 'T00:00:00'), 'dd/MM')} - {format(new Date(row.data_fim + 'T00:00:00'), 'dd/MM')}
             </p>
           )}
         </div>
