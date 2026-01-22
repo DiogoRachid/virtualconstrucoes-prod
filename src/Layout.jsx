@@ -3,38 +3,40 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from './utils';
 import { base44 } from '@/api/base44Client';
 import {
-              LayoutDashboard,
-              Users,
-              Building2,
-              Wallet,
-              Receipt,
-              ArrowDownCircle,
-              ArrowUpCircle,
-              PieChart,
-              FileText,
-              Settings,
-              Menu,
-              X,
-              ChevronDown,
-              LogOut,
-              HardHat,
-              Landmark,
-              FolderKanban,
-              TrendingUp,
-              Moon,
-              Sun,
-              UsersRound,
-              Clock,
-              FileSignature,
-              Gift,
-              Package,
-              Layers,
-              Calculator,
-              UploadCloud,
-              History,
-              DollarSign,
-              Ruler
-              } from 'lucide-react';
+                  LayoutDashboard,
+                  Users,
+                  Building2,
+                  Wallet,
+                  Receipt,
+                  ArrowDownCircle,
+                  ArrowUpCircle,
+                  PieChart,
+                  FileText,
+                  Settings,
+                  Menu,
+                  X,
+                  ChevronDown,
+                  LogOut,
+                  HardHat,
+                  Landmark,
+                  FolderKanban,
+                  TrendingUp,
+                  Moon,
+                  Sun,
+                  UsersRound,
+                  Clock,
+                  FileSignature,
+                  Gift,
+                  Package,
+                  Layers,
+                  Calculator,
+                  UploadCloud,
+                  History,
+                  DollarSign,
+                  Ruler,
+                  ChevronLeft,
+                  ChevronRight
+                  } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -119,6 +121,12 @@ const menuItems = [
 
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
+    }
+    return false;
+  });
   const [expandedMenus, setExpandedMenus] = useState([]);
   const [user, setUser] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
@@ -136,6 +144,10 @@ export default function Layout({ children, currentPageName }) {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -281,7 +293,8 @@ export default function Layout({ children, currentPageName }) {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 left-0 h-full w-80 sm:w-72 border-r z-50 transition-all duration-300",
+        "fixed top-0 left-0 h-full border-r z-50 transition-all duration-300",
+        sidebarCollapsed ? "w-20" : "w-80 sm:w-72",
         darkMode ? "bg-gradient-to-b from-[#1e3a5f] to-[#0f172a] border-[#2d4a6f]" : "bg-white border-slate-200",
         "lg:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -289,15 +302,17 @@ export default function Layout({ children, currentPageName }) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className={`h-20 flex items-center justify-between px-6 border-b ${darkMode ? 'border-[#2d4a6f]' : 'border-slate-100'}`}>
-            <img 
-              src={darkMode 
-                ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png"
-                : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg"
-              } 
-              alt="Virtual Construções" 
-              className="h-10 object-contain"
-            />
-            <div className="flex items-center gap-2">
+            {!sidebarCollapsed && (
+              <img 
+                src={darkMode 
+                  ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png"
+                  : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg"
+                } 
+                alt="Virtual Construções" 
+                className="h-10 object-contain"
+              />
+            )}
+            <div className={`flex items-center gap-2 ${sidebarCollapsed ? 'mx-auto' : ''}`}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -332,17 +347,20 @@ export default function Layout({ children, currentPageName }) {
                             ? "text-slate-300 hover:bg-[#2d4a6f] hover:text-white"
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                         )}
+                        title={sidebarCollapsed ? item.title : ''}
                       >
                         <div className="flex items-center gap-3">
                           <item.icon className="h-5 w-5" />
-                          {item.title}
+                          {!sidebarCollapsed && item.title}
                         </div>
-                        <ChevronDown className={cn(
-                          "h-4 w-4 transition-transform",
-                          expandedMenus.includes(item.title) && "rotate-180"
-                        )} />
+                        {!sidebarCollapsed && (
+                          <ChevronDown className={cn(
+                            "h-4 w-4 transition-transform",
+                            expandedMenus.includes(item.title) && "rotate-180"
+                          )} />
+                        )}
                       </button>
-                      {expandedMenus.includes(item.title) && (
+                      {expandedMenus.includes(item.title) && !sidebarCollapsed && (
                         <div className={`ml-4 mt-1 space-y-1 border-l-2 pl-4 ${darkMode ? 'border-[#3b5998]' : 'border-slate-100'}`}>
                           {item.submenu.map((subitem) => (
                             <Link
@@ -371,6 +389,7 @@ export default function Layout({ children, currentPageName }) {
                     <Link
                       to={createPageUrl(item.page)}
                       onClick={() => setSidebarOpen(false)}
+                      title={sidebarCollapsed ? item.title : ''}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
                         currentPageName === item.page
@@ -381,7 +400,7 @@ export default function Layout({ children, currentPageName }) {
                       )}
                     >
                       <item.icon className="h-5 w-5" />
-                      {item.title}
+                      {!sidebarCollapsed && item.title}
                     </Link>
                   )}
                 </div>
@@ -389,20 +408,37 @@ export default function Layout({ children, currentPageName }) {
             </div>
           </nav>
 
+          {/* Collapse Button */}
+          <div className={`hidden lg:block px-4 py-2 border-t ${darkMode ? 'border-[#2d4a6f]' : 'border-slate-100'}`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={`w-full ${darkMode ? 'hover:bg-[#2d4a6f]' : ''}`}
+            >
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 mr-2" />}
+              {!sidebarCollapsed && 'Recolher'}
+            </Button>
+          </div>
+
           {/* User Section */}
           {user && (
             <div className={`p-4 border-t ${darkMode ? 'border-[#2d4a6f]' : 'border-slate-100'}`}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${darkMode ? 'hover:bg-[#2d4a6f]' : 'hover:bg-slate-50'}`}>
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
                       {user.full_name?.[0]?.toUpperCase() || 'U'}
                     </div>
-                    <div className="flex-1 text-left">
-                      <p className={`text-sm font-medium truncate ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>{user.full_name}</p>
-                      <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{getPermissionLabel(user.permissao_financeiro)}</p>
-                    </div>
-                    <ChevronDown className={`h-4 w-4 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                    {!sidebarCollapsed && (
+                      <>
+                        <div className="flex-1 text-left">
+                          <p className={`text-sm font-medium truncate ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>{user.full_name}</p>
+                          <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{getPermissionLabel(user.permissao_financeiro)}</p>
+                        </div>
+                        <ChevronDown className={`h-4 w-4 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                      </>
+                    )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -425,7 +461,7 @@ export default function Layout({ children, currentPageName }) {
       </aside>
 
       {/* Main Content */}
-      <main className={`lg:pl-72 pt-16 lg:pt-0 min-h-screen transition-colors ${darkMode ? 'text-slate-100' : ''}`}>
+      <main className={`pt-16 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} ${darkMode ? 'text-slate-100' : ''}`}>
         <div className="p-4 sm:p-6 lg:p-8">
           {children}
         </div>
