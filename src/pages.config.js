@@ -31,6 +31,7 @@ import InvestmentDetail from './pages/InvestmentDetail';
 import InvestmentForm from './pages/InvestmentForm';
 import InvestmentTransactions from './pages/InvestmentTransactions';
 import Investments from './pages/Investments';
+import MaterialRequisitionForm from './pages/MaterialRequisitionForm';
 import MaterialRequisitions from './pages/MaterialRequisitions';
 import MeasurementForm from './pages/MeasurementForm';
 import Measurements from './pages/Measurements';
@@ -58,7 +59,6 @@ import TimeSheet from './pages/TimeSheet';
 import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
-import MaterialRequisitionForm from './pages/MaterialRequisitionForm';
 import __Layout from './Layout.jsx';
 
 
@@ -96,6 +96,7 @@ export const PAGES = {
     "InvestmentForm": InvestmentForm,
     "InvestmentTransactions": InvestmentTransactions,
     "Investments": Investments,
+    "MaterialRequisitionForm": MaterialRequisitionForm,
     "MaterialRequisitions": MaterialRequisitions,
     "MeasurementForm": MeasurementForm,
     "Measurements": Measurements,
@@ -123,7 +124,6 @@ export const PAGES = {
     "Transactions": Transactions,
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
-    "MaterialRequisitionForm": MaterialRequisitionForm,
 }
 
 export const pagesConfig = {

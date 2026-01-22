@@ -127,13 +127,18 @@ export default function PurchasingListPage() {
 
   // Filtrar itens por mês selecionado
   let filteredPeriodos = listData?.periodos || [];
-  let displayData = listData;
+  let displayData = {
+    ...listData,
+    itens: listData?.periodos?.flatMap(p => p.itens) || [],
+    total_geral_itens: listData?.total_geral_itens || 0,
+    total_geral_valor: listData?.total_geral_valor || 0
+  };
 
   if (selectedMonth !== 'all' && listData) {
     const monthNum = parseInt(selectedMonth);
     filteredPeriodos = listData.periodos.filter(p => p.mes === monthNum);
     
-    const allItems = filteredPeriodos.flatMap(p => p.itens);
+    const allItems = filteredPeriodos.flatMap(p => p.itens || []);
     const totalValue = filteredPeriodos.reduce((sum, p) => sum + p.total_valor, 0);
     displayData = {
       ...listData,
