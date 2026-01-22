@@ -45,11 +45,12 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     setExpandedStages(newExpanded);
   };
 
-  // Buscar serviços de uma etapa
+  // Buscar serviços de uma etapa filtrando itens pelo stage_id
   const getStageServices = (stageId) => {
-    const stage = stages.find(s => s.id === stageId);
-    if (!stage || !stage.servicos_ids) return [];
-    return stage.servicos_ids;
+    return items
+      .filter(item => item.stage_id === stageId)
+      .map(item => item.servico_id)
+      .filter(Boolean);
   };
 
   const handleServicePercentageChange = (serviceId, monthIndex, value) => {
