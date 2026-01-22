@@ -772,68 +772,90 @@ export default function MeasurementForm() {
                 return (
                   <div className="space-y-6">
                     {sortedStages.map((stageData) => {
-                      const percentPeriodo = data.previsto_periodo > 0 
-                        ? (data.executado_periodo / data.previsto_periodo) * 100 
+                      const percentExecutadoPeriodo = stageData.previsto_periodo > 0 
+                        ? (stageData.executado_periodo / stageData.previsto_periodo) * 100 
                         : 0;
-                      const isOnTrack = percentPeriodo >= 95;
-                      const isBehind = percentPeriodo < 80;
+                      const percentExecutadoAcum = stageData.previsto_acumulado > 0 
+                        ? (stageData.executado_acumulado / stageData.previsto_acumulado) * 100 
+                        : 0;
 
                       return (
-                        <div key={stage} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-slate-700">{stage}</h4>
-                            <span className={`text-sm font-semibold ${
-                              isOnTrack ? 'text-green-600' : 
-                              isBehind ? 'text-red-600' : 'text-yellow-600'
-                            }`}>
-                              {percentPeriodo.toFixed(1)}%
-                            </span>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4 text-sm mb-2">
-                            <div>
-                              <span className="text-slate-500">Previsto Período:</span>
-                              <span className="ml-2 font-medium">
-                                {new Intl.NumberFormat('pt-BR', { 
-                                  style: 'currency', 
-                                  currency: 'BRL' 
-                                }).format(data.previsto_periodo)}
-                              </span>
+                        <Card key={stageData.stageId}>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">
+                              {stageData.codigo} {stageData.nome}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-slate-500 mb-1">Previsto Período</p>
+                                <p className="text-lg font-semibold text-slate-900">
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: 'BRL' 
+                                  }).format(stageData.previsto_periodo)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-500 mb-1">Executado Período</p>
+                                <p className="text-lg font-semibold text-blue-600">
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: 'BRL' 
+                                  }).format(stageData.executado_periodo)}
+                                </p>
+                                <div className="mt-2">
+                                  <div className="w-full bg-slate-200 rounded-full h-2">
+                                    <div 
+                                      className={`h-2 rounded-full ${
+                                        percentExecutadoPeriodo >= 100 ? 'bg-green-500' : 
+                                        percentExecutadoPeriodo >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${Math.min(percentExecutadoPeriodo, 100)}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {percentExecutadoPeriodo.toFixed(1)}% do previsto
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <p className="text-sm text-slate-500 mb-1">Previsto Acumulado</p>
+                                <p className="text-lg font-semibold text-slate-900">
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: 'BRL' 
+                                  }).format(stageData.previsto_acumulado)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-500 mb-1">Executado Acumulado</p>
+                                <p className="text-lg font-semibold text-green-600">
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: 'BRL' 
+                                  }).format(stageData.executado_acumulado)}
+                                </p>
+                                <div className="mt-2">
+                                  <div className="w-full bg-slate-200 rounded-full h-2">
+                                    <div 
+                                      className={`h-2 rounded-full ${
+                                        percentExecutadoAcum >= 100 ? 'bg-green-500' : 
+                                        percentExecutadoAcum >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${Math.min(percentExecutadoAcum, 100)}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {percentExecutadoAcum.toFixed(1)}% do previsto
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <span className="text-slate-500">Executado Período:</span>
-                              <span className="ml-2 font-medium text-blue-600">
-                                {new Intl.NumberFormat('pt-BR', { 
-                                  style: 'currency', 
-                                  currency: 'BRL' 
-                                }).format(data.executado_periodo)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full transition-all ${
-                                isOnTrack ? 'bg-green-500' : 
-                                isBehind ? 'bg-red-500' : 'bg-yellow-500'
-                              }`}
-                              style={{ width: `${Math.min(percentPeriodo, 100)}%` }}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 mt-1">
-                            <div>Prev. Acum.: {new Intl.NumberFormat('pt-BR', { 
-                              style: 'currency', 
-                              currency: 'BRL',
-                              minimumFractionDigits: 0
-                            }).format(data.previsto_acumulado)}</div>
-                            <div>Exec. Acum.: {new Intl.NumberFormat('pt-BR', { 
-                              style: 'currency', 
-                              currency: 'BRL',
-                              minimumFractionDigits: 0
-                            }).format(data.executado_acumulado)}</div>
-                          </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                       );
                     })}
 
