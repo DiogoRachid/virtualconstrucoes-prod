@@ -107,6 +107,22 @@ export default function MeasurementForm() {
     }
   }, [measurementItems]);
 
+  // Carregar etapas e distribuições quando editando
+  useEffect(() => {
+    const loadStagesWhenEditing = async () => {
+      if (isEditing && formData.orcamento_id && projectStages.length === 0) {
+        const stages = await base44.entities.ProjectStage.filter({ orcamento_id: formData.orcamento_id });
+        setProjectStages(stages);
+        
+        const monthlyDistributions = await base44.entities.ServiceMonthlyDistribution.filter({ 
+          orcamento_id: formData.orcamento_id
+        });
+        setScheduleData(monthlyDistributions);
+      }
+    };
+    loadStagesWhenEditing();
+  }, [isEditing, formData.orcamento_id, projectStages.length]);
+
   const handleObraChange = async (obraId) => {
     const obra = projects.find(p => p.id === obraId);
     setFormData(prev => ({
