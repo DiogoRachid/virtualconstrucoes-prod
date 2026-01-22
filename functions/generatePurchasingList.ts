@@ -118,10 +118,13 @@ Deno.serve(async (req) => {
 
     // Para cada BudgetItem (serviço do orçamento)
     for (const budgetItem of allBudgetItems) {
-      // Buscar ServiceItems deste serviço
-      const serviceItems = serviceItemMap.get(budgetItem.servico_id) || [];
+     // Buscar ServiceItems deste serviço
+     const serviceItems = serviceItemMap.get(budgetItem.servico_id) || [];
 
-      if (serviceItems.length === 0) continue;
+     if (serviceItems.length === 0) {
+       console.log(`[DEBUG] BudgetItem ${budgetItem.id} (serviço: ${budgetItem.servico_id}) não tem ServiceItems`);
+       continue;
+     }
 
       // Para cada insumo que compõe este serviço
       for (const serviceItem of serviceItems) {
