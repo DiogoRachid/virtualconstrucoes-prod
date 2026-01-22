@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import { base44 } from '@/api/base44Client';
 
@@ -11,7 +11,7 @@ export async function exportMeasurementXLSX(measurementId) {
     const budgetItems = await base44.entities.BudgetItem.filter({ orcamento_id: measurement.orcamento_id });
     const project = (await base44.entities.Project.filter({ id: measurement.obra_id }))[0];
 
-    // Criar mapa de itens do orçamento para obter custos de material e mão de obra
+    // Criar mapa de itens do orçamento
     const budgetItemMap = {};
     budgetItems.forEach(item => {
       budgetItemMap[item.servico_id] = item;
@@ -44,9 +44,6 @@ export async function exportMeasurementXLSX(measurementId) {
     const valorBDIPeriodo = subtotalPeriodo * (bdiPercentual / 100);
     const totalComBDIPeriodo = subtotalPeriodo + valorBDIPeriodo;
 
-    // Criar planilha única
-    const data = [];
-    
     // Formatar datas
     const formatDate = (dateStr) => {
       if (!dateStr) return '-';
@@ -54,33 +51,97 @@ export async function exportMeasurementXLSX(measurementId) {
       return date.toLocaleDateString('pt-BR');
     };
 
-    // Cabeçalho formatado
-    data.push(['MEDIÇÃO DE OBRA']);
-    data.push([]);
-    data.push(['DADOS DA OBRA']);
-    data.push(['Obra:', measurement.obra_nome]);
-    data.push(['Endereço:', project?.endereco || '-']);
-    data.push(['Cidade/Estado:', `${project?.cidade || ''} / ${project?.estado || ''}`]);
-    data.push([]);
-    data.push(['DADOS DA MEDIÇÃO']);
-    data.push(['Medição Nº:', measurement.numero_medicao]);
-    data.push(['Período:', measurement.periodo_referencia]);
-    data.push(['Data Início:', formatDate(measurement.data_inicio)]);
-    data.push(['Data Fim:', formatDate(measurement.data_fim)]);
-    data.push(['Emissão:', new Date().toLocaleDateString('pt-BR')]);
-    data.push([]);
-    
+    // Criar workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Medição');
+
+    let currentRow = 1;
+
+    // Logo
+    try {
+      const logoUrl = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
+      const response = await fetch(logoUrl);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      const imageId = workbook.addImage({
+        buffer: arrayBuffer,
+        extension: 'jpeg',
+      });
+      
+      worksheet.addImage(imageId, {
+        tl: { col: 0, row: 0 },
+        ext: { width: 200, height: 80 }
+      });
+      
+      currentRow = 6;
+    } catch (e) {
+      console.log('Logo não carregada');
+    }
+
+    // Título
+    worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+    const titleCell = worksheet.getCell(`A${currentRow}`);
+    titleCell.value = 'MEDIÇÃO DE OBRA';
+    titleCell.font = { size: 18, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    currentRow += 2;
+
+    // Dados da Obra
+    const headerRow1 = worksheet.getRow(currentRow);
+    headerRow1.getCell(1).value = 'DADOS DA OBRA';
+    headerRow1.getCell(1).font = { bold: true, size: 12 };
+    headerRow1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } };
+    currentRow++;
+
+    worksheet.getRow(currentRow).getCell(1).value = 'Obra:';
+    worksheet.getRow(currentRow).getCell(2).value = measurement.obra_nome;
+    currentRow++;
+    worksheet.getRow(currentRow).getCell(1).value = 'Endereço:';
+    worksheet.getRow(currentRow).getCell(2).value = project?.endereco || '-';
+    currentRow++;
+    worksheet.getRow(currentRow).getCell(1).value = 'Cidade/Estado:';
+    worksheet.getRow(currentRow).getCell(2).value = `${project?.cidade || ''} / ${project?.estado || ''}`;
+    currentRow += 2;
+
+    // Dados da Medição
+    const headerRow2 = worksheet.getRow(currentRow);
+    headerRow2.getCell(1).value = 'DADOS DA MEDIÇÃO';
+    headerRow2.getCell(1).font = { bold: true, size: 12 };
+    headerRow2.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } };
+    currentRow++;
+
+    worksheet.getRow(currentRow).getCell(1).value = 'Medição Nº:';
+    worksheet.getRow(currentRow).getCell(2).value = measurement.numero_medicao;
+    worksheet.getRow(currentRow).getCell(4).value = 'Período:';
+    worksheet.getRow(currentRow).getCell(5).value = measurement.periodo_referencia;
+    currentRow++;
+    worksheet.getRow(currentRow).getCell(1).value = 'Data Início:';
+    worksheet.getRow(currentRow).getCell(2).value = formatDate(measurement.data_inicio);
+    worksheet.getRow(currentRow).getCell(4).value = 'Data Fim:';
+    worksheet.getRow(currentRow).getCell(5).value = formatDate(measurement.data_fim);
+    currentRow++;
+    worksheet.getRow(currentRow).getCell(1).value = 'Emissão:';
+    worksheet.getRow(currentRow).getCell(2).value = new Date().toLocaleDateString('pt-BR');
+    currentRow += 2;
+
     // Cabeçalho da tabela
-    data.push([
-      'Etapa',
-      'Código',
-      'Descrição',
-      'Unidade',
-      'Qtd Período',
-      'Material (R$)',
-      'Mão de Obra (R$)',
-      'Subtotal (R$)'
-    ]);
+    const tableHeaderRow = worksheet.getRow(currentRow);
+    const headers = ['Etapa', 'Código', 'Descrição', 'Unidade', 'Qtd Período', 'Material (R$)', 'Mão de Obra (R$)', 'Subtotal (R$)'];
+    headers.forEach((header, idx) => {
+      const cell = tableHeaderRow.getCell(idx + 1);
+      cell.value = header;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2962FF' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    currentRow++;
 
     // Agrupar por etapa
     const itemsByStage = {};
@@ -92,62 +153,115 @@ export async function exportMeasurementXLSX(measurementId) {
       itemsByStage[stageName].push(item);
     });
 
-    // Adicionar itens agrupados
+    // Adicionar itens
     Object.keys(itemsByStage).forEach(stageName => {
       const stageItems = itemsByStage[stageName];
       
       // Linha da etapa
-      data.push([stageName, '', '', '', '', '', '', '']);
+      const stageRow = worksheet.getRow(currentRow);
+      stageRow.getCell(1).value = stageName;
+      stageRow.getCell(1).font = { bold: true };
+      stageRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+      for (let i = 1; i <= 8; i++) {
+        stageRow.getCell(i).border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+      currentRow++;
       
       stageItems.forEach(item => {
-        data.push([
-          '',
-          item.codigo,
-          item.descricao,
-          item.unidade,
-          item.quantidade_executada_periodo,
-          item.valor_material_periodo,
-          item.valor_mao_obra_periodo,
-          item.valor_material_periodo + item.valor_mao_obra_periodo
-        ]);
+        const row = worksheet.getRow(currentRow);
+        row.getCell(2).value = item.codigo;
+        row.getCell(3).value = item.descricao;
+        row.getCell(4).value = item.unidade;
+        row.getCell(5).value = item.quantidade_executada_periodo;
+        row.getCell(6).value = item.valor_material_periodo;
+        row.getCell(6).numFmt = 'R$ #,##0.00';
+        row.getCell(7).value = item.valor_mao_obra_periodo;
+        row.getCell(7).numFmt = 'R$ #,##0.00';
+        row.getCell(8).value = item.valor_material_periodo + item.valor_mao_obra_periodo;
+        row.getCell(8).numFmt = 'R$ #,##0.00';
+        
+        for (let i = 1; i <= 8; i++) {
+          row.getCell(i).border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        }
+        currentRow++;
       });
-      
-      data.push([]); // Linha em branco entre etapas
     });
 
-    // Totais
-    data.push([]);
-    data.push(['', '', '', '', 'SUBTOTAL MATERIAL:', '', '', totalMaterialPeriodo]);
-    data.push(['', '', '', '', 'SUBTOTAL MÃO DE OBRA:', '', '', totalMaoObraPeriodo]);
-    data.push(['', '', '', '', 'SUBTOTAL GERAL:', '', '', subtotalPeriodo]);
-    data.push(['', '', '', '', `BDI (${bdiPercentual}%):`, '', '', valorBDIPeriodo]);
-    data.push(['', '', '', '', 'TOTAL COM BDI:', '', '', totalComBDIPeriodo]);
-    data.push([]);
-    data.push(['', '', '', '', 'Material com BDI:', '', '', totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100)]);
-    data.push(['', '', '', '', 'Mão de Obra com BDI:', '', '', totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100)]);
+    currentRow += 2;
 
-    // Criar worksheet
-    const ws = XLSX.utils.aoa_to_sheet(data);
+    // Totais
+    const addTotalRow = (label, value, bold = false) => {
+      const row = worksheet.getRow(currentRow);
+      row.getCell(5).value = label;
+      row.getCell(5).font = { bold };
+      row.getCell(5).alignment = { horizontal: 'right' };
+      row.getCell(8).value = value;
+      row.getCell(8).numFmt = 'R$ #,##0.00';
+      row.getCell(8).font = { bold };
+      row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+      currentRow++;
+    };
+
+    addTotalRow('SUBTOTAL MATERIAL:', totalMaterialPeriodo);
+    addTotalRow('SUBTOTAL MÃO DE OBRA:', totalMaoObraPeriodo);
+    addTotalRow('SUBTOTAL GERAL:', subtotalPeriodo, true);
+    addTotalRow(`BDI (${bdiPercentual}%):`, valorBDIPeriodo);
+    addTotalRow('TOTAL COM BDI:', totalComBDIPeriodo, true);
+    
+    currentRow++;
+    
+    // Valores com BDI
+    const bdiRow1 = worksheet.getRow(currentRow);
+    bdiRow1.getCell(5).value = 'Material com BDI:';
+    bdiRow1.getCell(5).font = { bold: true };
+    bdiRow1.getCell(5).alignment = { horizontal: 'right' };
+    bdiRow1.getCell(8).value = totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100);
+    bdiRow1.getCell(8).numFmt = 'R$ #,##0.00';
+    bdiRow1.getCell(8).font = { bold: true };
+    bdiRow1.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCF0FF' } };
+    currentRow++;
+    
+    const bdiRow2 = worksheet.getRow(currentRow);
+    bdiRow2.getCell(5).value = 'Mão de Obra com BDI:';
+    bdiRow2.getCell(5).font = { bold: true };
+    bdiRow2.getCell(5).alignment = { horizontal: 'right' };
+    bdiRow2.getCell(8).value = totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100);
+    bdiRow2.getCell(8).numFmt = 'R$ #,##0.00';
+    bdiRow2.getCell(8).font = { bold: true };
+    bdiRow2.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCF0FF' } };
 
     // Largura das colunas
-    ws['!cols'] = [
-      { wch: 20 }, // Etapa
-      { wch: 10 }, // Código
-      { wch: 45 }, // Descrição
-      { wch: 8 },  // Unidade
-      { wch: 12 }, // Qtd
-      { wch: 15 }, // Material
-      { wch: 15 }, // Mão de Obra
-      { wch: 15 }  // Subtotal
+    worksheet.columns = [
+      { width: 20 },
+      { width: 12 },
+      { width: 50 },
+      { width: 10 },
+      { width: 12 },
+      { width: 16 },
+      { width: 16 },
+      { width: 16 }
     ];
 
-    // Criar workbook
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Medição');
-
     // Exportar
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const fileName = `Medicao_${measurement.numero_medicao}_${measurement.obra_nome}_${measurement.periodo_referencia}.xlsx`.replace(/[/\\?%*:|"<>]/g, '_');
-    XLSX.writeFile(wb, fileName);
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
 
     return { success: true, message: 'XLSX exportado com sucesso!' };
   } catch (error) {
