@@ -3,7 +3,16 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { budgetId, budgetName } = await req.json();
+    let requestData = {};
+    
+    try {
+      requestData = await req.json();
+    } catch (e) {
+      requestData = {};
+    }
+    
+    const { budgetId, budgetName } = requestData;
+    console.log('[DEBUG] Request data:', JSON.stringify(requestData));
 
     let finalBudgetId = budgetId;
 
