@@ -143,6 +143,16 @@ export default function MeasurementForm() {
       // Filtrar apenas itens que têm etapa definida
       const budgetItems = allBudgetItems.filter(item => item.stage_id);
       
+      // Criar mapa de etapas por ID
+      const stageMap = {};
+      projectStages.forEach(stage => {
+        stageMap[stage.id] = {
+          id: stage.id,
+          nome: stage.nome,
+          descricao: stage.descricao
+        };
+      });
+      
       // Buscar etapas padrão (BudgetStage)
       const budgetStages = await base44.entities.BudgetStage.list();
       
@@ -182,11 +192,7 @@ export default function MeasurementForm() {
         
         // Buscar etapa a partir do stage_id do BudgetItem
         let stageId = item.stage_id;
-        let stageName = 'Sem Etapa';
-        
-        if (stageId && stageMap[stageId]) {
-          stageName = stageMap[stageId].nome;
-        }
+        let stageName = stageMap[stageId]?.nome || 'Sem Etapa';
         
         return {
           servico_id: item.servico_id,
