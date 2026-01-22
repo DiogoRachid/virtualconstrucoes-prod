@@ -292,7 +292,7 @@ export default function PurchasingListPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(listData?.itens || []).map((item, idx) => (
+                    {(displayData?.itens || []).map((item, idx) => (
                       <tr key={idx} className="border-b hover:bg-slate-50 transition">
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded text-white text-xs font-medium ${
