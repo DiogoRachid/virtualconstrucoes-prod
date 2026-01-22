@@ -251,12 +251,12 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
         </TableRow>
         
         {isExpanded && stageServiceItems.length > 0 && stageServiceItems.map(service => {
-          const serviceData = serviceSchedule[service.servico_id];
-          const isServiceComplete = serviceData?.total === 100;
-          const isServiceOverLimit = serviceData?.total > 100;
+          const itemData = serviceSchedule[service.id];
+          const isServiceComplete = itemData?.total === 100;
+          const isServiceOverLimit = itemData?.total > 100;
           
           return (
-            <TableRow key={`service-${service.servico_id}`} className="bg-white">
+            <TableRow key={`item-${service.id}`} className="bg-white">
               <TableCell className="sticky left-0 bg-white z-10 text-sm" style={{ paddingLeft: `${32 + paddingLeft}px` }}>
                 {service.descricao || 'Sem descrição'}
               </TableCell>
@@ -270,14 +270,14 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                     min="0"
                     max="100"
                     step="0.01"
-                    value={serviceData?.percentages[idx]?.toFixed(2) || '0.00'}
-                    onChange={(e) => handleServicePercentageChange(service.servico_id, idx, e.target.value)}
+                    value={itemData?.percentages[idx]?.toFixed(2) || '0.00'}
+                    onChange={(e) => handleServicePercentageChange(service.id, idx, e.target.value)}
                     className="h-8 w-16 text-xs text-center"
                   />
                 </TableCell>
               ))}
               <TableCell className={`text-right font-bold text-sm ${isServiceOverLimit ? 'text-red-600' : isServiceComplete ? 'text-green-600' : 'text-slate-600'}`}>
-                {serviceData?.total.toFixed(2)}%
+                {itemData?.total.toFixed(2)}%
                 {isServiceOverLimit && <AlertCircle className="inline h-4 w-4 ml-1" />}
               </TableCell>
             </TableRow>
