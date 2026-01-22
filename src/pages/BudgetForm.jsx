@@ -11,6 +11,8 @@ import {
   PieChart as PieChartIcon,
   Printer,
   Loader2,
+  FileSpreadsheet,
+  FileText,
   Calculator,
   RefreshCw,
   GripVertical,
@@ -21,7 +23,7 @@ import {
   ChevronsUpDown,
   Pencil
 } from 'lucide-react';
-import { printBudget } from '@/components/budgets/BudgetPrinter';
+import { exportBudgetPDF, exportBudgetXLSX } from '@/components/budgets/BudgetExporter';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BudgetStageEditor from '@/components/planner/BudgetStageEditor';
@@ -441,18 +443,30 @@ export default function BudgetForm() {
     setIsSaving(false);
   };
 
-  const handleExportPDF = () => {
-    printBudget(null, {
-      header: {
-        ...header,
-        obra_nome: projects.find(p => p.id === header.obra_id)?.nome,
-        centro_custo_nome: costCenters.find(c => c.id === header.centro_custo_id)?.nome
-      },
-      stages,
-      items,
-      project: projects.find(p => p.id === header.obra_id),
-      costCenter: costCenters.find(c => c.id === header.centro_custo_id)
-    });
+  const handleExportPDF = async () => {
+    if (!budgetId) {
+      toast.error('Salve o orçamento antes de exportar');
+      return;
+    }
+    const result = await exportBudgetPDF(budgetId);
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+  };
+
+  const handleExportXLSX = async () => {
+    if (!budgetId) {
+      toast.error('Salve o orçamento antes de exportar');
+      return;
+    }
+    const result = await exportBudgetXLSX(budgetId);
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
   };
 
   // Rendering Helpers
@@ -644,9 +658,16 @@ export default function BudgetForm() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportPDF}>
-            <Printer className="h-4 w-4 mr-2" /> Imprimir / PDF
-          </Button>
+          {budgetId && (
+            <>
+              <Button variant="outline" onClick={handleExportXLSX}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar XLSX
+              </Button>
+              <Button variant="outline" onClick={handleExportPDF}>
+                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+              </Button>
+            </>
+          )}
           <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
             Salvar
