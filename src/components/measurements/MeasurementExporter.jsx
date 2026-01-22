@@ -6,108 +6,134 @@ export async function exportMeasurementXLSX(measurementId) {
   try {
     // Buscar dados
     const measurement = (await base44.entities.Measurement.filter({ id: measurementId }))[0];
-    const items = await base44.entities.MeasurementItem.filter({ medicao_id: measurementId });
+    const measurementItems = await base44.entities.MeasurementItem.filter({ medicao_id: measurementId });
     const budget = (await base44.entities.Budget.filter({ id: measurement.orcamento_id }))[0];
+    const budgetItems = await base44.entities.BudgetItem.filter({ orcamento_id: measurement.orcamento_id });
+    const project = (await base44.entities.Project.filter({ id: measurement.obra_id }))[0];
 
-    // ABA 1 - RESUMO DA MEDIÇÃO
-    const resumoData = [
-      ['RESUMO DA MEDIÇÃO'],
-      [],
-      ['Obra:', measurement.obra_nome],
-      ['Número da Medição:', measurement.numero_medicao],
-      ['Período:', measurement.periodo_referencia],
-      ['Data Início:', measurement.data_inicio || '-'],
-      ['Data Fim:', measurement.data_fim || '-'],
-      [],
-      ['Valor do Orçamento:', budget?.total_final || 0],
-      ['Valor Executado no Período:', measurement.valor_total_periodo || 0],
-      ['Valor Executado Acumulado:', measurement.valor_total_acumulado || 0],
-      ['Saldo a Executar:', (budget?.total_final || 0) - (measurement.valor_total_acumulado || 0)],
-      [],
-      ['% Físico Executado:', (measurement.percentual_fisico_executado || 0).toFixed(2) + '%'],
-      ['% Financeiro Executado:', (measurement.percentual_financeiro_executado || 0).toFixed(2) + '%'],
-      [],
-      ['Observações:', measurement.observacao || '-']
-    ];
+    // Criar mapa de itens do orçamento para obter custos de material e mão de obra
+    const budgetItemMap = {};
+    budgetItems.forEach(item => {
+      budgetItemMap[item.servico_id] = item;
+    });
 
-    const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+    // Calcular totais
+    let totalMaterialPeriodo = 0;
+    let totalMaoObraPeriodo = 0;
+    
+    const itemsEnriquecidos = measurementItems.map(item => {
+      const budgetItem = budgetItemMap[item.servico_id];
+      const custoUnitMaterial = budgetItem?.custo_unitario_material || 0;
+      const custoUnitMaoObra = budgetItem?.custo_unitario_mao_obra || 0;
+      
+      const valorMaterialPeriodo = item.quantidade_executada_periodo * custoUnitMaterial;
+      const valorMaoObraPeriodo = item.quantidade_executada_periodo * custoUnitMaoObra;
+      
+      totalMaterialPeriodo += valorMaterialPeriodo;
+      totalMaoObraPeriodo += valorMaoObraPeriodo;
+      
+      return {
+        ...item,
+        valor_material_periodo: valorMaterialPeriodo,
+        valor_mao_obra_periodo: valorMaoObraPeriodo
+      };
+    });
 
-    // ABA 2 - MEDIÇÃO DE SERVIÇOS
-    const servicosHeaders = [
+    const subtotalPeriodo = totalMaterialPeriodo + totalMaoObraPeriodo;
+    const bdiPercentual = budget?.bdi_padrao || 0;
+    const valorBDIPeriodo = subtotalPeriodo * (bdiPercentual / 100);
+    const totalComBDIPeriodo = subtotalPeriodo + valorBDIPeriodo;
+
+    // Criar planilha única
+    const data = [];
+    
+    // Logo e cabeçalho
+    data.push(['MEDIÇÃO DE OBRA']);
+    data.push([]);
+    data.push(['Obra:', measurement.obra_nome]);
+    data.push(['Endereço:', project?.endereco || '-']);
+    data.push(['Cidade/Estado:', `${project?.cidade || ''} / ${project?.estado || ''}`]);
+    data.push(['Medição Nº:', measurement.numero_medicao]);
+    data.push(['Período:', measurement.periodo_referencia]);
+    data.push(['Data Início:', measurement.data_inicio || '-']);
+    data.push(['Data Fim:', measurement.data_fim || '-']);
+    data.push([]);
+    
+    // Cabeçalho da tabela
+    data.push([
       'Etapa',
       'Código',
       'Descrição',
       'Unidade',
-      'Qtd Orçada',
-      'Qtd Exec. Período',
-      'Qtd Exec. Acumulada',
-      'Saldo',
-      'Preço Unitário',
-      'Valor Exec. Período',
-      'Valor Exec. Acumulado'
-    ];
-
-    const servicosData = items.map(item => [
-      item.stage_nome || '',
-      item.codigo,
-      item.descricao,
-      item.unidade,
-      item.quantidade_orcada,
-      item.quantidade_executada_periodo,
-      item.quantidade_executada_acumulada,
-      item.saldo_a_executar,
-      item.custo_unitario,
-      item.valor_executado_periodo,
-      item.valor_executado_acumulado
+      'Qtd Período',
+      'Material (R$)',
+      'Mão de Obra (R$)',
+      'Subtotal (R$)'
     ]);
 
-    // Adicionar totais
-    const totalPeriodo = items.reduce((sum, item) => sum + (item.valor_executado_periodo || 0), 0);
-    const totalAcumulado = items.reduce((sum, item) => sum + (item.valor_executado_acumulado || 0), 0);
+    // Agrupar por etapa
+    const itemsByStage = {};
+    itemsEnriquecidos.forEach(item => {
+      const stageName = item.stage_nome || 'Sem Etapa';
+      if (!itemsByStage[stageName]) {
+        itemsByStage[stageName] = [];
+      }
+      itemsByStage[stageName].push(item);
+    });
 
-    servicosData.push([]);
-    servicosData.push(['', '', '', '', '', '', '', '', 'TOTAL:', totalPeriodo, totalAcumulado]);
+    // Adicionar itens agrupados
+    Object.keys(itemsByStage).forEach(stageName => {
+      const stageItems = itemsByStage[stageName];
+      
+      // Linha da etapa
+      data.push([stageName, '', '', '', '', '', '', '']);
+      
+      stageItems.forEach(item => {
+        data.push([
+          '',
+          item.codigo,
+          item.descricao,
+          item.unidade,
+          item.quantidade_executada_periodo,
+          item.valor_material_periodo,
+          item.valor_mao_obra_periodo,
+          item.valor_material_periodo + item.valor_mao_obra_periodo
+        ]);
+      });
+      
+      data.push([]); // Linha em branco entre etapas
+    });
 
-    const wsServicos = XLSX.utils.aoa_to_sheet([servicosHeaders, ...servicosData]);
+    // Totais
+    data.push([]);
+    data.push(['', '', '', '', 'SUBTOTAL MATERIAL:', '', '', totalMaterialPeriodo]);
+    data.push(['', '', '', '', 'SUBTOTAL MÃO DE OBRA:', '', '', totalMaoObraPeriodo]);
+    data.push(['', '', '', '', 'SUBTOTAL GERAL:', '', '', subtotalPeriodo]);
+    data.push(['', '', '', '', `BDI (${bdiPercentual}%):`, '', '', valorBDIPeriodo]);
+    data.push(['', '', '', '', 'TOTAL COM BDI:', '', '', totalComBDIPeriodo]);
+    data.push([]);
+    data.push(['', '', '', '', 'Para Nota Fiscal:', '', '', '']);
+    data.push(['', '', '', '', 'Material:', '', '', totalMaterialPeriodo + (totalMaterialPeriodo * bdiPercentual / 100)]);
+    data.push(['', '', '', '', 'Mão de Obra:', '', '', totalMaoObraPeriodo + (totalMaoObraPeriodo * bdiPercentual / 100)]);
+
+    // Criar worksheet
+    const ws = XLSX.utils.aoa_to_sheet(data);
 
     // Largura das colunas
-    wsServicos['!cols'] = [
-      { wch: 15 }, // Etapa
+    ws['!cols'] = [
+      { wch: 20 }, // Etapa
       { wch: 10 }, // Código
-      { wch: 40 }, // Descrição
+      { wch: 45 }, // Descrição
       { wch: 8 },  // Unidade
-      { wch: 12 }, // Qtd Orçada
-      { wch: 15 }, // Qtd Exec Período
-      { wch: 17 }, // Qtd Exec Acum
-      { wch: 10 }, // Saldo
-      { wch: 14 }, // Preço Unit
-      { wch: 16 }, // Valor Período
-      { wch: 17 }  // Valor Acum
+      { wch: 12 }, // Qtd
+      { wch: 15 }, // Material
+      { wch: 15 }, // Mão de Obra
+      { wch: 15 }  // Subtotal
     ];
-
-    // ABA 3 - COMPARATIVO (simplificado)
-    const comparativoData = [
-      ['COMPARATIVO - PREVISTO X EXECUTADO'],
-      [],
-      ['Descrição', 'Previsto (R$)', 'Executado (R$)', 'Diferença (R$)', 'Diferença (%)'],
-      [
-        'Total do Projeto',
-        budget?.total_final || 0,
-        measurement.valor_total_acumulado || 0,
-        (budget?.total_final || 0) - (measurement.valor_total_acumulado || 0),
-        budget?.total_final > 0 
-          ? (((measurement.valor_total_acumulado || 0) / budget.total_final) * 100).toFixed(2) + '%'
-          : '0%'
-      ]
-    ];
-
-    const wsComparativo = XLSX.utils.aoa_to_sheet(comparativoData);
 
     // Criar workbook
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
-    XLSX.utils.book_append_sheet(wb, wsServicos, 'Medição de Serviços');
-    XLSX.utils.book_append_sheet(wb, wsComparativo, 'Comparativo');
+    XLSX.utils.book_append_sheet(wb, ws, 'Medição');
 
     // Exportar
     const fileName = `Medicao_${measurement.numero_medicao}_${measurement.obra_nome}_${measurement.periodo_referencia}.xlsx`.replace(/[/\\?%*:|"<>]/g, '_');
