@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Package, Layers, FileText, FileSpreadsheet } from 'lucide-react';
 import { exportQuotationMapXLSX, exportQuotationMapPDF } from './QuotationMapExporter';
+import { toast } from 'sonner';
 
 const COLORS_ABC = {
   A: '#ef4444',
@@ -309,7 +310,11 @@ export default function ABCAnalysis({ items, services, budget }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportToPDF(prepareQuotationData(), budget)}
+              onClick={async () => {
+                const result = await exportQuotationMapPDF(prepareQuotationData(), budget);
+                if (result.success) toast.success(result.message);
+                else toast.error(result.message);
+              }}
               disabled={isLoadingInputs || inputAnalysisData.length === 0}
             >
               <FileText className="h-4 w-4 mr-2" />
@@ -318,7 +323,11 @@ export default function ABCAnalysis({ items, services, budget }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportToExcel(prepareQuotationData(), budget)}
+              onClick={async () => {
+                const result = await exportQuotationMapXLSX(prepareQuotationData(), budget);
+                if (result.success) toast.success(result.message);
+                else toast.error(result.message);
+              }}
               disabled={isLoadingInputs || inputAnalysisData.length === 0}
             >
               <FileSpreadsheet className="h-4 w-4 mr-2" />

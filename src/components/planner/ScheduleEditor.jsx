@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertCircle, ArrowUpDown, Save } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, Save, FileSpreadsheet, FileText } from 'lucide-react';
+import { exportScheduleXLSX, exportSchedulePDF } from './ScheduleExporter';
 
 export default function ScheduleEditor({ budget, stages, items, onChange, onSave, isSaving }) {
   const [months, setMonths] = useState(budget?.duracao_meses || 12);
@@ -217,19 +218,43 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                 Defina os percentuais de execução mensais para cada etapa
               </div>
             </div>
-            <Button onClick={handleSave} disabled={isSaving} className="gap-2">
-              {isSaving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Salvar Cronograma
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                onClick={async () => {
+                  const result = await exportScheduleXLSX(schedule, stages, items, months, budget);
+                  if (result.success) toast.success(result.message);
+                  else toast.error(result.message);
+                }}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Exportar XLSX
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={async () => {
+                  const result = await exportSchedulePDF(schedule, stages, items, months, budget);
+                  if (result.success) toast.success(result.message);
+                  else toast.error(result.message);
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Exportar PDF
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Salvar Cronograma
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
