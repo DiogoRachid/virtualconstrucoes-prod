@@ -107,7 +107,10 @@ Deno.serve(async (req) => {
     }
 
     // Log para debugging
-    console.log(`[DEBUG] Obra: ${workId}, Meses: ${months}, Medições: ${measurements.length}, Orçamentos: ${budgets.length}, Items: ${allBudgetItems.length}, Insumos: ${allInputs.length}`);
+    console.log(`[DEBUG] Obra: ${workId}, Meses: ${months}`);
+    console.log(`[DEBUG] Medições: ${measurements.length}, Orçamentos: ${budgets.length}, BudgetItems: ${allBudgetItems.length}`);
+    console.log(`[DEBUG] ServiceItems totais: ${allServiceItems.length}, Insumos: ${allInputs.length}`);
+    console.log(`[DEBUG] MeasurementItems: ${measurementItems.length}, DistributionMap: ${distributionMap.size}`);
 
     // Compilar lista de compras por período
     const periodosMap = new Map(); // mes -> { insumos_map, valor_total }
