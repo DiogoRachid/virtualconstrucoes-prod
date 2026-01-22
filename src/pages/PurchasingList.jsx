@@ -223,7 +223,7 @@ export default function PurchasingListPage() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-sm text-slate-600">Total de Itens</p>
-                <p className="text-2xl font-bold">{listData.itens.length}</p>
+                <p className="text-2xl font-bold">{listData?.itens?.length || 0}</p>
               </CardContent>
             </Card>
             <Card>
@@ -247,7 +247,7 @@ export default function PurchasingListPage() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-sm text-slate-600">Valor Total</p>
-                <p className="text-2xl font-bold">R$ {listData.total_valor.toFixed(2)}</p>
+                <p className="text-2xl font-bold">R$ {(listData?.total_valor || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
           </div>
@@ -291,7 +291,7 @@ export default function PurchasingListPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {listData.itens.map((item, idx) => (
+                    {(listData?.itens || []).map((item, idx) => (
                       <tr key={idx} className="border-b hover:bg-slate-50 transition">
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded text-white text-xs font-medium ${
