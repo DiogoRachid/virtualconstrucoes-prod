@@ -54,6 +54,8 @@ import Transactions from './pages/Transactions';
 import VersionHistory from './pages/VersionHistory';
 import VersionHistoryForm from './pages/VersionHistoryForm';
 import ImportInvoice from './pages/ImportInvoice';
+import ImportInvoiceMapping from './pages/ImportInvoiceMapping';
+import InputPurchaseHistory from './pages/InputPurchaseHistory';
 import __Layout from './Layout.jsx';
 
 
@@ -114,6 +116,8 @@ export const PAGES = {
     "VersionHistory": VersionHistory,
     "VersionHistoryForm": VersionHistoryForm,
     "ImportInvoice": ImportInvoice,
+    "ImportInvoiceMapping": ImportInvoiceMapping,
+    "InputPurchaseHistory": InputPurchaseHistory,
 }
 
 export const pagesConfig = {
