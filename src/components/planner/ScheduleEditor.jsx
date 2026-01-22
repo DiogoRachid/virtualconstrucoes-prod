@@ -47,6 +47,23 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     setSchedule(initialSchedule);
   }, [stages, months]);
 
+  const toggleStageExpanded = (stageId) => {
+    const newExpanded = new Set(expandedStages);
+    if (newExpanded.has(stageId)) {
+      newExpanded.delete(stageId);
+    } else {
+      newExpanded.add(stageId);
+    }
+    setExpandedStages(newExpanded);
+  };
+
+  // Buscar serviços de uma etapa
+  const getStageServices = (stageId) => {
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage || !stage.servicos_ids) return [];
+    return stage.servicos_ids;
+  };
+
   const handlePercentageChange = (stageId, monthIndex, value) => {
     const newSchedule = { ...schedule };
     const percentage = parseFloat(value) || 0;
