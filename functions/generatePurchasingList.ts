@@ -3,10 +3,15 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { workId, abcFilter } = await req.json();
+    const { workId, workName, abcFilter } = await req.json();
 
-    // Buscar projeto
-    const project = await base44.asServiceRole.entities.Project.filter({ id: workId }).then(r => r[0]);
+    // Buscar projeto por ID ou Nome
+    let project;
+    if (workId) {
+      project = await base44.asServiceRole.entities.Project.filter({ id: workId }).then(r => r[0]);
+    } else if (workName) {
+      project = await base44.asServiceRole.entities.Project.filter({ nome: workName }).then(r => r[0]);
+    }
     if (!project) {
       return Response.json({ 
         success: false, 
