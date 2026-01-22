@@ -34,7 +34,6 @@ export default function PurchasingListPage() {
       const response = await base44.functions.invoke('generatePurchasingList', {
         workId: selectedWork,
         month: selectedMonth,
-        year: selectedYear,
         abcFilter: abcFilter || null
       });
       return response.data;
@@ -158,31 +157,15 @@ export default function PurchasingListPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Mês</label>
+              <label className="text-sm font-medium">Período</label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o mês" />
+                  <SelectValue placeholder="Selecione o período" />
                 </SelectTrigger>
                 <SelectContent>
                   {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
                     <SelectItem key={m} value={m.toString()}>
-                      {m.toString().padStart(2, '0')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Ano</label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o ano" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026].map(y => (
-                    <SelectItem key={y} value={y.toString()}>
-                      {y}
+                      Mês {m}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -207,7 +190,7 @@ export default function PurchasingListPage() {
 
           <Button
             onClick={() => generateMutation.mutate()}
-            disabled={!selectedWork || !selectedMonth || !selectedYear || generateMutation.isPending}
+            disabled={!selectedWork || !selectedMonth || generateMutation.isPending}
             className="mt-4 bg-blue-600 hover:bg-blue-700"
           >
             {generateMutation.isPending ? 'Gerando...' : 'Gerar Lista'}

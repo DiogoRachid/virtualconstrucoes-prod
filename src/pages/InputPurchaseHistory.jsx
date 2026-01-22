@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { History, TrendingDown } from 'lucide-react';
+import { History, TrendingDown, Search } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -15,11 +16,17 @@ import {
 
 export default function InputPurchaseHistoryPage() {
   const [selectedInputId, setSelectedInputId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: inputs = [] } = useQuery({
     queryKey: ['inputs'],
     queryFn: () => base44.entities.Input.list()
   });
+
+  const filteredInputs = inputs.filter(input =>
+    input.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    input.descricao.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const { data: history = [] } = useQuery({
     queryKey: ['purchaseHistory', selectedInputId],
@@ -52,24 +59,38 @@ export default function InputPurchaseHistoryPage() {
         icon={History}
       />
 
-      {/* Filtro de Insumo */}
+      {/* Filtro de Insumo com Busca */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">Selecione o Insumo</CardTitle>
+          <CardTitle className="text-base">Buscar Insumo</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Select value={selectedInputId} onValueChange={setSelectedInputId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um insumo para ver o histórico" />
-            </SelectTrigger>
-            <SelectContent>
-              {inputs.map(input => (
-                <SelectItem key={input.id} value={input.id}>
-                  {input.codigo} - {input.descricao} ({input.unidade})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Busque por código ou descrição..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          {searchTerm && filteredInputs.length > 0 && (
+            <Select value={selectedInputId} onValueChange={setSelectedInputId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o insumo" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredInputs.map(input => (
+                  <SelectItem key={input.id} value={input.id}>
+                    {input.codigo} - {input.descricao} ({input.unidade})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {searchTerm && filteredInputs.length === 0 && (
+            <p className="text-sm text-slate-500">Nenhum insumo encontrado com "{searchTerm}"</p>
+          )}
         </CardContent>
       </Card>
 
