@@ -320,15 +320,55 @@ export default function MeasurementForm() {
   const totals = calculateTotals();
   const isReadOnly = false; // Sempre editável
 
-  // Group items by stage
-  const itemsByStage = {};
-  items.forEach(item => {
-    const stageName = item.stage_nome || 'Sem Etapa';
-    if (!itemsByStage[stageName]) {
-      itemsByStage[stageName] = [];
-    }
-    itemsByStage[stageName].push(item);
-  });
+  // Criar hierarquia de etapas com numeração
+  const createStageHierarchy = () => {
+    if (!formData.orcamento_id || projectStages.length === 0) return [];
+    
+    const mainStages = projectStages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
+    const hierarchy = [];
+    
+    mainStages.forEach((mainStage, mainIdx) => {
+      const mainStageItems = items.filter(i => i.stage_id === mainStage.id);
+      
+      hierarchy.push({
+        id: mainStage.id,
+        nome: mainStage.nome,
+        number: `${mainIdx + 1}.`,
+        level: 0,
+        items: mainStageItems,
+        ordem: mainStage.ordem
+      });
+      
+      const subStages = projectStages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+      subStages.forEach((subStage, subIdx) => {
+        const subStageItems = items.filter(i => i.stage_id === subStage.id);
+        
+        hierarchy.push({
+          id: subStage.id,
+          nome: subStage.nome,
+          number: `${mainIdx + 1}.${subIdx + 1}`,
+          level: 1,
+          items: subStageItems,
+          ordem: subStage.ordem
+        });
+      });
+    });
+    
+    return hierarchy;
+  };
+  
+  const stageHierarchy = createStageHierarchy();
+  
+  // Verificar se uma etapa principal tem serviços (diretos ou em subetapas)
+  const hasItemsInHierarchy = (stageId) => {
+    // Verificar se a própria etapa tem itens
+    if (items.some(i => i.stage_id === stageId)) return true;
+    
+    // Verificar se alguma subetapa tem itens
+    return projectStages.some(s => 
+      s.parent_stage_id === stageId && items.some(i => i.stage_id === s.id)
+    );
+  };
 
   if (loadingMeasurement) {
     return (
@@ -534,69 +574,88 @@ export default function MeasurementForm() {
               <CardTitle>Lançamento de Quantidades</CardTitle>
             </CardHeader>
             <CardContent>
-              {Object.keys(itemsByStage).map(stageName => (
-                <div key={stageName} className="mb-6">
-                  <h3 className="text-lg font-semibold text-slate-700 mb-3 pb-2 border-b">
-                    {stageName}
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Código</th>
-                          <th className="px-3 py-2 text-left">Descrição</th>
-                          <th className="px-3 py-2 text-center">Un</th>
-                          <th className="px-3 py-2 text-right">Orçada</th>
-                          <th className="px-3 py-2 text-right">Exec. Período</th>
-                          <th className="px-3 py-2 text-right">Exec. Acum.</th>
-                          <th className="px-3 py-2 text-right">Saldo</th>
-                          <th className="px-3 py-2 text-right">Valor Período</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {itemsByStage[stageName].map((item, idx) => {
-                          const itemId = item.id || items.indexOf(item);
-                          const hasExceeded = item.quantidade_executada_acumulada > item.quantidade_orcada;
-                          
-                          return (
-                            <tr key={itemId} className={`border-b ${hasExceeded ? 'bg-red-50' : ''}`}>
-                              <td className="px-3 py-2 text-slate-600">{item.codigo}</td>
-                              <td className="px-3 py-2">{item.descricao}</td>
-                              <td className="px-3 py-2 text-center text-slate-600">{item.unidade}</td>
-                              <td className="px-3 py-2 text-right font-medium">
-                                {(item.quantidade_orcada || 0).toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={editableQuantities[itemId] || 0}
-                                  onChange={(e) => handleQuantityChange(itemId, e.target.value)}
-                                  className="w-24 text-right"
-                                />
-                              </td>
-                              <td className="px-3 py-2 text-right font-semibold text-blue-600">
-                                {(item.quantidade_executada_acumulada || 0).toFixed(2)}
-                              </td>
-                              <td className={`px-3 py-2 text-right font-medium ${
-                                item.saldo_a_executar < 0 ? 'text-red-600' : 'text-slate-700'
-                              }`}>
-                                {(item.saldo_a_executar || 0).toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right font-medium">
-                                {new Intl.NumberFormat('pt-BR', { 
-                                  style: 'currency', 
-                                  currency: 'BRL' 
-                                }).format(item.valor_executado_periodo || 0)}
-                              </td>
+              {stageHierarchy.map(stage => {
+                // Para etapas principais (nível 0), mostrar sempre se tiver itens na hierarquia
+                if (stage.level === 0 && !hasItemsInHierarchy(stage.id)) return null;
+                
+                // Para subetapas (nível 1+), só mostrar se tiver itens diretos
+                if (stage.level > 0 && stage.items.length === 0) return null;
+                
+                const indent = stage.level > 0 ? 'ml-8' : '';
+                
+                return (
+                  <div key={stage.id} className={`mb-6 ${indent}`}>
+                    <h3 className={`font-semibold text-slate-700 mb-3 pb-2 border-b ${
+                      stage.level === 0 ? 'text-lg' : 'text-base'
+                    }`}>
+                      {stage.number} {stage.nome}
+                    </h3>
+                    
+                    {stage.items.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Código</th>
+                              <th className="px-3 py-2 text-left">Descrição</th>
+                              <th className="px-3 py-2 text-center">Un</th>
+                              <th className="px-3 py-2 text-right">Orçada</th>
+                              <th className="px-3 py-2 text-right">Exec. Período</th>
+                              <th className="px-3 py-2 text-right">Exec. Acum.</th>
+                              <th className="px-3 py-2 text-right">Saldo</th>
+                              <th className="px-3 py-2 text-right">Valor Período</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody>
+                            {stage.items.map((item, itemIdx) => {
+                              const itemId = item.id || items.indexOf(item);
+                              const hasExceeded = item.quantidade_executada_acumulada > item.quantidade_orcada;
+                              const itemNumber = `${stage.number}${itemIdx + 1}`;
+                              
+                              return (
+                                <tr key={itemId} className={`border-b ${hasExceeded ? 'bg-red-50' : ''}`}>
+                                  <td className="px-3 py-2 text-slate-600">
+                                    <div className="text-xs text-slate-400 mb-1">{itemNumber}</div>
+                                    {item.codigo}
+                                  </td>
+                                  <td className="px-3 py-2">{item.descricao}</td>
+                                  <td className="px-3 py-2 text-center text-slate-600">{item.unidade}</td>
+                                  <td className="px-3 py-2 text-right font-medium">
+                                    {(item.quantidade_orcada || 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={editableQuantities[itemId] || 0}
+                                      onChange={(e) => handleQuantityChange(itemId, e.target.value)}
+                                      className="w-24 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-semibold text-blue-600">
+                                    {(item.quantidade_executada_acumulada || 0).toFixed(2)}
+                                  </td>
+                                  <td className={`px-3 py-2 text-right font-medium ${
+                                    item.saldo_a_executar < 0 ? 'text-red-600' : 'text-slate-700'
+                                  }`}>
+                                    {(item.saldo_a_executar || 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-medium">
+                                    {new Intl.NumberFormat('pt-BR', { 
+                                      style: 'currency', 
+                                      currency: 'BRL' 
+                                    }).format(item.valor_executado_periodo || 0)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {items.some(item => item.quantidade_executada_acumulada > item.quantidade_orcada) && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
