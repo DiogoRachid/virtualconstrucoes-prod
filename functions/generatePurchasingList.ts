@@ -133,7 +133,10 @@ Deno.serve(async (req) => {
           const insumoId = serviceItem.item_id;
           const insumo = inputMap.get(insumoId);
 
-          if (!insumo) continue;
+          if (!insumo) {
+            console.log(`[DEBUG] Insumo ${insumoId} não encontrado no mapa`);
+            continue;
+          }
 
           // Quantidade total de insumo necessária = quantidade_serviço * quantidade_insumo_por_serviço
           const quantidadeTotalInsumo = budgetItem.quantidade * serviceItem.quantidade;
