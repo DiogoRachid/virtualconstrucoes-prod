@@ -138,18 +138,26 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     return (stageValue * cumulativePercentage) / 100;
   };
 
-  const getTotalMonthly = (monthIndex) => {
-    return mainStages.reduce((sum, stage) => sum + getMonthlyValue(stage.id, monthIndex), 0);
+  const getTotalMonthlyByService = (monthIndex) => {
+    return items.reduce((sum, item) => {
+      const servicePercentage = serviceSchedule[item.servico_id]?.percentages[monthIndex] || 0;
+      return sum + ((item.subtotal || 0) * servicePercentage) / 100;
+    }, 0);
   };
 
-  const getTotalCumulative = (monthIndex) => {
-    return mainStages.reduce((sum, stage) => sum + getCumulativeValue(stage.id, monthIndex), 0);
+  const getTotalCumulativeByService = (monthIndex) => {
+    return items.reduce((sum, item) => {
+      const cumulativePercentage = serviceSchedule[item.servico_id]?.percentages
+        .slice(0, monthIndex + 1)
+        .reduce((s, p) => s + p, 0) || 0;
+      return sum + ((item.subtotal || 0) * cumulativePercentage) / 100;
+    }, 0);
   };
 
-  const getCumulativePercentage = (monthIndex) => {
+  const getCumulativePercentageByService = (monthIndex) => {
     const totalBudget = budget?.total_final || 0;
     if (totalBudget === 0) return 0;
-    return (getTotalCumulative(monthIndex) / totalBudget) * 100;
+    return (getTotalCumulativeByService(monthIndex) / totalBudget) * 100;
   };
 
   // Filtrar e ordenar etapas principais (sem parent_stage_id) com valor > 0
