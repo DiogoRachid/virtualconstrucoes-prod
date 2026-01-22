@@ -6,7 +6,7 @@ export async function exportBudgetXLSX(budgetId) {
   try {
     // Buscar dados
     const budget = (await base44.entities.Budget.filter({ id: budgetId }))[0];
-    const stages = (await base44.entities.BudgetStage.filter({ orcamento_id: budgetId })).sort((a, b) => a.ordem - b.ordem);
+    const stages = (await base44.entities.ProjectStage.filter({ orcamento_id: budgetId })).sort((a, b) => a.ordem - b.ordem);
     const items = await base44.entities.BudgetItem.filter({ orcamento_id: budgetId });
     const project = budget.obra_id ? (await base44.entities.Project.filter({ id: budget.obra_id }))[0] : null;
 
@@ -276,7 +276,7 @@ export async function exportBudgetPDF(budgetId) {
   try {
     // Buscar dados
     const budget = (await base44.entities.Budget.filter({ id: budgetId }))[0];
-    const stages = (await base44.entities.BudgetStage.filter({ orcamento_id: budgetId })).sort((a, b) => a.ordem - b.ordem);
+    const stages = (await base44.entities.ProjectStage.filter({ orcamento_id: budgetId })).sort((a, b) => a.ordem - b.ordem);
     const items = await base44.entities.BudgetItem.filter({ orcamento_id: budgetId });
     const project = budget.obra_id ? (await base44.entities.Project.filter({ id: budget.obra_id }))[0] : null;
 

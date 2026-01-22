@@ -10,12 +10,12 @@ import {
   MoreHorizontal,
   Loader2,
   Copy,
+  FileSpreadsheet,
   FileText,
-  Printer,
   Calendar,
   RefreshCw
 } from 'lucide-react';
-import { printBudget } from '@/components/budgets/BudgetPrinter';
+import { exportBudgetPDF, exportBudgetXLSX } from '@/components/budgets/BudgetExporter';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchFilter from '@/components/shared/SearchFilter';
 import DataTable from '@/components/shared/DataTable';
@@ -234,9 +234,21 @@ export default function Budgets() {
               <Calendar className="h-4 w-4 mr-2" />
               Planejamento e Cronograma
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => printBudget(row.id)}>
-              <Printer className="h-4 w-4 mr-2" />
-              Imprimir
+            <DropdownMenuItem onClick={async () => {
+              const result = await exportBudgetXLSX(row.id);
+              if (result.success) toast.success(result.message);
+              else toast.error(result.message);
+            }}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Exportar XLSX
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={async () => {
+              const result = await exportBudgetPDF(row.id);
+              if (result.success) toast.success(result.message);
+              else toast.error(result.message);
+            }}>
+              <FileText className="h-4 w-4 mr-2" />
+              Exportar PDF
             </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={() => duplicateMutation.mutate(row.id)}
