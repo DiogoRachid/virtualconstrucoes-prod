@@ -44,22 +44,34 @@ export default function PurchasingListPage() {
   const exportPDF = () => {
     if (!displayData) return;
 
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: 'landscape' });
     const work = works.find(w => w.id === selectedWork);
 
-    // Cabeçalho
-    doc.setFontSize(16);
-    doc.text('LISTA DE COMPRAS', 14, 15);
-    
+    // Cabeçalho com logo
+    const logoUrl = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
+    doc.addImage(logoUrl, 'JPEG', 14, 10, 30, 15);
+
+    // Título e informações
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('LISTA DE COMPRAS', 80, 20);
+
     doc.setFontSize(10);
-    doc.text(`Obra: ${work?.nome}`, 14, 25);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Obra: ${work?.nome || 'N/A'}`, 80, 30);
+    doc.text(`Endereço: ${work?.endereco || 'N/A'}`, 80, 36);
+    doc.text(`Cidade: ${work?.cidade || 'N/A'} - ${work?.estado || 'N/A'}`, 80, 42);
+    
+    doc.text(`Data de Geração: ${displayData.data_geracao}`, 270, 30);
     if (selectedMonth !== 'all') {
-      doc.text(`Período: Mês ${selectedMonth}`, 14, 32);
-      doc.text(`Data de Geração: ${displayData.data_geracao}`, 14, 39);
+      doc.text(`Período: Mês ${selectedMonth}`, 270, 36);
     } else {
-      doc.text(`Total de Períodos: ${displayData.total_meses}`, 14, 32);
-      doc.text(`Data de Geração: ${displayData.data_geracao}`, 14, 39);
+      doc.text(`Total de Períodos: ${displayData.total_meses}`, 270, 36);
     }
+
+    // Linha divisória
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 50, 280, 50);
 
     // Tabela
     const tableData = displayData.itens.map(item => [
@@ -72,20 +84,37 @@ export default function PurchasingListPage() {
     ]);
 
     doc.autoTable({
-      head: [['ABC', 'Descrição', 'Un.', 'Quantidade', 'Valor Unit.', 'Total']],
+      head: [['ABC', 'Descrição do Material', 'Un.', 'Quantidade', 'Valor Unit.', 'Total']],
       body: tableData,
-      startY: 50,
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] }
+      startY: 55,
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 15 },
+        1: { cellWidth: 120 },
+        2: { halign: 'center', cellWidth: 15 },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', cellWidth: 30 },
+        5: { halign: 'right', cellWidth: 30 }
+      }
     });
 
     // Totais
     const finalY = doc.lastAutoTable.finalY + 10;
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont(undefined, 'bold');
     doc.text(`VALOR TOTAL: R$ ${displayData.total_geral_valor.toFixed(2)}`, 14, finalY);
+    
+    doc.setFontSize(9);
+    doc.text(`Total de Itens: ${displayData.total_geral_itens}`, 14, finalY + 7);
 
-    doc.save(`lista_compras_${selectedWork}.pdf`);
+    // Rodapé
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Documento gerado automaticamente em ${new Date().toLocaleString('pt-BR')}`, 14, doc.internal.pageSize.height - 10);
+
+    doc.save(`lista_compras_${work?.nome || 'obra'}.pdf`);
   };
 
   const exportXLSX = () => {
