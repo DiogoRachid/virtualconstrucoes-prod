@@ -40,6 +40,7 @@ export default function MeasurementForm() {
   const [items, setItems] = useState([]);
   const [editableQuantities, setEditableQuantities] = useState({});
   const [scheduleData, setScheduleData] = useState([]);
+  const [projectStages, setProjectStages] = useState([]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
