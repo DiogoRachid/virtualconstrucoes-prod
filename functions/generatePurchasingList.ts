@@ -140,6 +140,7 @@ Deno.serve(async (req) => {
 
           // Quantidade total de insumo necessária = quantidade_serviço * quantidade_insumo_por_serviço
           const quantidadeTotalInsumo = budgetItem.quantidade * serviceItem.quantidade;
+          console.log(`[DEBUG] BudgetItem qty=${budgetItem.quantidade}, ServiceItem qty=${serviceItem.quantidade}, Total=${quantidadeTotalInsumo}`);
 
           // Buscar distribuição mensal para este serviço
           const distribuicoesServico = [];
