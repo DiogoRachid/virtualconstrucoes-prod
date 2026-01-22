@@ -133,20 +133,34 @@ export default function MeasurementForm() {
         numero_medicao: lastNumber + 1
       }));
 
-      // Buscar itens do orçamento e todas as etapas (globais)
+      // Buscar itens do orçamento
       const budgetItems = await base44.entities.BudgetItem.filter({ orcamento_id: orcamentoId });
       
-      // Buscar serviços para obter stage_id
-      const allServices = await base44.entities.Service.list();
+      // Buscar etapas do projeto vinculadas ao orçamento
+      const projectStages = await base44.entities.ProjectStage.filter({ orcamento_id: orcamentoId });
+      
+      // Buscar etapas padrão (BudgetStage)
+      const budgetStages = await base44.entities.BudgetStage.list();
+      
+      // Criar mapa de etapas do projeto por serviço
       const serviceStageMap = {};
-      allServices.forEach(s => {
-        if (s.stage_id) {
-          serviceStageMap[s.id] = s.stage_id;
+      projectStages.forEach(stage => {
+        if (stage.servicos_ids && Array.isArray(stage.servicos_ids)) {
+          stage.servicos_ids.forEach(servicoId => {
+            serviceStageMap[servicoId] = {
+              id: stage.id,
+              nome: stage.nome,
+              budget_stage_id: stage.budget_stage_id
+            };
+          });
         }
       });
 
-      // Buscar todas as etapas
-      const allStages = await base44.entities.BudgetStage.list();
+      // Criar mapa de nomes de budget stages
+      const budgetStageNames = {};
+      budgetStages.forEach(s => {
+        budgetStageNames[s.id] = s.nome;
+      });
       
       // Buscar última medição para pegar acumulados
       const lastMeasurement = existingMeasurements.length > 0
@@ -158,23 +172,22 @@ export default function MeasurementForm() {
         lastItems = await base44.entities.MeasurementItem.filter({ medicao_id: lastMeasurement.id });
       }
 
-      // Criar mapa de etapas (ID -> Nome)
-      const stageMap = {};
-      allStages.forEach(s => {
-        stageMap[s.id] = s.nome;
-      });
-
       const newItems = budgetItems.map(item => {
         const lastItem = lastItems.find(li => li.servico_id === item.servico_id);
         const acumulado = lastItem?.quantidade_executada_acumulada || 0;
         
-        // Tentar pegar stage_id do BudgetItem, se não tiver, pegar do Service
+        // Buscar etapa a partir do stage_id do BudgetItem
         let stageId = item.stage_id;
-        if (!stageId && item.servico_id) {
-          stageId = serviceStageMap[item.servico_id];
-        }
+        let stageName = 'Sem Etapa';
         
-        const stageName = stageId && stageMap[stageId] ? stageMap[stageId] : 'Sem Etapa';
+        if (stageId && budgetStageNames[stageId]) {
+          stageName = budgetStageNames[stageId];
+        } else if (item.servico_id && serviceStageMap[item.servico_id]) {
+          // Fallback: buscar pela project stage
+          const projectStage = serviceStageMap[item.servico_id];
+          stageId = projectStage.budget_stage_id || projectStage.id;
+          stageName = projectStage.nome;
+        }
         
         return {
           servico_id: item.servico_id,
@@ -193,9 +206,10 @@ export default function MeasurementForm() {
         };
       });
 
-      // Buscar distribuição mensal para cronograma
+      // Buscar distribuição mensal para cronograma do mês da medição
       const monthlyDistributions = await base44.entities.ServiceMonthlyDistribution.filter({ 
-        orcamento_id: orcamentoId 
+        orcamento_id: orcamentoId,
+        mes: formData.numero_medicao
       });
       setScheduleData(monthlyDistributions);
 
