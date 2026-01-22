@@ -182,10 +182,28 @@ export async function exportBudgetXLSX(budgetId) {
       };
     }
 
+    // Verificar se etapas principais têm serviços (diretos ou em sub-etapas)
+    const hasItemsInHierarchy = (stageId) => {
+      // Verificar se a própria etapa tem itens
+      if (itemsByStage[stageId] && itemsByStage[stageId].items.length > 0) return true;
+      
+      // Verificar se alguma sub-etapa tem itens
+      const hasSubItems = stages.some(s => {
+        return s.parent_stage_id === stageId && itemsByStage[s.id] && itemsByStage[s.id].items.length > 0;
+      });
+      
+      return hasSubItems;
+    };
+
     // Adicionar itens
     hierarchyStages.forEach(stage => {
       const stageData = itemsByStage[stage.id];
-      if (!stageData || stageData.items.length === 0) return;
+      
+      // Para etapas principais (nível 0), sempre mostrar se tiver itens na hierarquia
+      if (stageData.level === 0 && !hasItemsInHierarchy(stage.id)) return;
+      
+      // Para sub-etapas (nível 1+), só mostrar se tiver itens diretos
+      if (stageData.level > 0 && (!stageData || stageData.items.length === 0)) return;
       
       // Linha da etapa
       const stageRow = worksheet.getRow(currentRow);
@@ -228,7 +246,8 @@ export async function exportBudgetXLSX(budgetId) {
           };
         }
         currentRow++;
-      });
+        });
+      }
     });
     
     // Itens não categorizados
@@ -487,11 +506,29 @@ export async function exportBudgetPDF(budgetId) {
     doc.text('Total c/ BDI (R$)', 277, yPos + 5, { align: 'right' });
     yPos += 8;
 
+    // Verificar se etapas principais têm serviços (diretos ou em sub-etapas)
+    const hasItemsInHierarchy = (stageId) => {
+      // Verificar se a própria etapa tem itens
+      if (itemsByStage[stageId] && itemsByStage[stageId].items.length > 0) return true;
+      
+      // Verificar se alguma sub-etapa tem itens
+      const hasSubItems = stages.some(s => {
+        return s.parent_stage_id === stageId && itemsByStage[s.id] && itemsByStage[s.id].items.length > 0;
+      });
+      
+      return hasSubItems;
+    };
+
     // Renderizar itens
     doc.setTextColor(0, 0, 0);
     hierarchyStages.forEach(stage => {
       const stageData = itemsByStage[stage.id];
-      if (!stageData || stageData.items.length === 0) return;
+      
+      // Para etapas principais (nível 0), sempre mostrar se tiver itens na hierarquia
+      if (stageData.level === 0 && !hasItemsInHierarchy(stage.id)) return;
+      
+      // Para sub-etapas (nível 1+), só mostrar se tiver itens diretos
+      if (stageData.level > 0 && (!stageData || stageData.items.length === 0)) return;
 
       if (yPos > 180) {
         doc.addPage();
@@ -510,7 +547,9 @@ export async function exportBudgetPDF(budgetId) {
       doc.setFont(undefined, 'normal');
       doc.setFontSize(7);
       
-      stageData.items.forEach((item, itemIdx) => {
+      // Só adicionar itens se a etapa realmente tiver itens
+      if (stageData.items && stageData.items.length > 0) {
+        stageData.items.forEach((item, itemIdx) => {
         if (yPos > 185) {
           doc.addPage();
           yPos = 20;
@@ -549,7 +588,8 @@ export async function exportBudgetPDF(budgetId) {
         doc.text(formatCurrency(item.subtotal || 0), 277, yPos + 4, { align: 'right' });
 
         yPos += descLines.length > 1 ? 7 : 5;
-      });
+        });
+      }
 
       yPos += 3;
     });
