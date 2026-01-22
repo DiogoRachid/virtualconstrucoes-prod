@@ -679,44 +679,61 @@ export default function MeasurementForm() {
             </CardHeader>
             <CardContent>
               {(() => {
-                // Agrupar execução por etapa
-                const executionByStage = {};
+                // Agrupar execução por etapa PRINCIPAL apenas
+                const executionByMainStage = {};
                 
                 // Primeiro, processar os itens executados
                 items.forEach(item => {
-                  const stage = item.stage_nome || 'Sem Etapa';
-                  if (!executionByStage[stage]) {
-                    executionByStage[stage] = {
+                  // Encontrar a etapa principal
+                  const itemStage = projectStages.find(s => s.id === item.stage_id);
+                  if (!itemStage) return;
+                  
+                  // Se for subetapa, buscar a etapa pai
+                  let mainStage;
+                  if (itemStage.parent_stage_id) {
+                    mainStage = projectStages.find(s => s.id === itemStage.parent_stage_id);
+                  } else {
+                    mainStage = itemStage;
+                  }
+                  
+                  if (!mainStage) return;
+                  
+                  const stageName = mainStage.nome;
+                  
+                  if (!executionByMainStage[stageName]) {
+                    executionByMainStage[stageName] = {
                       previsto_periodo: 0,
                       executado_periodo: 0,
                       previsto_acumulado: 0,
                       executado_acumulado: 0,
-                      valor_total_etapa: 0
+                      valor_total_etapa: 0,
+                      stageId: mainStage.id
                     };
                   }
-                  executionByStage[stage].executado_periodo += item.valor_executado_periodo || 0;
-                  executionByStage[stage].executado_acumulado += item.valor_executado_acumulado || 0;
+                  executionByMainStage[stageName].executado_periodo += item.valor_executado_periodo || 0;
+                  executionByMainStage[stageName].executado_acumulado += item.valor_executado_acumulado || 0;
                   // Calcular valor total da etapa (todos os serviços)
-                  executionByStage[stage].valor_total_etapa += (item.quantidade_orcada || 0) * (item.custo_unitario || 0);
+                  executionByMainStage[stageName].valor_total_etapa += (item.quantidade_orcada || 0) * (item.custo_unitario || 0);
                 });
 
-                // Agora calcular o previsto baseado na distribuição mensal das etapas
-                projectStages.forEach(stage => {
+                // Agora calcular o previsto baseado na distribuição mensal das etapas principais
+                projectStages.filter(s => !s.parent_stage_id).forEach(stage => {
                   const stageName = stage.nome;
                   
                   // Verificar se a etapa tem distribuição mensal
                   if (stage.distribuicao_mensal && Array.isArray(stage.distribuicao_mensal)) {
                     // Calcular valor total dessa etapa específica
-                    const valorTotalEtapa = executionByStage[stageName]?.valor_total_etapa || 0;
+                    const valorTotalEtapa = executionByMainStage[stageName]?.valor_total_etapa || 0;
                     
                     if (valorTotalEtapa > 0) {
-                      if (!executionByStage[stageName]) {
-                        executionByStage[stageName] = {
+                      if (!executionByMainStage[stageName]) {
+                        executionByMainStage[stageName] = {
                           previsto_periodo: 0,
                           executado_periodo: 0,
                           previsto_acumulado: 0,
                           executado_acumulado: 0,
-                          valor_total_etapa: valorTotalEtapa
+                          valor_total_etapa: valorTotalEtapa,
+                          stageId: stage.id
                         };
                       }
                       
@@ -727,12 +744,12 @@ export default function MeasurementForm() {
                         
                         // Previsto do período atual
                         if (dist.mes === formData.numero_medicao) {
-                          executionByStage[stageName].previsto_periodo += valorMes;
+                          executionByMainStage[stageName].previsto_periodo += valorMes;
                         }
                         
                         // Previsto acumulado até este período
                         if (dist.mes <= formData.numero_medicao) {
-                          executionByStage[stageName].previsto_acumulado += valorMes;
+                          executionByMainStage[stageName].previsto_acumulado += valorMes;
                         }
                       });
                     }
@@ -741,7 +758,7 @@ export default function MeasurementForm() {
 
                 return (
                   <div className="space-y-6">
-                    {Object.entries(executionByStage).map(([stage, data]) => {
+                    {Object.entries(executionByMainStage).map(([stage, data]) => {
                       const percentPeriodo = data.previsto_periodo > 0 
                         ? (data.executado_periodo / data.previsto_periodo) * 100 
                         : 0;
@@ -807,7 +824,7 @@ export default function MeasurementForm() {
                       );
                     })}
 
-                    {Object.keys(executionByStage).length === 0 && (
+                    {Object.keys(executionByMainStage).length === 0 && (
                       <div className="text-center py-8 text-slate-500">
                         <p>Nenhum dado de cronograma disponível</p>
                         <p className="text-sm mt-2">Configure o cronograma no planejamento do orçamento</p>
