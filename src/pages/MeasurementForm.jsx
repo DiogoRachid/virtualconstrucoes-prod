@@ -184,13 +184,8 @@ export default function MeasurementForm() {
         let stageId = item.stage_id;
         let stageName = 'Sem Etapa';
         
-        if (stageId && budgetStageNames[stageId]) {
-          stageName = budgetStageNames[stageId];
-        } else if (item.servico_id && serviceStageMap[item.servico_id]) {
-          // Fallback: buscar pela project stage
-          const projectStage = serviceStageMap[item.servico_id];
-          stageId = projectStage.budget_stage_id || projectStage.id;
-          stageName = projectStage.nome;
+        if (stageId && stageMap[stageId]) {
+          stageName = stageMap[stageId].nome;
         }
         
         return {
