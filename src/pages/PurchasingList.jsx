@@ -21,6 +21,7 @@ export default function PurchasingListPage() {
   const [selectedWork, setSelectedWork] = useState('');
   const [abcFilter, setAbcFilter] = useState('');
   const [listData, setListData] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState('all');
 
   const { data: works = [] } = useQuery({
     queryKey: ['works'],
