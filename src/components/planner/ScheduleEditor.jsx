@@ -352,9 +352,9 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(budget?.total_final || 0)}
                   </TableCell>
                   {Array.from({ length: months }).map((_, idx) => (
-                    <TableCell key={idx} className="text-center text-xs">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalMonthly(idx))}
-                    </TableCell>
+                   <TableCell key={idx} className="text-center text-xs">
+                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getTotalMonthlyByService(idx))}
+                   </TableCell>
                   ))}
                   <TableCell></TableCell>
                 </TableRow>
