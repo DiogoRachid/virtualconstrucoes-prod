@@ -323,7 +323,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
               <Button 
                 variant="outline"
                 onClick={async () => {
-                  const result = await exportScheduleXLSX(schedule, stages, items, months, budget);
+                  const result = await exportScheduleXLSX(serviceSchedule, stages, items, months, budget);
                   if (result.success) toast.success(result.message);
                   else toast.error(result.message);
                 }}
@@ -334,7 +334,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
               <Button 
                 variant="outline"
                 onClick={async () => {
-                  const result = await exportSchedulePDF(schedule, stages, items, months, budget);
+                  const result = await exportSchedulePDF(serviceSchedule, stages, items, months, budget);
                   if (result.success) toast.success(result.message);
                   else toast.error(result.message);
                 }}
