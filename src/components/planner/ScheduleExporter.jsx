@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 
-export async function exportScheduleXLSX(schedule, stages, items, months, budgetData) {
+export async function exportScheduleXLSX(itemPercentages, stages, items, months, budgetData) {
   try {
     // Criar workbook
     const workbook = new ExcelJS.Workbook();
@@ -96,13 +96,26 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
       return value;
     };
 
+    const getStageMonthlyValue = (stageId, monthIndex) => {
+      const directItems = items.filter(item => item.stage_id === stageId);
+      let monthlyValue = directItems.reduce((sum, item) => {
+        const percentages = itemPercentages[item.id] || [];
+        const percentage = percentages[monthIndex] || 0;
+        return sum + ((item.subtotal || 0) * percentage) / 100;
+      }, 0);
+      
+      const subStages = stages.filter(s => s.parent_stage_id === stageId);
+      const subStagesMonthlyValue = subStages.reduce((sum, subStage) => sum + getStageMonthlyValue(subStage.id, monthIndex), 0);
+      
+      return monthlyValue + subStagesMonthlyValue;
+    };
+
     // Dados das etapas
     const sortedStages = stages
       .filter(stage => !stage.parent_stage_id && getStageValue(stage.id) > 0)
       .sort((a, b) => a.ordem - b.ordem);
     
     sortedStages.forEach(stage => {
-      const stageSchedule = schedule[stage.id] || { percentages: Array(months).fill(0), total: 0 };
       const stageValue = getStageValue(stage.id);
       
       // Linha da etapa com valor total
@@ -119,21 +132,26 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
       
       for (let m = 0; m < months; m++) {
         const cell = row.getCell(m + 3);
-        const percentValue = stageSchedule.percentages[m] || 0;
-        const monthValue = (stageValue * percentValue) / 100;
+        const monthValue = getStageMonthlyValue(stage.id, m);
+        const percentValue = stageValue > 0 ? (monthValue / stageValue) * 100 : 0;
         
         // Mostrar percentual e valor
-        cell.value = `${percentValue.toFixed(2)}%\nR$ ${monthValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        cell.value = `${percentValue.toFixed(1)}%\nR$ ${monthValue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         
-        if (percentValue > 0) {
+        if (monthValue > 0) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
         }
       }
       
+      const totalStagePercent = Array.from({ length: months }).reduce((sum, _, m) => {
+        const monthValue = getStageMonthlyValue(stage.id, m);
+        return sum + (stageValue > 0 ? (monthValue / stageValue) * 100 : 0);
+      }, 0);
+      
       const totalCell = row.getCell(months + 3);
-      totalCell.value = parseFloat((stageSchedule.total / 100).toFixed(4));
+      totalCell.value = parseFloat((totalStagePercent / 100).toFixed(4));
       totalCell.numFmt = '0.00%';
       totalCell.font = { bold: true };
       totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -158,9 +176,7 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
     
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       const cell = totalMensalRow.getCell(m + 3);
@@ -183,9 +199,7 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
     let accumulated = 0;
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       accumulated += monthTotal;
@@ -210,9 +224,7 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
     accumulated = 0;
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       accumulated += monthTotal;
@@ -251,7 +263,7 @@ export async function exportScheduleXLSX(schedule, stages, items, months, budget
   }
 }
 
-export async function exportSchedulePDF(schedule, stages, items, months, budgetData) {
+export async function exportSchedulePDF(itemPercentages, stages, items, months, budgetData) {
   try {
     const doc = new jsPDF('landscape');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -297,10 +309,24 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
       return value;
     };
 
+    const getStageMonthlyValue = (stageId, monthIndex) => {
+      const directItems = items.filter(item => item.stage_id === stageId);
+      let monthlyValue = directItems.reduce((sum, item) => {
+        const percentages = itemPercentages[item.id] || [];
+        const percentage = percentages[monthIndex] || 0;
+        return sum + ((item.subtotal || 0) * percentage) / 100;
+      }, 0);
+      
+      const subStages = stages.filter(s => s.parent_stage_id === stageId);
+      const subStagesMonthlyValue = subStages.reduce((sum, subStage) => sum + getStageMonthlyValue(subStage.id, monthIndex), 0);
+      
+      return monthlyValue + subStagesMonthlyValue;
+    };
+
     // Cabeçalho da tabela
-    const colWidth = Math.min(18, (pageWidth - 100) / months);
-    const tableStartX = 10;
-    const valueColWidth = 30;
+    const colWidth = Math.min(20, (pageWidth - 90) / months);
+    const tableStartX = 8;
+    const valueColWidth = 28;
     
     doc.setFillColor(41, 98, 255);
     doc.rect(tableStartX, yPos, 40, 7, 'F');
@@ -335,33 +361,33 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
         yPos = 20;
       }
 
-      const stageSchedule = schedule[stage.id] || { percentages: Array(months).fill(0), total: 0 };
       const stageValue = getStageValue(stage.id);
       
       doc.setFont(undefined, 'bold');
-      const stageName = stage.nome.substring(0, 20);
-      doc.text(stageName, tableStartX + 2, yPos + 3);
+      const stageName = stage.nome.substring(0, 18);
+      doc.text(stageName, tableStartX + 2, yPos + 3.5);
       
       // Valor total
       doc.setFont(undefined, 'normal');
-      doc.text(formatCurrency(stageValue), tableStartX + 42, yPos + 3);
+      doc.setFontSize(6);
+      doc.text(formatCurrency(stageValue), tableStartX + 40, yPos + 3.5);
       
       for (let m = 0; m < months; m++) {
-        const percentValue = stageSchedule.percentages[m] || 0;
-        const monthValue = (stageValue * percentValue) / 100;
+        const monthValue = getStageMonthlyValue(stage.id, m);
+        const percentValue = stageValue > 0 ? (monthValue / stageValue) * 100 : 0;
         
-        if (percentValue > 0) {
+        if (monthValue > 0) {
           doc.setFillColor(224, 242, 254);
-          doc.rect(tableStartX + 40 + valueColWidth + m * colWidth, yPos, colWidth, 7, 'F');
+          doc.rect(tableStartX + 40 + valueColWidth + m * colWidth, yPos, colWidth, 8, 'F');
         }
         
         doc.setFontSize(6);
-        doc.text(`${percentValue.toFixed(1)}%`, tableStartX + 40 + valueColWidth + m * colWidth + colWidth / 2, yPos + 2.5, { align: 'center' });
+        doc.text(`${percentValue.toFixed(1)}%`, tableStartX + 40 + valueColWidth + m * colWidth + colWidth / 2, yPos + 3, { align: 'center' });
         doc.setFontSize(5);
-        doc.text(formatCurrencyShort(monthValue), tableStartX + 40 + valueColWidth + m * colWidth + colWidth / 2, yPos + 5.5, { align: 'center' });
+        doc.text(formatCurrencyShort(monthValue), tableStartX + 40 + valueColWidth + m * colWidth + colWidth / 2, yPos + 6, { align: 'center' });
       }
       
-      yPos += 8;
+      yPos += 9;
     });
 
     yPos += 2;
@@ -381,9 +407,7 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
     
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       doc.setFontSize(6);
@@ -399,9 +423,7 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
     let accumulated = 0;
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       accumulated += monthTotal;
@@ -419,9 +441,7 @@ export async function exportSchedulePDF(schedule, stages, items, months, budgetD
     accumulated = 0;
     for (let m = 0; m < months; m++) {
       const monthTotal = sortedStages.reduce((sum, stage) => {
-        const stageValue = getStageValue(stage.id);
-        const percentValue = (schedule[stage.id]?.percentages[m] || 0);
-        return sum + (stageValue * percentValue) / 100;
+        return sum + getStageMonthlyValue(stage.id, m);
       }, 0);
       
       accumulated += monthTotal;
