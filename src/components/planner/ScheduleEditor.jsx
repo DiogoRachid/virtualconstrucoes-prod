@@ -252,15 +252,19 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
           <TableCell></TableCell>
         </TableRow>
         
-        {isExpanded && stageServiceItems.length > 0 && stageServiceItems.map(service => {
-          const itemData = serviceSchedule[service.id];
+        {isExpanded && stageItems.length > 0 && stageItems.map((item, idx) => {
+          const itemData = serviceSchedule[item.id];
           const isServiceComplete = itemData?.total === 100;
           const isServiceOverLimit = itemData?.total > 100;
           
+          // Gerar número hierárquico do serviço
+          const itemNumber = `${stageNumber}.${idx + 1}`;
+          
           return (
-            <TableRow key={`item-${service.id}`} className="bg-white">
+            <TableRow key={`item-${item.id}`} className="bg-white">
               <TableCell className="sticky left-0 bg-white z-10 text-sm" style={{ paddingLeft: `${32 + paddingLeft}px` }}>
-                {service.descricao || 'Sem descrição'}
+                <span className="font-mono text-xs text-blue-600 mr-2">{itemNumber}</span>
+                {item.descricao || 'Sem descrição'}
               </TableCell>
               <TableCell className="text-right text-sm">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.subtotal || 0)}
