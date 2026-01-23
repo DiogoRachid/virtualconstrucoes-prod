@@ -171,14 +171,24 @@ export default function ProjectSchedule() {
   });
 
   const handleSave = (data) => {
-    console.log('=== HANDLE SAVE CHAMADO ===');
-    console.log('Data recebida:', data);
+    console.log('=== PROJECT SCHEDULE - HANDLE SAVE ===');
+    console.log('Data completa:', JSON.stringify(data, null, 2));
+    console.log('itemPercentages keys:', data?.itemPercentages ? Object.keys(data.itemPercentages).length : 0);
+    console.log('months:', data?.months);
     
-    if (!data || !data.itemPercentages) {
+    if (!data) {
+      console.error('ERROR: data é undefined/null');
       toast.error('Dados inválidos para salvar');
       return;
     }
     
+    if (!data.itemPercentages) {
+      console.error('ERROR: itemPercentages não existe');
+      toast.error('Dados de percentuais não encontrados');
+      return;
+    }
+    
+    console.log('Chamando saveMutation.mutate...');
     saveMutation.mutate(data);
   };
 
