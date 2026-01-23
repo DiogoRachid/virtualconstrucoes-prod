@@ -132,8 +132,8 @@ export default function BudgetPlanner() {
   });
 
   const handleSave = (receivedSchedule, receivedMonths) => {
-    setServiceSchedule(receivedSchedule);
-    setMonths(receivedMonths);
+    console.log('handleSave recebeu:', receivedSchedule);
+    console.log('Meses:', receivedMonths);
     saveMutation.mutate({ schedule: receivedSchedule, months: receivedMonths });
   };
 

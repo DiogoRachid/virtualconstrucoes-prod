@@ -87,19 +87,21 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
       }
       
       // Clone o array de percentages para evitar mutações
-      newSchedule[itemId] = {
-        percentages: [...newSchedule[itemId].percentages],
-        total: newSchedule[itemId].total
-      };
+      const newPercentages = [...newSchedule[itemId].percentages];
+      newPercentages[monthIndex] = percentage;
+      const newTotal = newPercentages.reduce((sum, p) => sum + p, 0);
       
-      newSchedule[itemId].percentages[monthIndex] = percentage;
-      newSchedule[itemId].total = newSchedule[itemId].percentages.reduce((sum, p) => sum + p, 0);
-      
-      if (newSchedule[itemId].total > 100) {
+      if (newTotal > 100) {
         toast.error(`O item não pode ultrapassar 100% de execução`);
         return prevSchedule;
       }
       
+      newSchedule[itemId] = {
+        percentages: newPercentages,
+        total: newTotal
+      };
+      
+      console.log(`Item ${itemId}, Mês ${monthIndex + 1}: ${percentage}%`);
       onChange && onChange(newSchedule, months);
       return newSchedule;
     });
