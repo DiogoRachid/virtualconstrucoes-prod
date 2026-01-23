@@ -64,24 +64,23 @@ export default function BudgetPlanner() {
       console.log('Schedule recebido:', JSON.stringify(schedule, null, 2));
       console.log('Meses:', months);
       console.log('Items:', items.length);
+      console.log('Stages:', stages.length);
       
-      // Primeiro: limpar distribuições antigas de todas as etapas
-      const clearUpdates = stages.map(stage => 
-        base44.entities.ProjectStage.update(stage.id, {
-          distribuicao_mensal: [],
-          duracao_meses: months
-        })
-      );
+      // Atualizar duração do orçamento primeiro
+      await base44.entities.Budget.update(budgetId, {
+        duracao_meses: months
+      });
+      console.log('Duração do orçamento atualizada');
       
-      await Promise.all(clearUpdates);
-      console.log('Distribuições antigas limpas');
-      
-      // Segundo: recalcular e salvar novas distribuições
+      // Agrupar itens por stage_id e calcular distribuições
       const stageDistributions = new Map();
       
       items.forEach(item => {
         const itemSchedule = schedule[item.id];
-        if (!item.stage_id || !itemSchedule) return;
+        if (!item.stage_id || !itemSchedule) {
+          console.log(`Item ${item.id} sem stage_id ou schedule`);
+          return;
+        }
         
         if (!stageDistributions.has(item.stage_id)) {
           stageDistributions.set(item.stage_id, { items: [], totalValue: 0 });
@@ -98,8 +97,7 @@ export default function BudgetPlanner() {
       
       console.log('Etapas com dados:', stageDistributions.size);
       
-      const saveUpdates = [];
-      
+      // Verificar quais etapas existem e atualizar
       for (const [stageId, data] of stageDistributions.entries()) {
         const distribuicao_mensal = [];
         
@@ -118,24 +116,28 @@ export default function BudgetPlanner() {
           });
         }
         
-        console.log(`Etapa ${stageId}:`, distribuicao_mensal);
+        console.log(`Salvando etapa ${stageId}:`, distribuicao_mensal);
         
-        saveUpdates.push(
-          base44.entities.ProjectStage.update(stageId, {
-            distribuicao_mensal,
-            duracao_meses: months
-          })
-        );
+        try {
+          // Verificar se a etapa existe
+          const existingStages = await base44.entities.ProjectStage.filter({ id: stageId });
+          
+          if (existingStages && existingStages.length > 0) {
+            // Etapa existe, atualizar
+            await base44.entities.ProjectStage.update(stageId, {
+              distribuicao_mensal,
+              duracao_meses: months
+            });
+            console.log(`Etapa ${stageId} atualizada`);
+          } else {
+            console.warn(`Etapa ${stageId} não encontrada, pulando`);
+          }
+        } catch (error) {
+          console.error(`Erro ao salvar etapa ${stageId}:`, error);
+          throw error;
+        }
       }
       
-      // Atualizar duração do orçamento
-      saveUpdates.push(
-        base44.entities.Budget.update(budgetId, {
-          duracao_meses: months
-        })
-      );
-      
-      await Promise.all(saveUpdates);
       console.log('=== SALVAMENTO CONCLUÍDO ===');
     },
     onSuccess: () => {
