@@ -153,19 +153,19 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
           <TableCell className="text-right"></TableCell>
         </TableRow>
         
-        {isExpanded && stageItems.map((item) => {
+        {isExpanded && stageItems.map((item, itemIdx) => {
           const percentages = itemPercentages[item.id] || Array(months).fill(0);
           const total = getItemTotal(item.id);
           const isComplete = total === 100;
           const isOverLimit = total > 100;
-          const itemNumber = `${stageNumber}.${item.ordem || 0}`;
-          
-          return (
-            <TableRow key={item.id} className="bg-white">
-              <TableCell className="sticky left-0 bg-white z-10 text-sm" style={{ paddingLeft: `${32 + paddingLeft}px` }}>
-                <span className="font-mono text-xs text-blue-600 mr-2">{itemNumber}</span>
-                {item.descricao || 'Sem descrição'}
-              </TableCell>
+          const itemNumber = `${stageNumber}.${itemIdx + 1}`;
+
+                  return (
+                    <TableRow key={item.id} className="bg-white">
+                      <TableCell className="sticky left-0 bg-white z-10 text-sm" style={{ paddingLeft: `${32 + paddingLeft}px` }}>
+                        <span className="font-mono text-xs text-blue-600 mr-2">{itemNumber}</span>
+                        {item.descricao || 'Sem descrição'}
+                      </TableCell>
               <TableCell className="text-right text-sm">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.subtotal || 0)}
               </TableCell>
