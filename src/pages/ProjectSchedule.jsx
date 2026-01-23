@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Calendar, TrendingUp, PieChart as PieChartIcon, Users } from 'lucide-react';
 import { toast } from "sonner";
@@ -17,10 +17,6 @@ export default function BudgetPlanner() {
   const budgetId = urlParams.get('budgetId');
   const queryClient = useQueryClient();
 
-  const [serviceSchedule, setServiceSchedule] = useState({});
-  const [months, setMonths] = useState(12);
-
-  // Carregar dados do orçamento
   const { data: budget, isLoading: loadingBudget } = useQuery({
     queryKey: ['budget', budgetId],
     queryFn: async () => {
@@ -36,12 +32,6 @@ export default function BudgetPlanner() {
     enabled: !!budgetId
   });
 
-  useEffect(() => {
-    if (budget?.duracao_meses) {
-      setMonths(budget.duracao_meses);
-    }
-  }, [budget?.duracao_meses]);
-
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ['budgetItems', budgetId],
     queryFn: () => base44.entities.BudgetItem.filter({ orcamento_id: budgetId }),
@@ -53,95 +43,61 @@ export default function BudgetPlanner() {
     queryFn: () => base44.entities.Service.list()
   });
 
-  const handleScheduleChange = (newSchedule, newMonths) => {
-    setServiceSchedule(newSchedule);
-    setMonths(newMonths);
-  };
-
   const saveMutation = useMutation({
-    mutationFn: async ({ schedule, months }) => {
+    mutationFn: async ({ itemPercentages, months }) => {
       console.log('=== SALVAMENTO INICIADO ===');
-      console.log('Schedule recebido:', JSON.stringify(schedule, null, 2));
+      console.log('Percentuais:', itemPercentages);
       console.log('Meses:', months);
-      console.log('Items disponíveis:', items.map(i => ({ id: i.id, stage_id: i.stage_id, descricao: i.descricao })));
-      console.log('Stages disponíveis:', stages.map(s => ({ id: s.id, nome: s.nome })));
-      
-      // Atualizar duração do orçamento primeiro
-      await base44.entities.Budget.update(budgetId, {
-        duracao_meses: months
-      });
-      console.log('Duração do orçamento atualizada');
-      
-      // Criar um map de stage_id válidos
-      const validStageIds = new Set(stages.map(s => s.id));
-      
-      // Agrupar itens por stage_id válido
-      const stageDistributions = new Map();
+
+      // 1. Atualizar duração do orçamento
+      await base44.entities.Budget.update(budgetId, { duracao_meses: months });
+
+      // 2. Agrupar itens por etapa
+      const stageData = new Map();
       
       items.forEach(item => {
-        const itemSchedule = schedule[item.id];
-        if (!itemSchedule) {
-          console.log(`Item ${item.id} sem schedule`);
-          return;
+        if (!item.stage_id || !itemPercentages[item.id]) return;
+        
+        if (!stageData.has(item.stage_id)) {
+          stageData.set(item.stage_id, []);
         }
         
-        if (!item.stage_id) {
-          console.warn(`Item ${item.id} (${item.descricao}) sem stage_id`);
-          return;
-        }
-        
-        if (!validStageIds.has(item.stage_id)) {
-          console.warn(`Item ${item.id} (${item.descricao}) tem stage_id inválido: ${item.stage_id}`);
-          return;
-        }
-        
-        if (!stageDistributions.has(item.stage_id)) {
-          stageDistributions.set(item.stage_id, { items: [], totalValue: 0 });
-        }
-        
-        const stageData = stageDistributions.get(item.stage_id);
-        stageData.items.push({
-          id: item.id,
-          subtotal: item.subtotal || 0,
-          percentages: itemSchedule.percentages
+        stageData.get(item.stage_id).push({
+          value: item.subtotal || 0,
+          percentages: itemPercentages[item.id]
         });
-        stageData.totalValue += item.subtotal || 0;
       });
+
+      // 3. Calcular distribuição mensal de cada etapa (média ponderada)
+      const updates = [];
       
-      console.log('Etapas válidas com dados:', stageDistributions.size);
-      
-      // Atualizar apenas etapas válidas
-      const updatePromises = [];
-      
-      for (const [stageId, data] of stageDistributions.entries()) {
+      for (const [stageId, itemsData] of stageData.entries()) {
+        const totalValue = itemsData.reduce((sum, i) => sum + i.value, 0);
         const distribuicao_mensal = [];
         
         for (let mes = 1; mes <= months; mes++) {
           let weightedPercentage = 0;
           
-          data.items.forEach(item => {
-            const itemPercentage = item.percentages[mes - 1] || 0;
-            const weight = item.subtotal / data.totalValue;
-            weightedPercentage += weight * itemPercentage;
+          itemsData.forEach(itemData => {
+            const weight = itemData.value / totalValue;
+            const percentage = itemData.percentages[mes - 1] || 0;
+            weightedPercentage += weight * percentage;
           });
           
-          distribuicao_mensal.push({
-            mes,
-            percentual: weightedPercentage
-          });
+          distribuicao_mensal.push({ mes, percentual: weightedPercentage });
         }
         
-        console.log(`Preparando update da etapa ${stageId}:`, distribuicao_mensal);
+        console.log(`Etapa ${stageId}:`, distribuicao_mensal);
         
-        updatePromises.push(
+        updates.push(
           base44.entities.ProjectStage.update(stageId, {
             distribuicao_mensal,
             duracao_meses: months
           })
         );
       }
-      
-      await Promise.all(updatePromises);
+
+      await Promise.all(updates);
       console.log('=== SALVAMENTO CONCLUÍDO ===');
     },
     onSuccess: () => {
@@ -150,16 +106,13 @@ export default function BudgetPlanner() {
       toast.success('Cronograma salvo com sucesso!');
     },
     onError: (error) => {
-      console.error('=== ERRO NO SALVAMENTO ===', error);
-      toast.error('Erro ao salvar cronograma: ' + error.message);
+      console.error('Erro ao salvar:', error);
+      toast.error('Erro ao salvar cronograma');
     }
   });
 
-  const handleSave = (receivedSchedule, receivedMonths) => {
-    console.log('=== BOTÃO SALVAR CLICADO ===');
-    console.log('Schedule:', Object.keys(receivedSchedule).length, 'itens');
-    console.log('Meses:', receivedMonths);
-    saveMutation.mutate({ schedule: receivedSchedule, months: receivedMonths });
+  const handleSave = (data) => {
+    saveMutation.mutate(data);
   };
 
   if (!budgetId) {
@@ -190,7 +143,6 @@ export default function BudgetPlanner() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => window.location.href = createPageUrl('BudgetForm') + `?id=${budgetId}`}>
@@ -203,7 +155,6 @@ export default function BudgetPlanner() {
         </div>
       </div>
 
-      {/* Resumo do Orçamento */}
       <Card className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
         <CardContent className="pt-6">
           <div className="grid grid-cols-4 gap-6">
@@ -229,7 +180,6 @@ export default function BudgetPlanner() {
         </CardContent>
       </Card>
 
-      {/* Tabs de Planejamento */}
       <Tabs defaultValue="schedule" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="schedule">
@@ -255,7 +205,6 @@ export default function BudgetPlanner() {
             budget={budget}
             stages={stages}
             items={items}
-            onChange={handleScheduleChange}
             onSave={handleSave}
             isSaving={saveMutation.isPending}
           />
@@ -263,10 +212,10 @@ export default function BudgetPlanner() {
 
         <TabsContent value="scurve" className="mt-6">
           <SCurveChart
-            schedule={serviceSchedule}
+            schedule={{}}
             stages={stages}
             items={items}
-            months={months}
+            months={budget?.duracao_meses || 12}
           />
         </TabsContent>
 
@@ -280,11 +229,11 @@ export default function BudgetPlanner() {
 
         <TabsContent value="staffing" className="mt-6">
           <StaffingCalculator
-            schedule={serviceSchedule}
+            schedule={{}}
             stages={stages}
             items={items}
             services={services}
-            months={months}
+            months={budget?.duracao_meses || 12}
           />
         </TabsContent>
       </Tabs>
