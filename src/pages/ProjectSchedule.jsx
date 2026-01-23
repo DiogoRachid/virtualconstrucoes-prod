@@ -45,98 +45,118 @@ export default function ProjectSchedule() {
 
   const saveMutation = useMutation({
     mutationFn: async ({ itemPercentages, months }) => {
-      console.log('=== SALVAMENTO INICIADO ===');
-      console.log('Items:', items.length);
-      console.log('Percentages keys:', Object.keys(itemPercentages).length);
+      try {
+        console.log('=== MUTATION INICIADA ===');
+        console.log('BudgetId:', budgetId);
+        console.log('Items totais:', items.length);
+        console.log('Keys de percentuais:', Object.keys(itemPercentages).length);
+        console.log('Meses:', months);
 
-      // 1. Atualizar duração do orçamento
-      await base44.entities.Budget.update(budgetId, { duracao_meses: months });
+        // 1. Atualizar duração do orçamento
+        console.log('1. Atualizando duração do orçamento...');
+        await base44.entities.Budget.update(budgetId, { duracao_meses: months });
 
-      // 2. Deletar distribuições antigas
-      const oldDistributions = await base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: budgetId });
-      await Promise.all(oldDistributions.map(d => base44.entities.ServiceMonthlyDistribution.delete(d.id)));
-
-      // 3. Salvar distribuição mensal de cada serviço
-      const distributionRecords = [];
-      
-      items.forEach(item => {
-        const percentages = itemPercentages[item.id] || [];
+        // 2. Deletar distribuições antigas
+        console.log('2. Deletando distribuições antigas...');
+        const oldDistributions = await base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: budgetId });
+        console.log(`Encontradas ${oldDistributions.length} distribuições antigas`);
         
-        percentages.forEach((percentual, idx) => {
-          if (percentual > 0) {
-            const mes = idx + 1;
-            const quantidade = ((item.quantidade || 0) * percentual) / 100;
-            const valor_mes = ((item.subtotal || 0) * percentual) / 100;
-            
-            distributionRecords.push({
-              orcamento_id: budgetId,
-              project_stage_id: item.stage_id,
-              servico_id: item.servico_id,
-              servico_codigo: item.codigo,
-              servico_descricao: item.descricao,
-              mes,
-              quantidade,
-              percentual,
-              valor_mes
-            });
-          }
-        });
-      });
-
-      if (distributionRecords.length > 0) {
-        await base44.entities.ServiceMonthlyDistribution.bulkCreate(distributionRecords);
-      }
-
-      // 4. Calcular e salvar distribuição agregada por etapa
-      const stageDistributions = {};
-      
-      stages.forEach(stage => {
-        stageDistributions[stage.id] = {
-          totalValue: 0,
-          monthlyValues: Array(months).fill(0)
-        };
-      });
-
-      items.forEach(item => {
-        if (!item.stage_id) return;
-        
-        const percentages = itemPercentages[item.id] || [];
-        const itemValue = item.subtotal || 0;
-        
-        stageDistributions[item.stage_id].totalValue += itemValue;
-        
-        percentages.forEach((percentage, idx) => {
-          stageDistributions[item.stage_id].monthlyValues[idx] += (itemValue * percentage) / 100;
-        });
-      });
-
-      // 5. Atualizar etapas com distribuição percentual
-      const stageUpdates = [];
-      
-      for (const [stageId, data] of Object.entries(stageDistributions)) {
-        if (data.totalValue === 0) continue;
-        
-        const distribuicao_mensal = [];
-        
-        for (let mes = 1; mes <= months; mes++) {
-          const monthValue = data.monthlyValues[mes - 1];
-          const percentual = data.totalValue > 0 ? (monthValue / data.totalValue) * 100 : 0;
-          distribuicao_mensal.push({ mes, percentual });
+        if (oldDistributions.length > 0) {
+          await Promise.all(oldDistributions.map(d => base44.entities.ServiceMonthlyDistribution.delete(d.id)));
         }
-        
-        stageUpdates.push(
-          base44.entities.ProjectStage.update(stageId, {
-            distribuicao_mensal,
-            duracao_meses: months,
-            valor_total: data.totalValue
-          })
-        );
-      }
 
-      await Promise.all(stageUpdates);
-      console.log('=== SALVAMENTO CONCLUÍDO ===');
-      console.log('Distribuições salvas:', distributionRecords.length);
-      console.log('Etapas atualizadas:', stageUpdates.length);
+        // 3. Salvar distribuição mensal de cada serviço
+        console.log('3. Criando novas distribuições...');
+        const distributionRecords = [];
+        
+        items.forEach(item => {
+          const percentages = itemPercentages[item.id] || [];
+          
+          percentages.forEach((percentual, idx) => {
+            if (percentual > 0) {
+              const mes = idx + 1;
+              const quantidade = ((item.quantidade || 0) * percentual) / 100;
+              const valor_mes = ((item.subtotal || 0) * percentual) / 100;
+              
+              distributionRecords.push({
+                orcamento_id: budgetId,
+                project_stage_id: item.stage_id,
+                servico_id: item.servico_id,
+                servico_codigo: item.codigo,
+                servico_descricao: item.descricao,
+                mes,
+                quantidade,
+                percentual,
+                valor_mes
+              });
+            }
+          });
+        });
+
+        console.log(`Criando ${distributionRecords.length} registros de distribuição`);
+        
+        if (distributionRecords.length > 0) {
+          await base44.entities.ServiceMonthlyDistribution.bulkCreate(distributionRecords);
+        }
+
+        // 4. Calcular distribuição agregada por etapa
+        console.log('4. Calculando distribuição por etapa...');
+        const stageDistributions = {};
+        
+        stages.forEach(stage => {
+          stageDistributions[stage.id] = {
+            totalValue: 0,
+            monthlyValues: Array(months).fill(0)
+          };
+        });
+
+        items.forEach(item => {
+          if (!item.stage_id) return;
+          
+          const percentages = itemPercentages[item.id] || [];
+          const itemValue = item.subtotal || 0;
+          
+          stageDistributions[item.stage_id].totalValue += itemValue;
+          
+          percentages.forEach((percentage, idx) => {
+            stageDistributions[item.stage_id].monthlyValues[idx] += (itemValue * percentage) / 100;
+          });
+        });
+
+        // 5. Atualizar etapas
+        console.log('5. Atualizando etapas...');
+        const stageUpdates = [];
+        
+        for (const [stageId, data] of Object.entries(stageDistributions)) {
+          if (data.totalValue === 0) continue;
+          
+          const distribuicao_mensal = [];
+          
+          for (let mes = 1; mes <= months; mes++) {
+            const monthValue = data.monthlyValues[mes - 1];
+            const percentual = data.totalValue > 0 ? (monthValue / data.totalValue) * 100 : 0;
+            distribuicao_mensal.push({ mes, percentual });
+          }
+          
+          stageUpdates.push(
+            base44.entities.ProjectStage.update(stageId, {
+              distribuicao_mensal,
+              duracao_meses: months,
+              valor_total: data.totalValue
+            })
+          );
+        }
+
+        console.log(`Atualizando ${stageUpdates.length} etapas`);
+        await Promise.all(stageUpdates);
+        
+        console.log('=== SALVAMENTO CONCLUÍDO COM SUCESSO ===');
+      } catch (error) {
+        console.error('=== ERRO NO SALVAMENTO ===');
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectStages', budgetId] });
@@ -151,6 +171,14 @@ export default function ProjectSchedule() {
   });
 
   const handleSave = (data) => {
+    console.log('=== HANDLE SAVE CHAMADO ===');
+    console.log('Data recebida:', data);
+    
+    if (!data || !data.itemPercentages) {
+      toast.error('Dados inválidos para salvar');
+      return;
+    }
+    
     saveMutation.mutate(data);
   };
 
