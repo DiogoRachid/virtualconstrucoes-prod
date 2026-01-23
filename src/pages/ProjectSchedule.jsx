@@ -46,6 +46,8 @@ export default function BudgetPlanner() {
   const saveMutation = useMutation({
     mutationFn: async ({ itemPercentages, months }) => {
       console.log('=== SALVAMENTO INICIADO ===');
+      console.log('Items:', items.length);
+      console.log('Percentages keys:', Object.keys(itemPercentages).length);
 
       // 1. Atualizar duração do orçamento
       await base44.entities.Budget.update(budgetId, { duracao_meses: months });

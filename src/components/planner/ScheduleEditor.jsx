@@ -125,8 +125,8 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
     const stageNumber = parentNumber ? `${parentNumber}.${stageIndex + 1}` : `${stageIndex + 1}`;
 
     return (
-      <React.Fragment key={stage.id}>
-        <TableRow className="font-medium bg-slate-50">
+      <>
+        <TableRow key={`stage-${stage.id}`} className="font-medium bg-slate-50">
           <TableCell className="sticky left-0 z-10 bg-slate-50" style={{ paddingLeft: `${16 + paddingLeft}px` }}>
             <div className="flex items-center gap-2">
               {hasContent && (
@@ -191,7 +191,7 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
         })}
 
         {isExpanded && subStages.map((subStage, subIdx) => renderStageRow(subStage, level + 1, stageNumber, subIdx))}
-      </React.Fragment>
+      </>
     );
   };
 
