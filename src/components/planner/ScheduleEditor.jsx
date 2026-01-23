@@ -88,6 +88,9 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
   };
 
   const handleSave = () => {
+    console.log('BOTÃO CLICADO - handleSave');
+    console.log('itemPercentages:', itemPercentages);
+    console.log('months:', months);
     onSave?.({ itemPercentages, months });
   };
 
