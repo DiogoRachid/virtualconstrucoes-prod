@@ -154,19 +154,7 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
     }
   };
 
-  const getMonthlyValue = (stageId, monthIndex) => {
-    const stageValue = getStageValue(stageId);
-    const percentage = schedule[stageId]?.percentages[monthIndex] || 0;
-    return (stageValue * percentage) / 100;
-  };
 
-  const getCumulativeValue = (stageId, monthIndex) => {
-    const stageValue = getStageValue(stageId);
-    const cumulativePercentage = schedule[stageId]?.percentages
-      .slice(0, monthIndex + 1)
-      .reduce((sum, p) => sum + p, 0) || 0;
-    return (stageValue * cumulativePercentage) / 100;
-  };
 
   const getTotalMonthlyByService = (monthIndex) => {
     return items.reduce((sum, item) => {
