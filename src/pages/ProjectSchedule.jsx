@@ -108,13 +108,39 @@ export default function BudgetPlanner() {
         })
       );
       
-      // Atualizar etapas
-      for (const stageId in schedule) {
-        const stageData = schedule[stageId];
-        const distribuicao_mensal = stageData.percentages.map((percentual, idx) => ({
-          mes: idx + 1,
-          percentual
-        }));
+      // Agrupar itens por stage_id e calcular distribuição mensal da etapa
+      const stageDistributions = new Map();
+      
+      items.forEach(item => {
+        if (item.stage_id && schedule[item.id]) {
+          if (!stageDistributions.has(item.stage_id)) {
+            stageDistributions.set(item.stage_id, { items: [], totalValue: 0 });
+          }
+          const stageData = stageDistributions.get(item.stage_id);
+          stageData.items.push({ ...item, schedule: schedule[item.id] });
+          stageData.totalValue += item.subtotal || 0;
+        }
+      });
+      
+      // Para cada etapa, calcular distribuição mensal ponderada
+      for (const [stageId, data] of stageDistributions.entries()) {
+        const distribuicao_mensal = [];
+        
+        for (let mes = 1; mes <= months; mes++) {
+          let weightedPercentage = 0;
+          
+          data.items.forEach(item => {
+            const itemValue = item.subtotal || 0;
+            const itemPercentage = item.schedule.percentages[mes - 1] || 0;
+            weightedPercentage += (itemValue / data.totalValue) * itemPercentage;
+          });
+          
+          distribuicao_mensal.push({
+            mes,
+            percentual: weightedPercentage
+          });
+        }
+        
         updates.push(
           base44.entities.ProjectStage.update(stageId, {
             distribuicao_mensal,
@@ -122,6 +148,7 @@ export default function BudgetPlanner() {
           })
         );
       }
+      
       await Promise.all(updates);
     },
     onSuccess: () => {
@@ -129,7 +156,8 @@ export default function BudgetPlanner() {
       queryClient.invalidateQueries({ queryKey: ['budget', budgetId] });
       toast.success('Cronograma salvo com sucesso!');
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Erro ao salvar:', error);
       toast.error('Erro ao salvar cronograma');
     }
   });
