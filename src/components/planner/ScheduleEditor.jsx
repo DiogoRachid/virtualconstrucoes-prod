@@ -117,7 +117,29 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
   };
 
   const getStageValue = (stageId) => {
-    return getStageItems(stageId).reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    const directItems = getStageItems(stageId);
+    const directValue = directItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    
+    // Somar valores das subetapas
+    const subStages = stages.filter(s => s.parent_stage_id === stageId);
+    const subStagesValue = subStages.reduce((sum, subStage) => sum + getStageValue(subStage.id), 0);
+    
+    return directValue + subStagesValue;
+  };
+
+  const getStageMonthlyValue = (stageId, monthIndex) => {
+    const directItems = getStageItems(stageId);
+    let monthlyValue = directItems.reduce((sum, item) => {
+      const percentages = itemPercentages[item.id] || [];
+      const percentage = percentages[monthIndex] || 0;
+      return sum + ((item.subtotal || 0) * percentage) / 100;
+    }, 0);
+    
+    // Somar valores mensais das subetapas
+    const subStages = stages.filter(s => s.parent_stage_id === stageId);
+    const subStagesMonthlyValue = subStages.reduce((sum, subStage) => sum + getStageMonthlyValue(subStage.id, monthIndex), 0);
+    
+    return monthlyValue + subStagesMonthlyValue;
   };
 
   const mainStages = stages.filter(stage => !stage.parent_stage_id).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
@@ -156,9 +178,20 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
         <TableCell className="text-right text-sm">
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stageValue)}
         </TableCell>
-        {Array.from({ length: months }).map((_, idx) => (
-          <TableCell key={idx} className="p-1 text-center text-xs text-slate-600">-</TableCell>
-        ))}
+        {Array.from({ length: months }).map((_, idx) => {
+          const monthValue = getStageMonthlyValue(stage.id, idx);
+          const monthPercentage = stageValue > 0 ? (monthValue / stageValue) * 100 : 0;
+          return (
+            <TableCell key={idx} className="p-1 text-center text-xs">
+              {monthValue > 0 ? (
+                <div className="space-y-0.5">
+                  <div className="text-slate-900 font-medium">{monthPercentage.toFixed(1)}%</div>
+                  <div className="text-slate-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(monthValue)}</div>
+                </div>
+              ) : '-'}
+            </TableCell>
+          );
+        })}
         <TableCell className="text-right"></TableCell>
       </TableRow>
     );
