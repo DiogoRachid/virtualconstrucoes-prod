@@ -267,17 +267,17 @@ export default function ScheduleEditor({ budget, stages, items, onChange, onSave
                 {item.descricao || 'Sem descrição'}
               </TableCell>
               <TableCell className="text-right text-sm">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.subtotal || 0)}
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.subtotal || 0)}
               </TableCell>
-              {Array.from({ length: months }).map((_, idx) => (
-                <TableCell key={idx} className="p-1">
+              {Array.from({ length: months }).map((_, monthIdx) => (
+                <TableCell key={monthIdx} className="p-1">
                   <Input
                     type="number"
                     min="0"
                     max="100"
                     step="0.01"
-                    value={itemData?.percentages[idx]?.toFixed(2) || '0.00'}
-                    onChange={(e) => handleServicePercentageChange(service.id, idx, e.target.value)}
+                    value={itemData?.percentages[monthIdx]?.toFixed(2) || '0.00'}
+                    onChange={(e) => handleServicePercentageChange(item.id, monthIdx, e.target.value)}
                     className="h-8 w-16 text-xs text-center"
                   />
                 </TableCell>
