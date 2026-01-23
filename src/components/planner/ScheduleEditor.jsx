@@ -87,18 +87,26 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
     return percentages.reduce((sum, p) => sum + p, 0);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     console.log('=== CLIQUE NO BOTÃO SALVAR ===');
-    console.log('Função onSave existe?', !!onSave);
+    console.log('Tipo de onSave:', typeof onSave);
+    console.log('onSave:', onSave);
     console.log('Quantidade de items com percentuais:', Object.keys(itemPercentages).length);
     console.log('Meses:', months);
     
-    if (!onSave) {
+    if (!onSave || typeof onSave !== 'function') {
       toast.error('Erro: função de salvamento não encontrada');
+      console.error('onSave não é uma função!');
       return;
     }
     
-    onSave({ itemPercentages, months });
+    try {
+      await onSave({ itemPercentages, months });
+      console.log('onSave executado com sucesso');
+    } catch (error) {
+      console.error('Erro ao executar onSave:', error);
+      toast.error('Erro ao salvar: ' + error.message);
+    }
   };
 
   const toggleStageExpanded = (stageId) => {
