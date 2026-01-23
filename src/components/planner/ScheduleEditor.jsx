@@ -35,11 +35,13 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
           loaded[item.id] = Array(months).fill(0);
         });
 
-        // Preencher com dados salvos
+        // Preencher com dados salvos - usar budget_item_id para evitar duplicação
         distributions.forEach(dist => {
-          const item = items.find(i => i.servico_id === dist.servico_id && i.stage_id === dist.project_stage_id);
-          if (item && dist.mes >= 1 && dist.mes <= months) {
-            loaded[item.id][dist.mes - 1] = dist.percentual || 0;
+          if (dist.budget_item_id && dist.mes >= 1 && dist.mes <= months) {
+            // Usar o ID do item do orçamento diretamente
+            if (loaded[dist.budget_item_id]) {
+              loaded[dist.budget_item_id][dist.mes - 1] = dist.percentual || 0;
+            }
           }
         });
 

@@ -120,6 +120,7 @@ export default function BudgetPlanner() {
           if (percentual > 0) {
             newDistributions.push({
               orcamento_id: budgetId,
+              budget_item_id: item.id,
               project_stage_id: item.stage_id,
               servico_id: item.servico_id,
               servico_codigo: item.codigo,
