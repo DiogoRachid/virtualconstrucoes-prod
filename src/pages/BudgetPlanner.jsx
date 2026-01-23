@@ -98,44 +98,98 @@ export default function BudgetPlanner() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: async ({ schedule, months }) => {
-      const updates = [];
-      
+    mutationFn: async ({ itemPercentages, months }) => {
       // Atualizar duração no orçamento
-      updates.push(
-        base44.entities.Budget.update(budgetId, {
-          duracao_meses: months
-        })
-      );
-      
-      // Atualizar etapas
-      for (const stageId in schedule) {
-        const stageData = schedule[stageId];
-        const distribuicao_mensal = stageData.percentages.map((percentual, idx) => ({
-          mes: idx + 1,
-          percentual
-        }));
-        updates.push(
-          base44.entities.ProjectStage.update(stageId, {
-            distribuicao_mensal,
-            duracao_meses: months
-          })
-        );
+      await base44.entities.Budget.update(budgetId, { duracao_meses: months });
+
+      // Limpar distribuições antigas
+      const oldDist = await base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: budgetId });
+      for (const d of oldDist) {
+        await base44.entities.ServiceMonthlyDistribution.delete(d.id);
       }
-      await Promise.all(updates);
+
+      // Criar novas distribuições por serviço
+      const newDistributions = [];
+      
+      for (const item of items) {
+        const percentages = itemPercentages[item.id] || [];
+        
+        for (let monthIdx = 0; monthIdx < months; monthIdx++) {
+          const percentual = percentages[monthIdx] || 0;
+          
+          if (percentual > 0) {
+            newDistributions.push({
+              orcamento_id: budgetId,
+              project_stage_id: item.stage_id,
+              servico_id: item.servico_id,
+              servico_codigo: item.codigo,
+              servico_descricao: item.descricao,
+              mes: monthIdx + 1,
+              quantidade: ((item.quantidade || 0) * percentual) / 100,
+              percentual: percentual,
+              valor_mes: ((item.subtotal || 0) * percentual) / 100
+            });
+          }
+        }
+      }
+
+      if (newDistributions.length > 0) {
+        await base44.entities.ServiceMonthlyDistribution.bulkCreate(newDistributions);
+      }
+
+      // Calcular e atualizar distribuição mensal das etapas
+      for (const stage of stages) {
+        const stageItems = items.filter(i => i.stage_id === stage.id);
+        const distribuicao_mensal = [];
+        let valor_total = 0;
+
+        // Calcular valor total da etapa
+        for (let mes = 1; mes <= months; mes++) {
+          let valorMes = 0;
+          
+          for (const item of stageItems) {
+            const percentages = itemPercentages[item.id] || [];
+            const percentual = percentages[mes - 1] || 0;
+            valorMes += ((item.subtotal || 0) * percentual) / 100;
+          }
+          
+          valor_total += valorMes;
+        }
+
+        // Calcular percentuais mensais da etapa
+        for (let mes = 1; mes <= months; mes++) {
+          let valorMes = 0;
+          
+          for (const item of stageItems) {
+            const percentages = itemPercentages[item.id] || [];
+            const percentual = percentages[mes - 1] || 0;
+            valorMes += ((item.subtotal || 0) * percentual) / 100;
+          }
+          
+          const percentual = valor_total > 0 ? (valorMes / valor_total) * 100 : 0;
+          distribuicao_mensal.push({ mes, percentual });
+        }
+
+        await base44.entities.ProjectStage.update(stage.id, {
+          distribuicao_mensal,
+          duracao_meses: months,
+          valor_total
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectStages', budgetId] });
       queryClient.invalidateQueries({ queryKey: ['budget', budgetId] });
       toast.success('Cronograma salvo com sucesso!');
     },
-    onError: () => {
-      toast.error('Erro ao salvar cronograma');
+    onError: (error) => {
+      console.error('Erro ao salvar:', error);
+      toast.error('Erro ao salvar cronograma: ' + error.message);
     }
   });
 
-  const handleSave = (schedule, months) => {
-    saveMutation.mutate({ schedule, months });
+  const handleSave = (data) => {
+    saveMutation.mutate(data);
   };
 
   if (!budgetId) {
