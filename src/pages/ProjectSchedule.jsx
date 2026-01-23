@@ -17,9 +17,8 @@ export default function BudgetPlanner() {
   const budgetId = urlParams.get('budgetId');
   const queryClient = useQueryClient();
 
-  const [schedule, setSchedule] = useState({});
+  const [serviceSchedule, setServiceSchedule] = useState({});
   const [months, setMonths] = useState(12);
-  const [scheduleLoaded, setScheduleLoaded] = useState(false);
 
   // Carregar dados do orçamento
   const { data: budget, isLoading: loadingBudget } = useQuery({
@@ -37,49 +36,11 @@ export default function BudgetPlanner() {
     enabled: !!budgetId
   });
 
-  // Carregar duração do projeto e cronograma inicial
   useEffect(() => {
-    if (!stages || stages.length === 0) return;
-    
-    // Carregar duração
     if (budget?.duracao_meses) {
       setMonths(budget.duracao_meses);
-    } else if (stages.length > 0) {
-      const stageWithDuration = stages.find(s => s.duracao_meses);
-      if (stageWithDuration) {
-        setMonths(stageWithDuration.duracao_meses);
-      }
     }
-    
-    // Carregar cronograma inicial dos dados salvos
-    if (!scheduleLoaded) {
-      const initialSchedule = {};
-      const duration = budget?.duracao_meses || 12;
-      
-      stages.forEach(stage => {
-        if (stage.distribuicao_mensal && stage.distribuicao_mensal.length > 0) {
-          const percentages = Array(duration).fill(0);
-          stage.distribuicao_mensal.forEach(d => {
-            if (d.mes >= 1 && d.mes <= duration) {
-              percentages[d.mes - 1] = d.percentual || 0;
-            }
-          });
-          initialSchedule[stage.id] = {
-            percentages,
-            total: percentages.reduce((sum, p) => sum + p, 0)
-          };
-        } else {
-          initialSchedule[stage.id] = {
-            percentages: Array(duration).fill(0),
-            total: 0
-          };
-        }
-      });
-      
-      setSchedule(initialSchedule);
-      setScheduleLoaded(true);
-    }
-  }, [budget, stages, scheduleLoaded]);
+  }, [budget?.duracao_meses]);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ['budgetItems', budgetId],
@@ -93,7 +54,7 @@ export default function BudgetPlanner() {
   });
 
   const handleScheduleChange = (newSchedule, newMonths) => {
-    setSchedule(newSchedule);
+    setServiceSchedule(newSchedule);
     setMonths(newMonths);
   };
 
@@ -162,8 +123,10 @@ export default function BudgetPlanner() {
     }
   });
 
-  const handleSave = (schedule, months) => {
-    saveMutation.mutate({ schedule, months });
+  const handleSave = (receivedSchedule, receivedMonths) => {
+    setServiceSchedule(receivedSchedule);
+    setMonths(receivedMonths);
+    saveMutation.mutate({ schedule: receivedSchedule, months: receivedMonths });
   };
 
   if (!budgetId) {
@@ -267,7 +230,7 @@ export default function BudgetPlanner() {
 
         <TabsContent value="scurve" className="mt-6">
           <SCurveChart
-            schedule={schedule}
+            schedule={serviceSchedule}
             stages={stages}
             items={items}
             months={months}
@@ -284,7 +247,7 @@ export default function BudgetPlanner() {
 
         <TabsContent value="staffing" className="mt-6">
           <StaffingCalculator
-            schedule={schedule}
+            schedule={serviceSchedule}
             stages={stages}
             items={items}
             services={services}
