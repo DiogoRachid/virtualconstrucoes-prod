@@ -9,6 +9,8 @@ import { AlertCircle, Save, FileSpreadsheet, FileText, ChevronDown, ChevronRight
 import { exportScheduleXLSX, exportSchedulePDF } from './ScheduleExporter';
 
 export default function ScheduleEditor({ budget, stages, items, onSave, isSaving }) {
+  console.log('ScheduleEditor renderizado com onSave:', typeof onSave);
+  
   const [months, setMonths] = useState(budget?.duracao_meses || 12);
   const [itemPercentages, setItemPercentages] = useState({});
   const [expandedStages, setExpandedStages] = useState(new Set());

@@ -280,17 +280,13 @@ export default function ProjectSchedule() {
         </TabsList>
 
         <TabsContent value="schedule" className="mt-6">
-          {budget && stages && items ? (
-            <ScheduleEditor
-              budget={budget}
-              stages={stages}
-              items={items}
-              onSave={handleSave}
-              isSaving={saveMutation.isPending}
-            />
-          ) : (
-            <div>Carregando dados...</div>
-          )}
+          <ScheduleEditor
+            budget={budget}
+            stages={stages}
+            items={items}
+            onSave={handleSave}
+            isSaving={saveMutation.isPending}
+          />
         </TabsContent>
 
         <TabsContent value="scurve" className="mt-6">
