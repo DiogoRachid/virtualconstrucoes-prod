@@ -22,11 +22,28 @@ export default function PurchasingListPage() {
   const [abcFilter, setAbcFilter] = useState('');
   const [listData, setListData] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('all');
+  const [workMonths, setWorkMonths] = useState(0);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const { data: works = [] } = useQuery({
     queryKey: ['works'],
     queryFn: () => base44.entities.Project.list()
+  });
+
+  // Buscar meses da obra selecionada
+  useQuery({
+    queryKey: ['workBudget', selectedWork],
+    queryFn: async () => {
+      if (!selectedWork) return null;
+      const budgets = await base44.entities.Budget.filter({ obra_id: selectedWork });
+      if (budgets.length > 0) {
+        setWorkMonths(budgets[0].duracao_meses || 12);
+        return budgets[0];
+      }
+      setWorkMonths(0);
+      return null;
+    },
+    enabled: !!selectedWork
   });
 
   const generateMutation = useMutation({
@@ -356,9 +373,9 @@ export default function PurchasingListPage() {
   };
 
   const sortedItems = useMemo(() => {
-    if (!displayData?.itens) return [];
+    if (!consolidatedItems) return [];
     
-    const items = [...displayData.itens];
+    const items = [...consolidatedItems];
     
     if (sortConfig.key) {
       items.sort((a, b) => {
@@ -388,9 +405,34 @@ export default function PurchasingListPage() {
     }
     
     return items;
-  }, [displayData?.itens, sortConfig]);
+  }, [consolidatedItems, sortConfig]);
 
-  const abcCounts = (sortedItems || []).reduce((acc, item) => ({
+  // Consolidar itens antes de calcular ABC
+  const consolidatedItems = useMemo(() => {
+    const itemsMap = new Map();
+    
+    (displayData?.itens || []).forEach(item => {
+      const key = `${item.codigo || ''}_${item.descricao}`;
+      
+      if (itemsMap.has(key)) {
+        const existing = itemsMap.get(key);
+        existing.quantidade += item.quantidade;
+      } else {
+        itemsMap.set(key, { ...item });
+      }
+    });
+    
+    return Array.from(itemsMap.values());
+  }, [displayData?.itens]);
+
+  const finalDisplayData = {
+    ...displayData,
+    itens: consolidatedItems,
+    total_geral_itens: consolidatedItems.length,
+    total_geral_valor: consolidatedItems.reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0)
+  };
+
+  const abcCounts = (consolidatedItems || []).reduce((acc, item) => ({
     ...acc,
     [item.abc_class]: (acc[item.abc_class] || 0) + 1
   }), {});
@@ -518,7 +560,7 @@ export default function PurchasingListPage() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-sm text-slate-600">Valor Total</p>
-                <p className="text-2xl font-bold">R$ {(displayData?.total_geral_valor || 0).toFixed(2)}</p>
+                <p className="text-2xl font-bold">R$ {(finalDisplayData?.total_geral_valor || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
           </div>
