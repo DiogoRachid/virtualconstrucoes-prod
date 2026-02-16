@@ -36,6 +36,9 @@ export default function AccountsPayable() {
   const [statusFilter, setStatusFilter] = useState('em_aberto');
   const [monthFilter, setMonthFilter] = useState('all');
   const [costCenterFilter, setCostCenterFilter] = useState('all');
+  const [workFilter, setWorkFilter] = useState('all');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [deleteId, setDeleteId] = useState(null);
   const [paymentDialog, setPaymentDialog] = useState(null);
@@ -52,6 +55,11 @@ export default function AccountsPayable() {
   const { data: costCenters = [] } = useQuery({
     queryKey: ['costCenters'],
     queryFn: () => base44.entities.CostCenter.list()
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => base44.entities.Project.list()
   });
 
   const adjustToBusinessDay = (dateStr) => {
@@ -225,14 +233,23 @@ export default function AccountsPayable() {
         a.numero_documento?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'all' || a.status === statusFilter;
       const matchCostCenter = costCenterFilter === 'all' || a.centro_custo_id === costCenterFilter;
+      const matchWork = workFilter === 'all' || a.obra_id === workFilter;
       
       let matchMonth = true;
       if (monthFilter !== 'all' && a.data_vencimento) {
         const dueMonth = a.data_vencimento.substring(0, 7); // YYYY-MM
         matchMonth = dueMonth === monthFilter;
       }
+
+      let matchDateRange = true;
+      if (startDateFilter && a.data_vencimento) {
+        matchDateRange = matchDateRange && a.data_vencimento >= startDateFilter;
+      }
+      if (endDateFilter && a.data_vencimento) {
+        matchDateRange = matchDateRange && a.data_vencimento <= endDateFilter;
+      }
       
-      return matchSearch && matchStatus && matchMonth && matchCostCenter;
+      return matchSearch && matchStatus && matchMonth && matchCostCenter && matchWork && matchDateRange;
     });
 
     if (sortConfig.key) {
@@ -250,7 +267,7 @@ export default function AccountsPayable() {
     }
 
     return result;
-  }, [accounts, search, statusFilter, monthFilter, costCenterFilter, sortConfig]);
+  }, [accounts, search, statusFilter, monthFilter, costCenterFilter, workFilter, startDateFilter, endDateFilter, sortConfig]);
 
   // Alertas de vencimento próximo
   const upcomingPayments = accounts.filter(a => {
@@ -283,16 +300,20 @@ export default function AccountsPayable() {
   };
 
   const toggleAllSelection = () => {
-    const payableIds = filteredAccounts
-      .filter(a => a.status === 'em_aberto' || a.status === 'atrasado')
-      .map(a => a.id);
+    const allIds = filteredAccounts.map(a => a.id);
     
-    if (selectedIds.length === payableIds.length) {
+    if (selectedIds.length === allIds.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(payableIds);
+      setSelectedIds(allIds);
     }
   };
+
+  const selectedTotal = React.useMemo(() => {
+    return accounts
+      .filter(a => selectedIds.includes(a.id))
+      .reduce((sum, a) => sum + Number(a.valor || 0), 0);
+  }, [accounts, selectedIds]);
 
   const columns = [
     {
@@ -300,21 +321,19 @@ export default function AccountsPayable() {
         <input
           type="checkbox"
           onChange={toggleAllSelection}
-          checked={selectedIds.length > 0 && selectedIds.length === filteredAccounts.filter(a => a.status === 'em_aberto' || a.status === 'atrasado').length}
+          checked={selectedIds.length > 0 && selectedIds.length === filteredAccounts.length}
           className="rounded"
         />
       ),
       className: 'w-12',
       render: (row) => (
-        (row.status === 'em_aberto' || row.status === 'atrasado') ? (
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(row.id)}
-            onChange={() => toggleSelection(row.id)}
-            onClick={(e) => e.stopPropagation()}
-            className="rounded"
-          />
-        ) : null
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(row.id)}
+          onChange={() => toggleSelection(row.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="rounded"
+        />
       )
     },
     {
@@ -421,19 +440,42 @@ export default function AccountsPayable() {
         onAction={() => window.location.href = createPageUrl('AccountPayableForm')}
       />
 
-      <div className="mb-4 flex justify-between items-center">
-        {selectedIds.length > 0 && (
-          <Button
-            onClick={() => {
-              setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
-              setBatchPaymentDialog(true);
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Dar Baixa em {selectedIds.length} Selecionadas
-          </Button>
-        )}
+      <div className="mb-4 flex justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {selectedIds.length > 0 && (
+            <>
+              <div className="flex flex-col">
+                <Button
+                  onClick={() => {
+                    const pendingIds = selectedIds.filter(id => {
+                      const account = accounts.find(a => a.id === id);
+                      return account && (account.status === 'em_aberto' || account.status === 'atrasado');
+                    });
+                    if (pendingIds.length === 0) {
+                      toast.error('Nenhuma conta pendente selecionada');
+                      return;
+                    }
+                    setSelectedIds(pendingIds);
+                    setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+                    setBatchPaymentDialog(true);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Dar Baixa em Selecionadas
+                </Button>
+              </div>
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="py-3 px-4">
+                  <p className="text-xs text-blue-700 mb-1">{selectedIds.length} contas selecionadas</p>
+                  <p className="text-lg font-bold text-blue-900">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedTotal)}
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
         <div className="ml-auto">
           <Button 
             variant="outline" 
@@ -484,6 +526,46 @@ export default function AccountsPayable() {
         </Card>
       </div>
 
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Data Início</Label>
+              <Input
+                type="date"
+                value={startDateFilter}
+                onChange={(e) => setStartDateFilter(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Data Fim</Label>
+              <Input
+                type="date"
+                value={endDateFilter}
+                onChange={(e) => setEndDateFilter(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div className="flex items-end">
+              {(startDateFilter || endDateFilter) && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setStartDateFilter('');
+                    setEndDateFilter('');
+                  }}
+                  className="h-9"
+                >
+                  Limpar Datas
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <SearchFilter
         searchValue={search}
         onSearchChange={setSearch}
@@ -513,6 +595,12 @@ export default function AccountsPayable() {
               })
           },
           {
+            value: workFilter,
+            onChange: setWorkFilter,
+            placeholder: 'Obra',
+            options: projects.map(p => ({ value: p.id, label: p.nome }))
+          },
+          {
             value: costCenterFilter,
             onChange: setCostCenterFilter,
             placeholder: 'Centro de Custo',
@@ -523,7 +611,10 @@ export default function AccountsPayable() {
           setSearch('');
           setStatusFilter('em_aberto');
           setMonthFilter('all');
+          setWorkFilter('all');
           setCostCenterFilter('all');
+          setStartDateFilter('');
+          setEndDateFilter('');
         }}
       />
 

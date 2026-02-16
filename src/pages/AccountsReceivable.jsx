@@ -36,10 +36,14 @@ export default function AccountsReceivable() {
   const [statusFilter, setStatusFilter] = useState('em_aberto');
   const [monthFilter, setMonthFilter] = useState('all');
   const [costCenterFilter, setCostCenterFilter] = useState('all');
+  const [workFilter, setWorkFilter] = useState('all');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [deleteId, setDeleteId] = useState(null);
   const [receiveDialog, setReceiveDialog] = useState(null);
   const [receiveDate, setReceiveDate] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
   const queryClient = useQueryClient();
 
   const { data: accounts = [], isLoading } = useQuery({
@@ -50,6 +54,11 @@ export default function AccountsReceivable() {
   const { data: costCenters = [] } = useQuery({
     queryKey: ['costCenters'],
     queryFn: () => base44.entities.CostCenter.list()
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => base44.entities.Project.list()
   });
 
   const adjustToBusinessDay = (dateStr) => {
@@ -174,6 +183,28 @@ export default function AccountsReceivable() {
     toast.success(`Lembrete enviado para ${account.cliente_nome || 'cliente'}`);
   };
 
+  const toggleSelection = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllSelection = () => {
+    const allIds = filteredAccounts.map(a => a.id);
+    
+    if (selectedIds.length === allIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allIds);
+    }
+  };
+
+  const selectedTotal = React.useMemo(() => {
+    return accounts
+      .filter(a => selectedIds.includes(a.id))
+      .reduce((sum, a) => sum + Number(a.valor || 0), 0);
+  }, [accounts, selectedIds]);
+
   const filteredAccounts = React.useMemo(() => {
     let result = accounts.filter(a => {
       const matchSearch = !search || 
@@ -182,14 +213,23 @@ export default function AccountsReceivable() {
         a.numero_documento?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'all' || a.status === statusFilter;
       const matchCostCenter = costCenterFilter === 'all' || a.centro_custo_id === costCenterFilter;
+      const matchWork = workFilter === 'all' || a.obra_id === workFilter;
       
       let matchMonth = true;
       if (monthFilter !== 'all' && a.data_vencimento) {
         const dueMonth = a.data_vencimento.substring(0, 7); // YYYY-MM
         matchMonth = dueMonth === monthFilter;
       }
+
+      let matchDateRange = true;
+      if (startDateFilter && a.data_vencimento) {
+        matchDateRange = matchDateRange && a.data_vencimento >= startDateFilter;
+      }
+      if (endDateFilter && a.data_vencimento) {
+        matchDateRange = matchDateRange && a.data_vencimento <= endDateFilter;
+      }
       
-      return matchSearch && matchStatus && matchMonth && matchCostCenter;
+      return matchSearch && matchStatus && matchMonth && matchCostCenter && matchWork && matchDateRange;
     });
 
     if (sortConfig.key) {
@@ -207,7 +247,7 @@ export default function AccountsReceivable() {
     }
 
     return result;
-  }, [accounts, search, statusFilter, monthFilter, costCenterFilter, sortConfig]);
+  }, [accounts, search, statusFilter, monthFilter, costCenterFilter, workFilter, startDateFilter, endDateFilter, sortConfig]);
 
   // Alertas de vencimento próximo
   const upcomingReceivables = accounts.filter(a => {
@@ -233,6 +273,26 @@ export default function AccountsReceivable() {
   };
 
   const columns = [
+    {
+      header: (
+        <input
+          type="checkbox"
+          onChange={toggleAllSelection}
+          checked={selectedIds.length > 0 && selectedIds.length === filteredAccounts.length}
+          className="rounded"
+        />
+      ),
+      className: 'w-12',
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(row.id)}
+          onChange={() => toggleSelection(row.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="rounded"
+        />
+      )
+    },
     {
       header: 'Descrição',
       accessor: 'descricao',
@@ -343,16 +403,30 @@ export default function AccountsReceivable() {
         onAction={() => window.location.href = createPageUrl('AccountReceivableForm')}
       />
 
-      <div className="mb-4 flex justify-end">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => fixExistingDatesMutation.mutate()}
-          disabled={fixExistingDatesMutation.isPending}
-        >
-          <CalendarCheck className="h-4 w-4 mr-2" />
-{fixExistingDatesMutation.isPending ? 'Corrigindo...' : 'Corrigir Datas Existentes'}
-        </Button>
+      <div className="mb-4 flex justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {selectedIds.length > 0 && (
+            <Card className="bg-emerald-50 border-emerald-200">
+              <CardContent className="py-3 px-4">
+                <p className="text-xs text-emerald-700 mb-1">{selectedIds.length} contas selecionadas</p>
+                <p className="text-lg font-bold text-emerald-900">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedTotal)}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+        <div className="ml-auto">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => fixExistingDatesMutation.mutate()}
+            disabled={fixExistingDatesMutation.isPending}
+          >
+            <CalendarCheck className="h-4 w-4 mr-2" />
+            {fixExistingDatesMutation.isPending ? 'Corrigindo...' : 'Corrigir Datas Existentes'}
+          </Button>
+        </div>
       </div>
 
       {/* Alertas */}
@@ -392,6 +466,46 @@ export default function AccountsReceivable() {
         </Card>
       </div>
 
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Data Início</Label>
+              <Input
+                type="date"
+                value={startDateFilter}
+                onChange={(e) => setStartDateFilter(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600 mb-1.5 block">Data Fim</Label>
+              <Input
+                type="date"
+                value={endDateFilter}
+                onChange={(e) => setEndDateFilter(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div className="flex items-end">
+              {(startDateFilter || endDateFilter) && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setStartDateFilter('');
+                    setEndDateFilter('');
+                  }}
+                  className="h-9"
+                >
+                  Limpar Datas
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <SearchFilter
         searchValue={search}
         onSearchChange={setSearch}
@@ -421,6 +535,12 @@ export default function AccountsReceivable() {
               })
           },
           {
+            value: workFilter,
+            onChange: setWorkFilter,
+            placeholder: 'Obra',
+            options: projects.map(p => ({ value: p.id, label: p.nome }))
+          },
+          {
             value: costCenterFilter,
             onChange: setCostCenterFilter,
             placeholder: 'Centro de Custo',
@@ -431,7 +551,10 @@ export default function AccountsReceivable() {
           setSearch('');
           setStatusFilter('em_aberto');
           setMonthFilter('all');
+          setWorkFilter('all');
           setCostCenterFilter('all');
+          setStartDateFilter('');
+          setEndDateFilter('');
         }}
       />
 
