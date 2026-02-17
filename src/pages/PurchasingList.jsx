@@ -52,10 +52,17 @@ export default function PurchasingListPage() {
         workId: selectedWork,
         abcFilter: abcFilter || null
       });
-      return response.data.data;
+      return response.data;
     },
     onSuccess: (data) => {
-      setListData(data);
+      if (data.success) {
+        setListData(data.data);
+      } else {
+        console.error('Erro ao gerar lista:', data.error);
+      }
+    },
+    onError: (error) => {
+      console.error('Erro na mutation:', error);
     }
   });
 
