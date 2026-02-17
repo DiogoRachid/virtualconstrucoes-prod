@@ -5,27 +5,45 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const { workId, workName, abcFilter } = await req.json();
 
+    console.log('[INFO] Iniciando geração de lista de compras', { workId, workName, abcFilter });
+
     // Buscar projeto por ID ou Nome
     let project;
-    if (workId) {
-      project = await base44.asServiceRole.entities.Project.filter({ id: workId }).then(r => r[0]);
-    } else if (workName) {
-      project = await base44.asServiceRole.entities.Project.filter({ nome: workName }).then(r => r[0]);
+    try {
+      if (workId) {
+        const projects = await base44.asServiceRole.entities.Project.filter({ id: workId });
+        project = projects[0];
+      } else if (workName) {
+        const projects = await base44.asServiceRole.entities.Project.filter({ nome: workName });
+        project = projects[0];
+      }
+    } catch (error) {
+      console.error('[ERROR] Erro ao buscar projeto:', error);
+      return Response.json({ 
+        success: false, 
+        error: `Erro ao buscar projeto: ${error.message}` 
+      }, { status: 500 });
     }
+
     if (!project) {
+      console.error('[ERROR] Projeto não encontrado');
       return Response.json({ 
         success: false, 
         error: 'Obra não encontrada' 
-      }, { status: 400 });
+      }, { status: 404 });
     }
+
+    console.log('[INFO] Projeto encontrado:', project.nome);
 
     // Buscar orçamentos da obra
     const budgets = await base44.asServiceRole.entities.Budget.filter({ obra_id: project.id });
+    console.log(`[INFO] Encontrados ${budgets.length} orçamentos`);
+    
     if (!budgets.length) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum orçamento encontrado' 
-      }, { status: 400 });
+        error: 'Nenhum orçamento encontrado para esta obra' 
+      }, { status: 404 });
     }
 
     // Buscar cronograma (ProjectStage) para calcular meses
@@ -44,11 +62,13 @@ Deno.serve(async (req) => {
       allBudgetItems.push(...items);
     }
 
+    console.log(`[INFO] Total de itens de orçamento: ${allBudgetItems.length}`);
+
     if (!allBudgetItems.length) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum item de orçamento encontrado' 
-      }, { status: 400 });
+        error: 'Nenhum serviço encontrado no orçamento. Adicione serviços ao orçamento primeiro.' 
+      }, { status: 404 });
     }
 
     // Buscar todos os ServiceItems para decompor os serviços em insumos
@@ -82,7 +102,14 @@ Deno.serve(async (req) => {
       });
     }
     
-    console.log(`[DEBUG] Found ${monthlyDistributions.length} monthly distributions for ${distributionMap.size} items`);
+    console.log(`[INFO] Encontradas ${monthlyDistributions.length} distribuições mensais para ${distributionMap.size} itens`);
+    
+    if (monthlyDistributions.length === 0) {
+      return Response.json({ 
+        success: false, 
+        error: 'Nenhuma distribuição mensal encontrada. É necessário salvar o cronograma no Planejamento antes de gerar a lista de compras.' 
+      }, { status: 404 });
+    }
 
     // Buscar insumos para obter dados completos
     const allInputs = await base44.asServiceRole.entities.Input.list();
@@ -227,10 +254,21 @@ Deno.serve(async (req) => {
     const totalGeralItens = periodosFormatados.reduce((sum, p) => sum + p.total_itens, 0);
     const totalGeralValor = periodosFormatados.reduce((sum, p) => sum + p.total_valor, 0);
 
+    console.log(`[INFO] Lista gerada com sucesso: ${totalGeralItens} itens em ${months} meses, valor total R$ ${totalGeralValor.toFixed(2)}`);
+
+    const hasItems = periodosFormatados.some(p => p.itens.length > 0);
+    if (!hasItems) {
+      return Response.json({ 
+        success: false, 
+        error: 'Nenhum insumo encontrado. Verifique se:\n1. Os serviços do orçamento têm insumos cadastrados\n2. O cronograma foi salvo com distribuição mensal (0-100%)\n3. Os percentuais mensais foram preenchidos' 
+      }, { status: 404 });
+    }
+
     return Response.json({ 
       success: true,
       data: {
         obra_id: project.id,
+        obra_nome: project.nome,
         total_meses: months,
         data_geracao: new Date().toISOString().split('T')[0],
         periodos: periodosFormatados,
