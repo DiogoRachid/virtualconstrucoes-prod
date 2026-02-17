@@ -101,8 +101,11 @@ Deno.serve(async (req) => {
       const serviceItems = serviceItemMap.get(budgetItem.servico_id) || [];
 
       if (serviceItems.length === 0) {
+        console.log(`[DEBUG] Serviço ${budgetItem.servico_id} não tem insumos cadastrados`);
         continue;
       }
+      
+      console.log(`[DEBUG] Processando item orçamento ${budgetItem.id} - Serviço: ${budgetItem.descricao}, Qtd: ${budgetItem.quantidade}`);
 
       // Para cada insumo que compõe este serviço
       for (const serviceItem of serviceItems) {
@@ -123,8 +126,11 @@ Deno.serve(async (req) => {
           
           // Se não houver distribuição, pular este item
           if (distribuicoesServico.length === 0) {
+            console.log(`[DEBUG] Item ${budgetItem.id} (${budgetItem.descricao}) não tem distribuição mensal cadastrada`);
             continue;
           }
+          
+          console.log(`[DEBUG] Item ${budgetItem.id} tem ${distribuicoesServico.length} distribuições mensais`);
 
           // Aplicar distribuição
           for (const dist of distribuicoesServico) {
