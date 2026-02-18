@@ -209,6 +209,7 @@ export default function ScheduleEditor({ budget, stages, items, onSave, isSaving
           <TableRow key={item.id} className="bg-white">
             <TableCell className="sticky left-0 bg-white z-10 text-sm" style={{ paddingLeft: `${32 + paddingLeft}px` }}>
               <span className="font-mono text-xs text-blue-600 mr-2">{itemNumber}</span>
+              <span className="font-mono text-xs text-slate-500 mr-2">{item.codigo}</span>
               {item.descricao || 'Sem descrição'}
             </TableCell>
             <TableCell className="text-right text-sm">

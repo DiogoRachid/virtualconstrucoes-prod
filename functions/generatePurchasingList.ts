@@ -72,7 +72,18 @@ Deno.serve(async (req) => {
     }
 
     // Buscar todos os ServiceItems para decompor os serviços em insumos
-    const allServiceItems = await base44.asServiceRole.entities.ServiceItem.list();
+    let allServiceItems = [];
+    try {
+      allServiceItems = await base44.asServiceRole.entities.ServiceItem.list();
+      console.log(`[INFO] Encontrados ${allServiceItems.length} ServiceItems`);
+    } catch (error) {
+      console.error('[ERROR] Erro ao buscar ServiceItems:', error);
+      return Response.json({ 
+        success: false, 
+        error: `Erro ao buscar insumos dos serviços: ${error.message}` 
+      }, { status: 500 });
+    }
+    
     const serviceItemMap = new Map();
     for (const si of allServiceItems) {
       const key = si.servico_id;
@@ -81,6 +92,8 @@ Deno.serve(async (req) => {
       }
       serviceItemMap.get(key).push(si);
     }
+    
+    console.log(`[INFO] ${serviceItemMap.size} serviços têm insumos vinculados`);
 
     // Buscar distribuições mensais dos serviços do cronograma (ServiceMonthlyDistribution)
     const monthlyDistributions = await base44.asServiceRole.entities.ServiceMonthlyDistribution.filter({ 
@@ -112,7 +125,18 @@ Deno.serve(async (req) => {
     }
 
     // Buscar insumos para obter dados completos
-    const allInputs = await base44.asServiceRole.entities.Input.list();
+    let allInputs = [];
+    try {
+      allInputs = await base44.asServiceRole.entities.Input.list();
+      console.log(`[INFO] Encontrados ${allInputs.length} insumos cadastrados`);
+    } catch (error) {
+      console.error('[ERROR] Erro ao buscar insumos:', error);
+      return Response.json({ 
+        success: false, 
+        error: `Erro ao buscar insumos: ${error.message}` 
+      }, { status: 500 });
+    }
+    
     const inputMap = new Map();
     for (const input of allInputs) {
       inputMap.set(input.id, input);
@@ -128,16 +152,23 @@ Deno.serve(async (req) => {
       const serviceItems = serviceItemMap.get(budgetItem.servico_id) || [];
 
       if (serviceItems.length === 0) {
-        console.log(`[DEBUG] Serviço ${budgetItem.servico_id} não tem insumos cadastrados`);
+        console.log(`[DEBUG] Serviço ${budgetItem.codigo} - ${budgetItem.descricao} (ID: ${budgetItem.servico_id}) não tem insumos cadastrados`);
         continue;
       }
       
-      console.log(`[DEBUG] Processando item orçamento ${budgetItem.id} - Serviço: ${budgetItem.descricao}, Qtd: ${budgetItem.quantidade}`);
+      // Filtrar apenas insumos (não incluir serviços aninhados)
+      const insumoItems = serviceItems.filter(si => si.tipo_item === 'INSUMO');
+      
+      if (insumoItems.length === 0) {
+        console.log(`[DEBUG] Serviço ${budgetItem.codigo} - ${budgetItem.descricao} só tem serviços aninhados, não tem insumos diretos`);
+        continue;
+      }
+      
+      console.log(`[DEBUG] Processando item orçamento ${budgetItem.id} - Serviço: ${budgetItem.codigo} ${budgetItem.descricao}, Qtd: ${budgetItem.quantidade}, Insumos: ${insumoItems.length}`);
 
-      // Para cada insumo que compõe este serviço
-      for (const serviceItem of serviceItems) {
-        // Se for INSUMO
-        if (serviceItem.tipo_item === 'INSUMO' && serviceItem.item_id) {
+      // Para cada insumo que compõe este serviço (já filtrado acima)
+      for (const serviceItem of insumoItems) {
+        if (serviceItem.item_id) {
           const insumoId = serviceItem.item_id;
           const insumo = inputMap.get(insumoId);
 
