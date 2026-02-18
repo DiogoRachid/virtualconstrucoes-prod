@@ -146,25 +146,50 @@ Deno.serve(async (req) => {
     const periodosMap = new Map(); // mes -> { insumos_map, valor_total }
     const totalQuantidadesPorInsumo = new Map(); // insumo_id -> total_quantidade
 
+    // Rastrear serviços sem insumos
+    const servicosSemInsumos = [];
+    const servicosComInsumos = [];
+    
     // Para cada BudgetItem (serviço do orçamento)
     for (const budgetItem of allBudgetItems) {
+      console.log(`[DEBUG] === Processando BudgetItem ===`);
+      console.log(`[DEBUG] ID: ${budgetItem.id}`);
+      console.log(`[DEBUG] Código: ${budgetItem.codigo}`);
+      console.log(`[DEBUG] Descrição: ${budgetItem.descricao}`);
+      console.log(`[DEBUG] Serviço ID: ${budgetItem.servico_id}`);
+      console.log(`[DEBUG] Quantidade: ${budgetItem.quantidade}`);
+      
+      // Buscar distribuição mensal deste item
+      const distribuicoesServico = distributionMap.get(budgetItem.id) || [];
+      console.log(`[DEBUG] Distribuições mensais: ${distribuicoesServico.length}`);
+      
+      if (distribuicoesServico.length === 0) {
+        console.log(`[DEBUG] ⚠️ Item ${budgetItem.codigo} não tem distribuição mensal - PULANDO`);
+        continue;
+      }
+      
       // Buscar ServiceItems deste serviço
       const serviceItems = serviceItemMap.get(budgetItem.servico_id) || [];
+      console.log(`[DEBUG] ServiceItems encontrados: ${serviceItems.length}`);
 
       if (serviceItems.length === 0) {
-        console.log(`[DEBUG] Serviço ${budgetItem.codigo} - ${budgetItem.descricao} (ID: ${budgetItem.servico_id}) não tem insumos cadastrados`);
+        console.log(`[DEBUG] ⚠️ Serviço ${budgetItem.codigo} (ID: ${budgetItem.servico_id}) não tem insumos cadastrados`);
+        servicosSemInsumos.push(`${budgetItem.codigo} - ${budgetItem.descricao}`);
         continue;
       }
       
       // Filtrar apenas insumos (não incluir serviços aninhados)
       const insumoItems = serviceItems.filter(si => si.tipo_item === 'INSUMO');
+      console.log(`[DEBUG] Insumos (filtrado): ${insumoItems.length}`);
       
       if (insumoItems.length === 0) {
-        console.log(`[DEBUG] Serviço ${budgetItem.codigo} - ${budgetItem.descricao} só tem serviços aninhados, não tem insumos diretos`);
+        console.log(`[DEBUG] ⚠️ Serviço ${budgetItem.codigo} só tem serviços aninhados`);
+        servicosSemInsumos.push(`${budgetItem.codigo} - ${budgetItem.descricao} (só serviços aninhados)`);
         continue;
       }
       
-      console.log(`[DEBUG] Processando item orçamento ${budgetItem.id} - Serviço: ${budgetItem.codigo} ${budgetItem.descricao}, Qtd: ${budgetItem.quantidade}, Insumos: ${insumoItems.length}`);
+      servicosComInsumos.push(`${budgetItem.codigo} - ${insumoItems.length} insumos`);
+      console.log(`[DEBUG] ✓ Processando ${insumoItems.length} insumos`);
 
       // Para cada insumo que compõe este serviço (já filtrado acima)
       for (const serviceItem of insumoItems) {
@@ -173,26 +198,21 @@ Deno.serve(async (req) => {
           const insumo = inputMap.get(insumoId);
 
           if (!insumo) {
+            console.log(`[DEBUG] ⚠️ Insumo ID ${insumoId} não encontrado no cadastro de insumos`);
             continue;
           }
+
+          console.log(`[DEBUG]   → Insumo: ${insumo.codigo} - ${insumo.descricao}, Qtd/serviço: ${serviceItem.quantidade}`);
 
           // Quantidade total de insumo necessária = quantidade_serviço * quantidade_insumo_por_serviço
           const quantidadeTotalInsumo = budgetItem.quantidade * serviceItem.quantidade;
+          console.log(`[DEBUG]   → Quantidade total necessária: ${quantidadeTotalInsumo.toFixed(4)}`);
 
-          // Buscar distribuição mensal deste item específico do orçamento
-          const distribuicoesServico = distributionMap.get(budgetItem.id) || [];
-          
-          // Se não houver distribuição, pular este item
-          if (distribuicoesServico.length === 0) {
-            console.log(`[DEBUG] Item ${budgetItem.id} (${budgetItem.descricao}) não tem distribuição mensal cadastrada`);
-            continue;
-          }
-          
-          console.log(`[DEBUG] Item ${budgetItem.id} tem ${distribuicoesServico.length} distribuições mensais`);
-
-          // Aplicar distribuição
+          // Aplicar distribuição mensal
           for (const dist of distribuicoesServico) {
             const quantidadeNecessaria = (quantidadeTotalInsumo * dist.percentual) / 100;
+            
+            console.log(`[DEBUG]   → Mês ${dist.mes}: ${dist.percentual}% = ${quantidadeNecessaria.toFixed(4)}`);
 
             if (quantidadeNecessaria > 0) {
               // Garantir que o mês existe
@@ -285,13 +305,41 @@ Deno.serve(async (req) => {
     const totalGeralItens = periodosFormatados.reduce((sum, p) => sum + p.total_itens, 0);
     const totalGeralValor = periodosFormatados.reduce((sum, p) => sum + p.total_valor, 0);
 
-    console.log(`[INFO] Lista gerada com sucesso: ${totalGeralItens} itens em ${months} meses, valor total R$ ${totalGeralValor.toFixed(2)}`);
+    console.log(`[INFO] === RESUMO DA GERAÇÃO ===`);
+    console.log(`[INFO] Serviços com insumos: ${servicosComInsumos.length}`);
+    console.log(`[INFO] Serviços sem insumos: ${servicosSemInsumos.length}`);
+    if (servicosSemInsumos.length > 0) {
+      console.log(`[INFO] Serviços sem insumos:`, servicosSemInsumos);
+    }
+    if (servicosComInsumos.length > 0) {
+      console.log(`[INFO] Serviços com insumos:`, servicosComInsumos);
+    }
+    console.log(`[INFO] Total de itens gerados: ${totalGeralItens}`);
+    console.log(`[INFO] Valor total: R$ ${totalGeralValor.toFixed(2)}`);
 
     const hasItems = periodosFormatados.some(p => p.itens.length > 0);
     if (!hasItems) {
+      let errorMsg = 'Nenhum insumo encontrado na lista de compras.\n\n';
+      
+      if (servicosSemInsumos.length > 0) {
+        errorMsg += `Serviços sem insumos cadastrados (${servicosSemInsumos.length}):\n`;
+        errorMsg += servicosSemInsumos.slice(0, 5).join('\n');
+        if (servicosSemInsumos.length > 5) {
+          errorMsg += `\n... e mais ${servicosSemInsumos.length - 5} serviços`;
+        }
+        errorMsg += '\n\nVá em Cadastros > Serviços e adicione insumos a cada serviço.';
+      } else if (distributionMap.size === 0) {
+        errorMsg += 'O cronograma não foi salvo com distribuição mensal.\n';
+        errorMsg += 'Vá em Planejamento > selecione o orçamento > preencha os percentuais mensais > clique em Salvar.';
+      } else {
+        errorMsg += 'Verifique:\n';
+        errorMsg += '1. Os serviços do orçamento têm insumos cadastrados\n';
+        errorMsg += '2. O cronograma foi salvo com percentuais preenchidos (0-100%)';
+      }
+      
       return Response.json({ 
         success: false, 
-        error: 'Nenhum insumo encontrado. Verifique se:\n1. Os serviços do orçamento têm insumos cadastrados\n2. O cronograma foi salvo com distribuição mensal (0-100%)\n3. Os percentuais mensais foram preenchidos' 
+        error: errorMsg
       }, { status: 404 });
     }
 
