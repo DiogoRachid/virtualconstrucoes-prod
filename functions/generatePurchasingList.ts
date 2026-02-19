@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 8. Classificação ABC
+    // 9. Classificação ABC
     // Calcular valor total para classificação ABC
     const allItems = [];
     periodoMap.forEach(mesMap => {
