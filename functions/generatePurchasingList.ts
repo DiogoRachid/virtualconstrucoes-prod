@@ -58,17 +58,39 @@ Deno.serve(async (req) => {
       id: { $in: serviceIds }
     });
 
-    // 5. Buscar composições (insumos) de todos os serviços
-    const serviceItems = await base44.asServiceRole.entities.ServiceItem.filter({
-      servico_id: { $in: serviceIds },
-      tipo_item: 'INSUMO'
+    // 5. Buscar composições de todos os serviços (incluindo insumos e serviços aninhados)
+    const allServiceItems = await base44.asServiceRole.entities.ServiceItem.filter({
+      servico_id: { $in: serviceIds }
     });
 
-    if (!serviceItems || serviceItems.length === 0) {
+    if (!allServiceItems || allServiceItems.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum insumo encontrado nas composições dos serviços' 
+        error: 'Os serviços não têm composições cadastradas. Configure as composições dos serviços.' 
       }, { status: 404 });
+    }
+
+    // Função recursiva para expandir serviços aninhados em insumos
+    async function expandService(servicoId, quantidade = 1, visited = new Set()) {
+      if (visited.has(servicoId)) return [];
+      visited.add(servicoId);
+
+      const items = allServiceItems.filter(si => si.servico_id === servicoId);
+      const expandedItems = [];
+
+      for (const item of items) {
+        if (item.tipo_item === 'INSUMO') {
+          expandedItems.push({
+            item_id: item.item_id,
+            quantidade: item.quantidade * quantidade
+          });
+        } else if (item.tipo_item === 'SERVICO') {
+          const nested = await expandService(item.item_id, item.quantidade * quantidade, visited);
+          expandedItems.push(...nested);
+        }
+      }
+
+      return expandedItems;
     }
 
     // 6. Buscar todos os insumos
