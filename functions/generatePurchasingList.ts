@@ -3,258 +3,237 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    
+    if (!user) {
+      return Response.json({ success: false, error: 'Não autenticado' }, { status: 401 });
+    }
+
     const { workId, abcFilter } = await req.json();
 
-
-
-    // 1. Buscar projeto
-    const projects = await base44.asServiceRole.entities.Project.filter({ id: workId });
-    if (!projects || projects.length === 0) {
-      return Response.json({ 
-        success: false, 
-        error: 'Obra não encontrada' 
-      }, { status: 404 });
+    if (!workId) {
+      return Response.json({ success: false, error: 'ID da obra é obrigatório' }, { status: 400 });
     }
-    const project = projects[0];
 
-
-    // 2. Buscar orçamento da obra
-    const budgets = await base44.asServiceRole.entities.Budget.filter({ obra_id: project.id });
+    // 1. Buscar orçamento da obra (qualquer status, incluindo rascunho)
+    const budgets = await base44.asServiceRole.entities.Budget.filter({ obra_id: workId });
+    
     if (!budgets || budgets.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum orçamento cadastrado para esta obra' 
+        error: 'Nenhum orçamento encontrado para esta obra' 
       }, { status: 404 });
     }
+
     const budget = budgets[0];
-    const months = budget.duracao_meses || 12;
+    const totalMeses = budget.duracao_meses || 12;
 
-
-    // 3. Buscar itens do orçamento (BudgetItems - serviços)
+    // 2. Buscar itens do orçamento (serviços)
     const budgetItems = await base44.asServiceRole.entities.BudgetItem.filter({ 
       orcamento_id: budget.id 
     });
+
     if (!budgetItems || budgetItems.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Orçamento sem serviços. Adicione serviços ao orçamento primeiro.' 
+        error: 'Nenhum serviço encontrado no orçamento' 
       }, { status: 404 });
     }
 
-
-    // 4. Buscar distribuições mensais (cronograma salvo)
-    const monthlyDist = await base44.asServiceRole.entities.ServiceMonthlyDistribution.filter({ 
-      orcamento_id: budget.id 
+    // 3. Buscar cronograma (distribuição mensal dos serviços)
+    const distributions = await base44.asServiceRole.entities.ServiceMonthlyDistribution.filter({
+      orcamento_id: budget.id
     });
-    if (!monthlyDist || monthlyDist.length === 0) {
+
+    if (!distributions || distributions.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Cronograma não foi salvo. Vá em Planejamento, preencha os percentuais mensais e clique em Salvar.' 
+        error: 'Cronograma não encontrado. Salve o cronograma primeiro.' 
       }, { status: 404 });
     }
 
+    // 4. Buscar todos os serviços únicos
+    const serviceIds = [...new Set(budgetItems.map(item => item.servico_id))];
+    const services = await base44.asServiceRole.entities.Service.filter({
+      id: { $in: serviceIds }
+    });
 
-    // Criar mapa: budget_item_id -> [{ mes, percentual }]
-    const distMap = new Map();
-    for (const dist of monthlyDist) {
-      if (!dist.budget_item_id) continue;
-      if (!distMap.has(dist.budget_item_id)) {
-        distMap.set(dist.budget_item_id, []);
-      }
-      distMap.get(dist.budget_item_id).push({
-        mes: dist.mes,
-        percentual: dist.percentual || 0
-      });
+    // 5. Buscar composições (insumos) de todos os serviços
+    const serviceItems = await base44.asServiceRole.entities.ServiceItem.filter({
+      servico_id: { $in: serviceIds },
+      tipo_item: 'INSUMO'
+    });
+
+    if (!serviceItems || serviceItems.length === 0) {
+      return Response.json({ 
+        success: false, 
+        error: 'Nenhum insumo encontrado nas composições dos serviços' 
+      }, { status: 404 });
     }
-
-
-    // 5. Buscar todos os ServiceItems (composição dos serviços)
-    const allServiceItems = await base44.asServiceRole.entities.ServiceItem.list();
-    const serviceItemsMap = new Map();
-    for (const si of allServiceItems) {
-      if (!serviceItemsMap.has(si.servico_id)) {
-        serviceItemsMap.set(si.servico_id, []);
-      }
-      serviceItemsMap.get(si.servico_id).push(si);
-    }
-
 
     // 6. Buscar todos os insumos
-    const allInputs = await base44.asServiceRole.entities.Input.list();
-    const inputsMap = new Map();
-    for (const input of allInputs) {
-      inputsMap.set(input.id, input);
-    }
+    const insumoIds = [...new Set(serviceItems.map(si => si.item_id))];
+    const inputs = await base44.asServiceRole.entities.Input.filter({
+      id: { $in: insumoIds }
+    });
 
-
-    // 7. Processar lista de compras
-    const periodosMap = new Map(); // mes -> Map(insumo_id -> dados)
-    const totalQtyMap = new Map(); // insumo_id -> quantidade total (para ABC)
+    // Criar mapas para acesso rápido
+    const serviceMap = new Map(services.map(s => [s.id, s]));
+    const inputMap = new Map(inputs.map(i => [i.id, i]));
     
-    let servicosProcessados = 0;
-    let servicosSemInsumos = [];
-    let servicosSemDistribuicao = [];
-
-    for (const budgetItem of budgetItems) {
-      // Verificar se tem distribuição mensal
-      const distribuicoes = distMap.get(budgetItem.id);
-      if (!distribuicoes || distribuicoes.length === 0) {
-        servicosSemDistribuicao.push(budgetItem.codigo || budgetItem.descricao);
-        continue;
+    // Mapa de composições: servico_id -> array de insumos
+    const compositionMap = new Map();
+    serviceItems.forEach(si => {
+      if (!compositionMap.has(si.servico_id)) {
+        compositionMap.set(si.servico_id, []);
       }
+      compositionMap.get(si.servico_id).push(si);
+    });
 
-      // Buscar insumos deste serviço
-      const serviceItems = serviceItemsMap.get(budgetItem.servico_id) || [];
-      const insumos = serviceItems.filter(si => si.tipo_item === 'INSUMO');
+    // 7. LÓGICA PRINCIPAL: Calcular insumos por mês
+    const periodoMap = new Map(); // mes -> array de itens
+
+    distributions.forEach(dist => {
+      // Encontrar o item do orçamento correspondente
+      const budgetItem = budgetItems.find(bi => bi.id === dist.budget_item_id);
+      if (!budgetItem) return;
+
+      // Quantidade do serviço neste mês (baseado no percentual)
+      const quantidadeServico = (budgetItem.quantidade * dist.percentual) / 100;
       
-      if (insumos.length === 0) {
-        servicosSemInsumos.push(budgetItem.codigo || budgetItem.descricao);
-        continue;
-      }
+      if (quantidadeServico <= 0) return;
 
-      servicosProcessados++;
+      // Buscar composição do serviço
+      const composicao = compositionMap.get(budgetItem.servico_id) || [];
 
-      // Para cada insumo do serviço
-      for (const serviceItem of insumos) {
-        const insumo = inputsMap.get(serviceItem.item_id);
-        if (!insumo) continue;
+      // Para cada insumo da composição, calcular quantidade
+      composicao.forEach(serviceItem => {
+        const input = inputMap.get(serviceItem.item_id);
+        if (!input) return;
 
-        const qtdTotalInsumo = budgetItem.quantidade * serviceItem.quantidade;
+        // Quantidade do insumo = quantidade do serviço * quantidade na composição
+        const quantidadeInsumo = quantidadeServico * serviceItem.quantidade;
 
-        // Distribuir por mês
-        for (const dist of distribuicoes) {
-          const qtdMes = (qtdTotalInsumo * dist.percentual) / 100;
-          
-          if (qtdMes <= 0) continue;
-
-          // Inicializar mês se não existir
-          if (!periodosMap.has(dist.mes)) {
-            periodosMap.set(dist.mes, new Map());
-          }
-
-          const mesMap = periodosMap.get(dist.mes);
-          
-          if (!mesMap.has(insumo.id)) {
-            mesMap.set(insumo.id, {
-              insumo_id: insumo.id,
-              codigo: insumo.codigo,
-              descricao: insumo.descricao,
-              unidade: insumo.unidade,
-              valor_unitario: insumo.valor_unitario || 0,
-              quantidade: 0
-            });
-          }
-
-          mesMap.get(insumo.id).quantidade += qtdMes;
-          
-          // Acumular para ABC
-          const totalAtual = totalQtyMap.get(insumo.id) || 0;
-          totalQtyMap.set(insumo.id, totalAtual + qtdMes);
+        if (!periodoMap.has(dist.mes)) {
+          periodoMap.set(dist.mes, new Map());
         }
-      }
-    }
 
+        const mesMap = periodoMap.get(dist.mes);
+        const key = input.id;
 
-
-    // 8. Calcular classificação ABC
-    const abcMap = new Map();
-    const qtdArray = Array.from(totalQtyMap.entries())
-      .map(([id, qty]) => ({ id, qty }))
-      .sort((a, b) => b.qty - a.qty);
-
-    const totalQtd = qtdArray.reduce((sum, item) => sum + item.qty, 0);
-    let acumulado = 0;
-
-    for (const item of qtdArray) {
-      acumulado += item.qty;
-      const percentual = (acumulado / totalQtd) * 100;
-      
-      if (percentual <= 80) {
-        abcMap.set(item.id, 'A');
-      } else if (percentual <= 95) {
-        abcMap.set(item.id, 'B');
-      } else {
-        abcMap.set(item.id, 'C');
-      }
-    }
-
-    // 9. Formatar períodos
-    const periodosFormatados = [];
-    for (let mes = 1; mes <= months; mes++) {
-      const mesMap = periodosMap.get(mes);
-      
-      let itens = [];
-      if (mesMap) {
-        itens = Array.from(mesMap.values())
-          .map(item => ({
-            ...item,
-            abc_class: abcMap.get(item.insumo_id) || 'C'
-          }))
-          .filter(item => !abcFilter || item.abc_class === abcFilter)
-          .sort((a, b) => {
-            const order = { 'A': 1, 'B': 2, 'C': 3 };
-            return order[a.abc_class] - order[b.abc_class];
+        if (mesMap.has(key)) {
+          // Somar quantidade se já existe
+          const existing = mesMap.get(key);
+          existing.quantidade += quantidadeInsumo;
+        } else {
+          // Criar novo item
+          mesMap.set(key, {
+            insumo_id: input.id,
+            codigo: input.codigo,
+            descricao: input.descricao,
+            unidade: input.unidade,
+            valor_unitario: input.valor_unitario || 0,
+            quantidade: quantidadeInsumo
           });
+        }
+      });
+    });
+
+    // 8. Classificação ABC
+    // Calcular valor total para classificação ABC
+    const allItems = [];
+    periodoMap.forEach(mesMap => {
+      mesMap.forEach(item => {
+        const existing = allItems.find(i => i.insumo_id === item.insumo_id);
+        if (existing) {
+          existing.quantidade += item.quantidade;
+        } else {
+          allItems.push({ ...item });
+        }
+      });
+    });
+
+    allItems.forEach(item => {
+      item.valor_total = item.quantidade * item.valor_unitario;
+    });
+
+    const totalValue = allItems.reduce((sum, item) => sum + item.valor_total, 0);
+
+    // Ordenar por valor total
+    allItems.sort((a, b) => b.valor_total - a.valor_total);
+
+    // Classificar ABC
+    let accumulated = 0;
+    allItems.forEach(item => {
+      accumulated += item.valor_total;
+      const percentage = (accumulated / totalValue) * 100;
+      
+      if (percentage <= 80) {
+        item.abc_class = 'A';
+      } else if (percentage <= 95) {
+        item.abc_class = 'B';
+      } else {
+        item.abc_class = 'C';
       }
+    });
 
-      const totalValor = itens.reduce((sum, i) => sum + (i.quantidade * i.valor_unitario), 0);
+    // Criar mapa ABC
+    const abcMap = new Map(allItems.map(item => [item.insumo_id, item.abc_class]));
 
-      periodosFormatados.push({
-        mes: mes,
+    // 9. Montar resposta
+    const periodos = [];
+    for (let mes = 1; mes <= totalMeses; mes++) {
+      const mesMap = periodoMap.get(mes);
+      if (!mesMap || mesMap.size === 0) continue;
+
+      const itens = Array.from(mesMap.values()).map(item => ({
+        ...item,
+        abc_class: abcMap.get(item.insumo_id) || 'C'
+      }));
+
+      // Filtrar por classe ABC se necessário
+      const itensFiltrados = abcFilter 
+        ? itens.filter(item => item.abc_class === abcFilter)
+        : itens;
+
+      if (itensFiltrados.length === 0) continue;
+
+      const totalValor = itensFiltrados.reduce((sum, item) => 
+        sum + (item.quantidade * item.valor_unitario), 0
+      );
+
+      periodos.push({
+        mes,
         periodo: `Mês ${mes}`,
-        itens: itens,
-        total_itens: itens.length,
+        itens: itensFiltrados.sort((a, b) => {
+          const classOrder = { 'A': 0, 'B': 1, 'C': 2 };
+          return classOrder[a.abc_class] - classOrder[b.abc_class];
+        }),
+        total_itens: itensFiltrados.length,
         total_valor: totalValor
       });
     }
 
-    const totalGeralItens = periodosFormatados.reduce((sum, p) => sum + p.total_itens, 0);
-    const totalGeralValor = periodosFormatados.reduce((sum, p) => sum + p.total_valor, 0);
+    const obra = await base44.asServiceRole.entities.Project.get(workId);
 
-
-
-    // Verificar se gerou algum item
-    if (totalGeralItens === 0) {
-      let errorMsg = 'Lista de compras vazia.\n\n';
-      
-      if (servicosSemInsumos.length > 0) {
-        errorMsg += `${servicosSemInsumos.length} serviço(s) sem insumos:\n`;
-        errorMsg += servicosSemInsumos.slice(0, 3).join(', ');
-        if (servicosSemInsumos.length > 3) {
-          errorMsg += ` e mais ${servicosSemInsumos.length - 3}...`;
-        }
-        errorMsg += '\n\nCadastre insumos em: Cadastros > Serviços';
-      } else if (servicosSemDistribuicao.length > 0) {
-        errorMsg += 'Todos os serviços estão sem distribuição mensal.\n';
-        errorMsg += 'Vá em Planejamento > preencha os percentuais > Salvar.';
-      } else {
-        errorMsg += 'Verifique o cronograma e os insumos dos serviços.';
-      }
-      
-      return Response.json({ 
-        success: false, 
-        error: errorMsg
-      }, { status: 404 });
-    }
-
-    return Response.json({ 
+    return Response.json({
       success: true,
       data: {
-        obra_id: project.id,
-        obra_nome: project.nome,
-        total_meses: months,
+        obra_id: workId,
+        obra_nome: obra?.nome || 'N/A',
+        total_meses: totalMeses,
         data_geracao: new Date().toISOString().split('T')[0],
-        periodos: periodosFormatados,
-        total_geral_itens: totalGeralItens,
-        total_geral_valor: totalGeralValor
+        periodos,
+        total_geral_itens: allItems.length,
+        total_geral_valor: totalValue
       }
     });
 
   } catch (error) {
-    console.error('[ERROR]', error);
+    console.error('Erro ao gerar lista:', error);
     return Response.json({ 
       success: false, 
-      error: `Erro interno: ${error.message}` 
+      error: error.message || 'Erro interno do servidor' 
     }, { status: 500 });
   }
 });
