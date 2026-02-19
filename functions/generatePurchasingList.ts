@@ -93,63 +93,63 @@ Deno.serve(async (req) => {
       return expandedItems;
     }
 
-    // 6. Buscar todos os insumos
-    const insumoIds = [...new Set(serviceItems.map(si => si.item_id))];
-    const inputs = await base44.asServiceRole.entities.Input.filter({
-      id: { $in: insumoIds }
-    });
-
-    // Criar mapas para acesso rápido
-    const serviceMap = new Map(services.map(s => [s.id, s]));
-    const inputMap = new Map(inputs.map(i => [i.id, i]));
+    // 6. Expandir composições de cada serviço para obter todos os insumos
+    const serviceCompositions = new Map();
     
-    // Mapa de composições: servico_id -> array de insumos
-    const compositionMap = new Map();
-    serviceItems.forEach(si => {
-      if (!compositionMap.has(si.servico_id)) {
-        compositionMap.set(si.servico_id, []);
-      }
-      compositionMap.get(si.servico_id).push(si);
+    for (const serviceId of serviceIds) {
+      const expandedItems = await expandService(serviceId);
+      serviceCompositions.set(serviceId, expandedItems);
+    }
+
+    // 7. Buscar todos os insumos únicos
+    const allInsumoIds = new Set();
+    serviceCompositions.forEach(items => {
+      items.forEach(item => allInsumoIds.add(item.item_id));
     });
 
-    // 7. LÓGICA PRINCIPAL: Calcular insumos por mês
-    const periodoMap = new Map(); // mes -> array de itens
+    const inputs = await base44.asServiceRole.entities.Input.filter({
+      id: { $in: Array.from(allInsumoIds) }
+    });
 
-    distributions.forEach(dist => {
+    const inputMap = new Map(inputs.map(i => [i.id, i]));
+
+    // 8. LÓGICA PRINCIPAL: Calcular insumos por mês
+    const periodoMap = new Map(); // mes -> Map(insumo_id -> item)
+
+    for (const dist of distributions) {
       // Encontrar o item do orçamento correspondente
       const budgetItem = budgetItems.find(bi => bi.id === dist.budget_item_id);
-      if (!budgetItem) return;
+      if (!budgetItem) continue;
 
       // Quantidade do serviço neste mês (baseado no percentual)
       const quantidadeServico = (budgetItem.quantidade * dist.percentual) / 100;
       
-      if (quantidadeServico <= 0) return;
+      if (quantidadeServico <= 0) continue;
 
-      // Buscar composição do serviço
-      const composicao = compositionMap.get(budgetItem.servico_id) || [];
+      // Buscar composição expandida do serviço
+      const composicao = serviceCompositions.get(budgetItem.servico_id) || [];
 
       // Para cada insumo da composição, calcular quantidade
-      composicao.forEach(serviceItem => {
-        const input = inputMap.get(serviceItem.item_id);
-        if (!input) return;
+      for (const compItem of composicao) {
+        const input = inputMap.get(compItem.item_id);
+        if (!input) continue;
 
         // Quantidade do insumo = quantidade do serviço * quantidade na composição
-        const quantidadeInsumo = quantidadeServico * serviceItem.quantidade;
+        const quantidadeInsumo = quantidadeServico * compItem.quantidade;
 
         if (!periodoMap.has(dist.mes)) {
           periodoMap.set(dist.mes, new Map());
         }
 
         const mesMap = periodoMap.get(dist.mes);
-        const key = input.id;
 
-        if (mesMap.has(key)) {
+        if (mesMap.has(input.id)) {
           // Somar quantidade se já existe
-          const existing = mesMap.get(key);
+          const existing = mesMap.get(input.id);
           existing.quantidade += quantidadeInsumo;
         } else {
           // Criar novo item
-          mesMap.set(key, {
+          mesMap.set(input.id, {
             insumo_id: input.id,
             codigo: input.codigo,
             descricao: input.descricao,
@@ -158,8 +158,8 @@ Deno.serve(async (req) => {
             quantidade: quantidadeInsumo
           });
         }
-      });
-    });
+      }
+    }
 
     // 8. Classificação ABC
     // Calcular valor total para classificação ABC
