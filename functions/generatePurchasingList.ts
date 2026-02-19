@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
     // Criar mapa ABC
     const abcMap = new Map(allItems.map(item => [item.insumo_id, item.abc_class]));
 
-    // 9. Montar resposta
+    // 10. Montar resposta
     const periodos = [];
     for (let mes = 1; mes <= totalMeses; mes++) {
       const mesMap = periodoMap.get(mes);
