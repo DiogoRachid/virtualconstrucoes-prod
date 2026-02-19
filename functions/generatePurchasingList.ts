@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     if (!budgets || budgets.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum orçamento encontrado para esta obra' 
+        error: 'A obra não tem orçamento cadastrado. Crie um orçamento primeiro.' 
       }, { status: 404 });
     }
 
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     if (!budgetItems || budgetItems.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Nenhum serviço encontrado no orçamento' 
+        error: 'O orçamento não tem serviços cadastrados. Adicione serviços ao orçamento.' 
       }, { status: 404 });
     }
 
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     if (!distributions || distributions.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Cronograma não encontrado. Salve o cronograma primeiro.' 
+        error: 'O cronograma não foi salvo. Acesse Planejamento e salve o cronograma com a distribuição mensal dos serviços.' 
       }, { status: 404 });
     }
 
