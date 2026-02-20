@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { workId, abcFilter } = body;
+    const { workId, budgetId, abcFilter } = body;
 
     if (!workId) {
       return new Response(JSON.stringify({ success: false, error: 'ID da obra é obrigatório' }), {
@@ -22,24 +22,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[DEBUG] Buscando orçamento para obra: ${workId}`);
+    if (!budgetId) {
+      return new Response(JSON.stringify({ success: false, error: 'ID do orçamento é obrigatório' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-    // 1. Buscar orçamento mais recente da obra (aceita rascunho)
-    const budgets = await base44.asServiceRole.entities.Budget.filter({ obra_id: workId }, '-updated_date', 1);
+    console.log(`[DEBUG] Buscando orçamento: ${budgetId} para obra: ${workId}`);
+
+    // 1. Buscar orçamento específico
+    const budget = await base44.asServiceRole.entities.Budget.get(budgetId);
     
-    console.log(`[DEBUG] Orçamentos encontrados: ${budgets?.length || 0}`);
+    console.log(`[DEBUG] Orçamento encontrado: ${budget ? 'Sim' : 'Não'}`);
     
-    if (!budgets || budgets.length === 0) {
+    if (!budget) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'A obra não tem orçamento cadastrado. Crie um orçamento primeiro.' 
+        error: 'Orçamento não encontrado.' 
       }), { 
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
-    const budget = budgets[0];
     const totalMeses = budget.duracao_meses || 12;
     
     console.log(`[DEBUG] Orçamento: ${budget.id}, Duração: ${totalMeses} meses, Status: ${budget.status}`);
