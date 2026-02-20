@@ -93,10 +93,13 @@ Deno.serve(async (req) => {
     console.log(`[DEBUG] Serviços únicos no orçamento: ${serviceIds.length}`);
 
     if (!allServiceItems || allServiceItems.length === 0) {
-      return Response.json({ 
+      return new Response(JSON.stringify({ 
         success: false, 
         error: `Os serviços não têm composições cadastradas. Configure as composições dos ${serviceIds.length} serviços no orçamento.` 
-      }, { status: 404 });
+      }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Função recursiva para expandir serviços aninhados em insumos
