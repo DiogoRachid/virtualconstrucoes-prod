@@ -6,10 +6,14 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     
     if (!user) {
-      return Response.json({ success: false, error: 'Não autenticado' }, { status: 401 });
+      return new Response(JSON.stringify({ success: false, error: 'Não autenticado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    const { workId, abcFilter } = await req.json();
+    const body = await req.json();
+    const { workId, abcFilter } = body;
 
     if (!workId) {
       return Response.json({ success: false, error: 'ID da obra é obrigatório' }, { status: 400 });
