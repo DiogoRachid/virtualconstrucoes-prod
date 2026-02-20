@@ -323,15 +323,6 @@ export default function ImportInvoiceManual() {
               </div>
 
               <div>
-                <Label>Data de Vencimento *</Label>
-                <Input
-                  type="date"
-                  value={formData.data_vencimento}
-                  onChange={(e) => setFormData(prev => ({ ...prev, data_vencimento: e.target.value }))}
-                />
-              </div>
-
-              <div>
                 <Label>Forma de Pagamento</Label>
                 <Select
                   value={formData.forma_pagamento}
