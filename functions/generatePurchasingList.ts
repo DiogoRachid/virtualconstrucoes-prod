@@ -15,8 +15,12 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'ID da obra é obrigatório' }, { status: 400 });
     }
 
+    console.log(`[DEBUG] Buscando orçamento para obra: ${workId}`);
+
     // 1. Buscar orçamento mais recente da obra (aceita rascunho)
     const budgets = await base44.asServiceRole.entities.Budget.filter({ obra_id: workId }, '-updated_date', 1);
+    
+    console.log(`[DEBUG] Orçamentos encontrados: ${budgets?.length || 0}`);
     
     if (!budgets || budgets.length === 0) {
       return Response.json({ 
@@ -27,11 +31,15 @@ Deno.serve(async (req) => {
 
     const budget = budgets[0];
     const totalMeses = budget.duracao_meses || 12;
+    
+    console.log(`[DEBUG] Orçamento: ${budget.id}, Duração: ${totalMeses} meses, Status: ${budget.status}`);
 
     // 2. Buscar itens do orçamento (serviços)
     const budgetItems = await base44.asServiceRole.entities.BudgetItem.filter({ 
       orcamento_id: budget.id 
     });
+
+    console.log(`[DEBUG] Itens do orçamento: ${budgetItems?.length || 0}`);
 
     if (!budgetItems || budgetItems.length === 0) {
       return Response.json({ 
@@ -44,6 +52,8 @@ Deno.serve(async (req) => {
     const distributions = await base44.asServiceRole.entities.ServiceMonthlyDistribution.filter({
       orcamento_id: budget.id
     });
+
+    console.log(`[DEBUG] Distribuições mensais: ${distributions?.length || 0}`);
 
     if (!distributions || distributions.length === 0) {
       return Response.json({ 
@@ -63,10 +73,13 @@ Deno.serve(async (req) => {
       servico_id: { $in: serviceIds }
     });
 
+    console.log(`[DEBUG] Composições de serviços: ${allServiceItems?.length || 0}`);
+    console.log(`[DEBUG] Serviços únicos no orçamento: ${serviceIds.length}`);
+
     if (!allServiceItems || allServiceItems.length === 0) {
       return Response.json({ 
         success: false, 
-        error: 'Os serviços não têm composições cadastradas. Configure as composições dos serviços.' 
+        error: `Os serviços não têm composições cadastradas. Configure as composições dos ${serviceIds.length} serviços no orçamento.` 
       }, { status: 404 });
     }
 
@@ -237,6 +250,8 @@ Deno.serve(async (req) => {
     }
 
     const obra = await base44.asServiceRole.entities.Project.get(workId);
+
+    console.log(`[DEBUG] Lista gerada com sucesso: ${periodos.length} períodos, ${allItems.length} insumos únicos`);
 
     return Response.json({
       success: true,
