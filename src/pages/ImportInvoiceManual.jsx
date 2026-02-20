@@ -408,6 +408,77 @@ export default function ImportInvoiceManual() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
+              <CardTitle>Parcelas de Pagamento</CardTitle>
+              <Button onClick={addParcela} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Parcela
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {parcelas.map((parcela, index) => (
+                <div key={index} className="flex items-end gap-3 p-3 border rounded-lg">
+                  <div className="flex-shrink-0 w-20">
+                    <Label className="text-xs">Parcela</Label>
+                    <div className="text-lg font-semibold text-slate-700">{index + 1}/{parcelas.length}</div>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <Label>Data de Vencimento *</Label>
+                    <Input
+                      type="date"
+                      value={parcela.data_vencimento}
+                      onChange={(e) => updateParcela(index, 'data_vencimento', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <Label>Valor da Parcela *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={parcela.valor}
+                      onChange={(e) => updateParcela(index, 'valor', e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className="flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeParcela(index)}
+                      disabled={parcelas.length === 1}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg mt-4">
+                <span className="font-medium text-slate-700">Total das Parcelas:</span>
+                <span className="text-lg font-bold text-blue-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    parcelas.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0)
+                  )}
+                </span>
+              </div>
+
+              {parcelas.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0) !== formData.valor_total && (
+                <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                  ⚠️ O total das parcelas não corresponde ao valor total da nota
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
               <CardTitle>Itens da Nota Fiscal</CardTitle>
               <Button onClick={addItem} size="sm">
                 <Plus className="h-4 w-4 mr-2" />
