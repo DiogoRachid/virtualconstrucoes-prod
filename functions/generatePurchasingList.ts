@@ -16,7 +16,10 @@ Deno.serve(async (req) => {
     const { workId, abcFilter } = body;
 
     if (!workId) {
-      return Response.json({ success: false, error: 'ID da obra é obrigatório' }, { status: 400 });
+      return new Response(JSON.stringify({ success: false, error: 'ID da obra é obrigatório' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     console.log(`[DEBUG] Buscando orçamento para obra: ${workId}`);
