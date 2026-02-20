@@ -475,10 +475,14 @@ export default function PurchasingListPage() {
           <CardTitle className="text-base">Parâmetros da Lista</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div className="space-y-2">
                <label className="text-sm font-medium">Obra</label>
-               <Select value={selectedWork} onValueChange={setSelectedWork}>
+               <Select value={selectedWork} onValueChange={(value) => {
+                 setSelectedWork(value);
+                 setSelectedBudget('');
+                 setListData(null);
+               }}>
                  <SelectTrigger>
                    <SelectValue placeholder="Selecione a obra" />
                  </SelectTrigger>
@@ -493,10 +497,26 @@ export default function PurchasingListPage() {
              </div>
 
              <div className="space-y-2">
-               <label className="text-sm font-medium">Período</label>
-               <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={!selectedWork || workMonths === 0}>
+               <label className="text-sm font-medium">Orçamento</label>
+               <Select value={selectedBudget} onValueChange={setSelectedBudget} disabled={!selectedWork || budgets.length === 0}>
                  <SelectTrigger>
-                   <SelectValue placeholder="Selecione a obra primeiro" />
+                   <SelectValue placeholder={!selectedWork ? "Selecione a obra primeiro" : budgets.length === 0 ? "Sem orçamentos" : "Selecione o orçamento"} />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {budgets.map(budget => (
+                     <SelectItem key={budget.id} value={budget.id}>
+                       {budget.descricao} (v{budget.versao}) - {budget.status}
+                     </SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+
+             <div className="space-y-2">
+               <label className="text-sm font-medium">Período</label>
+               <Select value={selectedMonth} onValueChange={setSelectedMonth} disabled={!selectedBudget || workMonths === 0}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="Selecione o orçamento primeiro" />
                  </SelectTrigger>
                  <SelectContent>
                    <SelectItem value="all">Todos os Meses</SelectItem>
