@@ -48,19 +48,21 @@ export default function PurchasingListPage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      try {
-        const result = await base44.functions.invoke('generatePurchasingList', {
-          workId: selectedWork,
-          abcFilter: abcFilter || null
-        });
-        
-        return result?.data || result;
-      } catch (error) {
-        console.error('Erro na chamada:', error);
-        throw error;
+      const response = await base44.functions.invoke('generatePurchasingList', {
+        workId: selectedWork,
+        abcFilter: abcFilter || null
+      });
+      
+      // Acessar a resposta diretamente
+      if (response.data) {
+        return response.data;
       }
+      
+      return response;
     },
     onSuccess: (data) => {
+      console.log('Resposta recebida:', data);
+      
       if (data?.success) {
         setListData(data.data);
         if (!data.data?.periodos || data.data.periodos.length === 0) {
@@ -71,8 +73,19 @@ export default function PurchasingListPage() {
       }
     },
     onError: (error) => {
-      console.error('Erro completo:', error);
-      const errorMsg = error?.data?.error || error?.message || 'Erro ao gerar lista';
+      console.error('Erro na geração:', error);
+      
+      // Tentar extrair mensagem de erro
+      let errorMsg = 'Erro ao gerar lista';
+      
+      if (error?.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error?.data?.error) {
+        errorMsg = error.data.error;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
+      
       alert(`Erro: ${errorMsg}`);
     }
   });
