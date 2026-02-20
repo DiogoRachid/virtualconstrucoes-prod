@@ -69,10 +69,13 @@ Deno.serve(async (req) => {
     console.log(`[DEBUG] Distribuições mensais: ${distributions?.length || 0}`);
 
     if (!distributions || distributions.length === 0) {
-      return Response.json({ 
+      return new Response(JSON.stringify({ 
         success: false, 
         error: 'O cronograma não está configurado. Acesse Planejamento e configure a distribuição mensal dos serviços.' 
-      }, { status: 404 });
+      }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // 4. Buscar todos os serviços únicos
