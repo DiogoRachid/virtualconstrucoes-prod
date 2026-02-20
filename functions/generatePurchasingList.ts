@@ -30,10 +30,13 @@ Deno.serve(async (req) => {
     console.log(`[DEBUG] Orçamentos encontrados: ${budgets?.length || 0}`);
     
     if (!budgets || budgets.length === 0) {
-      return Response.json({ 
+      return new Response(JSON.stringify({ 
         success: false, 
         error: 'A obra não tem orçamento cadastrado. Crie um orçamento primeiro.' 
-      }, { status: 404 });
+      }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const budget = budgets[0];
