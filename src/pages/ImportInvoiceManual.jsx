@@ -29,7 +29,6 @@ export default function ImportInvoiceManual() {
     obra_id: '',
     valor_total: 0,
     forma_pagamento: 'boleto',
-    data_vencimento: '',
     observacoes: ''
   });
 
@@ -40,6 +39,11 @@ export default function ImportInvoiceManual() {
     unidade_xml: '',
     valor_unitario_xml: 0,
     insumo_id: ''
+  }]);
+
+  const [parcelas, setParcelas] = useState([{
+    data_vencimento: '',
+    valor: 0
   }]);
 
   const { data: suppliers = [] } = useQuery({
