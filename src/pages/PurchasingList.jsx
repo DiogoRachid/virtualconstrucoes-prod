@@ -56,11 +56,19 @@ export default function PurchasingListPage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
+      console.log('Enviando para backend:', {
+        workId: selectedWork,
+        budgetId: selectedBudget,
+        abcFilter: abcFilter || null
+      });
+      
       const response = await base44.functions.invoke('generatePurchasingList', {
         workId: selectedWork,
         budgetId: selectedBudget,
         abcFilter: abcFilter || null
       });
+      
+      console.log('Resposta do backend:', response);
       
       // Acessar a resposta diretamente
       if (response.data) {
