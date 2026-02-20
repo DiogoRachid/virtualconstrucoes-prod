@@ -15,17 +15,19 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { workId, budgetId, abcFilter } = body;
 
-    console.log('[INFO] Requisição recebida:', { workId, budgetId, abcFilter });
+    console.log('[INFO] Requisição recebida:', JSON.stringify({ workId, budgetId, abcFilter }));
 
-    if (!workId || typeof workId !== 'string') {
-      return new Response(JSON.stringify({ success: false, error: 'ID da obra inválido' }), {
+    if (!workId || typeof workId !== 'string' || workId === 'null' || workId === 'undefined') {
+      console.error('[ERROR] ID da obra inválido:', workId);
+      return new Response(JSON.stringify({ success: false, error: 'ID da obra inválido ou não fornecido' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    if (!budgetId || typeof budgetId !== 'string') {
-      return new Response(JSON.stringify({ success: false, error: 'ID do orçamento inválido' }), {
+    if (!budgetId || typeof budgetId !== 'string' || budgetId === 'null' || budgetId === 'undefined') {
+      console.error('[ERROR] ID do orçamento inválido:', budgetId);
+      return new Response(JSON.stringify({ success: false, error: 'ID do orçamento inválido ou não fornecido' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
