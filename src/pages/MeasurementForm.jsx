@@ -1115,9 +1115,16 @@ export default function MeasurementForm() {
                     const costs = costMap[item.servico_id] || { material: 0, mao_obra: 0 };
                     const itemNumber = `${stage.number}.${itemIdx + 1}`;
                     
+                    // Buscar distribuição planejada do cronograma
+                    const distribuicaoPlanejada = {};
+                    scheduleData.forEach(dist => {
+                      if (dist.servico_id === item.servico_id && dist.project_stage_id === item.stage_id) {
+                        distribuicaoPlanejada[dist.mes] = dist.quantidade || 0;
+                      }
+                    });
+                    
                     // Calcular para cada medição até a atual
                     const medicoes = [];
-                    let qtdPrevista = item.quantidade_orcada || 0;
                     let qtdAcumulada = 0;
                     
                     // Buscar todas as medições anteriores deste item
@@ -1143,19 +1150,31 @@ export default function MeasurementForm() {
                       const valorMaoObra = qtdExecutada * costs.mao_obra;
                       const qtdAMedir = Math.max(0, (item.quantidade_orcada || 0) - qtdAcumulada);
                       
+                      // Quantidade prevista ajustada para este mês
+                      let qtdPrevistaAjustada = distribuicaoPlanejada[numMed] || 0;
+                      
+                      // Se não há mais saldo, prevista = 0
+                      if (qtdAMedir <= 0) {
+                        qtdPrevistaAjustada = 0;
+                      } else if (numMed > 1) {
+                        // Ajustar com base na diferença do mês anterior
+                        const medAnterior = medicoes[numMed - 2];
+                        if (medAnterior) {
+                          const diferencaAnterior = medAnterior.qtdExecutada - medAnterior.qtdPrevista;
+                          // Redistribuir a diferença
+                          qtdPrevistaAjustada = Math.max(0, qtdPrevistaAjustada - diferencaAnterior);
+                        }
+                      }
+                      
                       medicoes.push({
                         numero: numMed,
-                        qtdPrevista,
+                        qtdPrevista: qtdPrevistaAjustada,
                         qtdExecutada,
                         valorMaterial,
                         valorMaoObra,
                         qtdAcumulada,
                         qtdAMedir
                       });
-                      
-                      // Ajustar previsto para próxima medição
-                      const diferenca = qtdExecutada - qtdPrevista;
-                      qtdPrevista = Math.max(0, qtdAMedir / Math.max(1, mesAtual - numMed));
                     }
                     
                     servicosData.push({
