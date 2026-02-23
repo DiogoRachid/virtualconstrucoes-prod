@@ -1096,12 +1096,21 @@ export default function MeasurementForm() {
                   };
                 });
                 
-                // Montar dados por serviço com hierarquia
+                // Montar dados por serviço com hierarquia incluindo etapas
                 const servicosData = [];
                 stageHierarchy.forEach(stage => {
                   if (stage.level === 0 && !hasItemsInHierarchy(stage.id)) return;
                   if (stage.level > 0 && stage.items.length === 0) return;
                   
+                  // Adicionar linha de etapa (macro serviço)
+                  servicosData.push({
+                    isStage: true,
+                    numero: stage.number,
+                    nome: stage.nome,
+                    level: stage.level
+                  });
+                  
+                  // Adicionar itens da etapa
                   stage.items.forEach((item, itemIdx) => {
                     const costs = costMap[item.servico_id] || { material: 0, mao_obra: 0 };
                     const itemNumber = `${stage.number}${itemIdx + 1}`;
@@ -1150,6 +1159,7 @@ export default function MeasurementForm() {
                     }
                     
                     servicosData.push({
+                      isStage: false,
                       numero: itemNumber,
                       codigo: item.codigo,
                       descricao: item.descricao,
@@ -1221,42 +1231,56 @@ export default function MeasurementForm() {
                         </tr>
                       </thead>
                       <tbody>
-                        {servicosData.map((servico, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="px-2 py-1 border text-xs text-slate-500">{servico.numero}</td>
-                            <td className="px-2 py-1 border text-xs">{servico.codigo}</td>
-                            <td className="px-2 py-1 border text-xs">{servico.descricao}</td>
-                            <td className="px-2 py-1 border text-center text-xs">{servico.unidade}</td>
-                            <td className="px-2 py-1 border text-right text-xs">
-                              {servico.valorMaterialUnitario.toFixed(2)}
-                            </td>
-                            <td className="px-2 py-1 border text-right text-xs">
-                              {servico.valorMaoObraUnitario.toFixed(2)}
-                            </td>
-                            <td className="px-2 py-1 border text-right text-xs font-medium">
-                              {servico.medicoes[0]?.qtdPrevista.toFixed(2) || '0.00'}
-                            </td>
-                            {servico.medicoes.map(med => (
-                              <React.Fragment key={med.numero}>
-                                <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-semibold">
-                                  {med.qtdExecutada.toFixed(2)}
+                        {servicosData.map((servico, idx) => {
+                          if (servico.isStage) {
+                            // Linha de etapa (macro serviço)
+                            return (
+                              <tr key={idx} className={`bg-slate-100 font-semibold ${servico.level === 0 ? 'text-base' : 'text-sm'}`}>
+                                <td className="px-2 py-2 border" colSpan={7 + (totaisPorMedicao.length * 5)} style={{ paddingLeft: `${servico.level * 20 + 8}px` }}>
+                                  {servico.numero} {servico.nome}
                                 </td>
-                                <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                  {med.valorMaterial.toFixed(2)}
+                              </tr>
+                            );
+                          } else {
+                            // Linha de serviço
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="px-2 py-1 border text-xs text-slate-500">{servico.numero}</td>
+                                <td className="px-2 py-1 border text-xs">{servico.codigo}</td>
+                                <td className="px-2 py-1 border text-xs">{servico.descricao}</td>
+                                <td className="px-2 py-1 border text-center text-xs">{servico.unidade}</td>
+                                <td className="px-2 py-1 border text-right text-xs">
+                                  {servico.valorMaterialUnitario.toFixed(2)}
                                 </td>
-                                <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                  {med.valorMaoObra.toFixed(2)}
+                                <td className="px-2 py-1 border text-right text-xs">
+                                  {servico.valorMaoObraUnitario.toFixed(2)}
                                 </td>
-                                <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-medium">
-                                  {med.qtdAcumulada.toFixed(2)}
+                                <td className="px-2 py-1 border text-right text-xs font-medium">
+                                  {servico.medicoes[0]?.qtdPrevista.toFixed(2) || '0.00'}
                                 </td>
-                                <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                  {med.qtdAMedir.toFixed(2)}
-                                </td>
-                              </React.Fragment>
-                            ))}
-                          </tr>
-                        ))}
+                                {servico.medicoes.map(med => (
+                                  <React.Fragment key={med.numero}>
+                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-semibold">
+                                      {med.qtdExecutada.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                      {med.valorMaterial.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                      {med.valorMaoObra.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-medium">
+                                      {med.qtdAcumulada.toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                      {med.qtdAMedir.toFixed(2)}
+                                    </td>
+                                  </React.Fragment>
+                                ))}
+                              </tr>
+                            );
+                          }
+                        })}
                         
                         <tr className="bg-slate-200 font-bold">
                           <td colSpan="7" className="px-2 py-2 border text-right">SUBTOTAL MATERIAL:</td>
