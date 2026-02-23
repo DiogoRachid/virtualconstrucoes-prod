@@ -171,7 +171,7 @@ export default function MeasurementForm() {
             })));
             
             itemsFromMed.forEach(item => {
-              const key = `${item.servico_id}_${item.stage_id}_${prevMed.numero_medicao}`;
+              const key = `${item.codigo}_${item.servico_id}_${item.stage_id}_${prevMed.numero_medicao}`;
               histMap[key] = item.quantidade_executada_periodo || 0;
             });
           }
@@ -1191,15 +1191,8 @@ export default function MeasurementForm() {
                         qtdExecutada = item.quantidade_executada_periodo || 0;
                       } else {
                         // Medições anteriores - buscar do histórico
-                        const key = `${item.servico_id}_${item.stage_id}_${numMed}`;
+                        const key = `${item.codigo}_${item.servico_id}_${item.stage_id}_${numMed}`;
                         qtdExecutada = historicMeasurementData[key] || 0;
-                        console.log(`Item ${itemNumber}, Medição ${numMed}:`, {
-                          servico_id: item.servico_id,
-                          stage_id: item.stage_id,
-                          key: key,
-                          qtd: qtdExecutada,
-                          historicKeys: Object.keys(historicMeasurementData).filter(k => k.includes(item.servico_id.substring(0, 20)))
-                        });
                       }
                       
                       qtdAcumulada += qtdExecutada;
