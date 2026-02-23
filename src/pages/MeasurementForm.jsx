@@ -1193,7 +1193,13 @@ export default function MeasurementForm() {
                         // Medições anteriores - buscar do histórico
                         const key = `${item.servico_id}_${item.stage_id}_${numMed}`;
                         qtdExecutada = historicMeasurementData[key] || 0;
-                        console.log(`Item ${itemNumber}, Medição ${numMed}: key=${key}, qtd=${qtdExecutada}`);
+                        console.log(`Item ${itemNumber}, Medição ${numMed}:`, {
+                          servico_id: item.servico_id,
+                          stage_id: item.stage_id,
+                          key: key,
+                          qtd: qtdExecutada,
+                          historicKeys: Object.keys(historicMeasurementData).filter(k => k.includes(item.servico_id.substring(0, 20)))
+                        });
                       }
                       
                       qtdAcumulada += qtdExecutada;
