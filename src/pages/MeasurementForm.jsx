@@ -170,6 +170,7 @@ export default function MeasurementForm() {
         }
         
         setHistoricMeasurementData(histMap);
+        console.log('Dados históricos carregados:', histMap);
       } catch (error) {
         console.error('Erro ao carregar medições:', error);
       } finally {
@@ -1184,6 +1185,7 @@ export default function MeasurementForm() {
                         // Medições anteriores - buscar do histórico
                         const key = `${item.servico_id}_${item.stage_id}_${numMed}`;
                         qtdExecutada = historicMeasurementData[key] || 0;
+                        console.log(`Item ${itemNumber}, Medição ${numMed}: key=${key}, qtd=${qtdExecutada}`);
                       }
                       
                       qtdAcumulada += qtdExecutada;
