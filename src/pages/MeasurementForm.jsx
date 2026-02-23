@@ -162,6 +162,14 @@ export default function MeasurementForm() {
               medicao_id: prevMed.id
             });
             
+            console.log(`Medição ${prevMed.numero_medicao} - Items carregados:`, itemsFromMed.map(i => ({
+              codigo: i.codigo,
+              servico_id: i.servico_id,
+              stage_id: i.stage_id,
+              qtd_periodo: i.quantidade_executada_periodo,
+              qtd_acum: i.quantidade_executada_acumulada
+            })));
+            
             itemsFromMed.forEach(item => {
               const key = `${item.servico_id}_${item.stage_id}_${prevMed.numero_medicao}`;
               histMap[key] = item.quantidade_executada_periodo || 0;
