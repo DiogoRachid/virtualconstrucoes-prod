@@ -667,7 +667,7 @@ export default function MeasurementForm() {
                             {stage.items.map((item, itemIdx) => {
                               const itemId = item.id || items.indexOf(item);
                               const hasExceeded = item.quantidade_executada_acumulada > item.quantidade_orcada;
-                              const itemNumber = `${stage.number}${itemIdx + 1}`;
+                              const itemNumber = `${stage.number}.${itemIdx + 1}`;
                               
                               return (
                                 <tr key={itemId} className={`border-b ${hasExceeded ? 'bg-red-50' : ''}`}>
@@ -780,7 +780,7 @@ export default function MeasurementForm() {
                                 const valorMaterial = qtdMedida * costs.material;
                                 const valorMaoObra = qtdMedida * costs.mao_obra;
                                 const totalDireto = valorMaterial + valorMaoObra;
-                                const itemNumber = `${stage.number}${itemIdx + 1}`;
+                                const itemNumber = `${stage.number}.${itemIdx + 1}`;
                                 
                                 return (
                                   <tr key={itemId} className="border-b hover:bg-slate-50">
