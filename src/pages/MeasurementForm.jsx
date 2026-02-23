@@ -1071,7 +1071,7 @@ export default function MeasurementForm() {
         <TabsContent value="cronograma">
           <Card>
             <CardHeader>
-              <CardTitle>Cronograma: Planejado vs Executado por Mês</CardTitle>
+              <CardTitle>Cronograma: Planejado vs Executado com Redistribuição</CardTitle>
             </CardHeader>
             <CardContent>
               {(() => {
@@ -1088,37 +1088,120 @@ export default function MeasurementForm() {
                 const totalMeses = budget?.duracao_meses || 12;
                 const mesAtual = formData.numero_medicao || 1;
                 
-                // Calcular planejado por mês (do planejamento - sem cálculo)
+                // Calcular planejado por mês do planejamento original
                 const planejadoPorMes = {};
+                const quantidadePlanejadaPorMes = {};
+                
                 for (let mes = 1; mes <= totalMeses; mes++) {
-                  const valorMes = scheduleData
-                    .filter(d => d.mes === mes)
-                    .reduce((sum, d) => sum + (d.valor_mes || 0), 0);
+                  const distMes = scheduleData.filter(d => d.mes === mes);
+                  const valorMes = distMes.reduce((sum, d) => sum + (d.valor_mes || 0), 0);
+                  const qtdMes = distMes.reduce((sum, d) => sum + (d.quantidade || 0), 0);
+                  
                   planejadoPorMes[mes] = valorMes;
+                  quantidadePlanejadaPorMes[mes] = qtdMes;
                 }
                 
-                // Calcular executado acumulado por mês baseado nas medições
-                const executadoAcumuladoPorMes = {};
+                // Calcular executado por período (não acumulado) das medições
+                const executadoPorPeriodo = {};
+                const quantidadeExecutadaPorPeriodo = {};
+                
                 previousMeasurements.forEach(med => {
-                  if (med.numero_medicao <= totalMeses) {
-                    executadoAcumuladoPorMes[med.numero_medicao] = med.valor_total_acumulado || 0;
+                  if (med.numero_medicao <= totalMeses && med.numero_medicao <= mesAtual) {
+                    executadoPorPeriodo[med.numero_medicao] = med.valor_total_periodo || 0;
+                    // Calcular quantidade executada somando os itens dessa medição
+                    // Simplificação: usar proporcionalidade do valor
+                    const proporcao = planejadoPorMes[med.numero_medicao] > 0 
+                      ? (med.valor_total_periodo || 0) / planejadoPorMes[med.numero_medicao]
+                      : 0;
+                    quantidadeExecutadaPorPeriodo[med.numero_medicao] = 
+                      (quantidadePlanejadaPorMes[med.numero_medicao] || 0) * proporcao;
                   }
                 });
                 
-                // Criar array de dados para a tabela
+                // Criar cronograma com redistribuição
                 const chronogramData = [];
+                let planejadoAjustadoPorMes = { ...planejadoPorMes };
+                let qtdPlanejadaAjustadaPorMes = { ...quantidadePlanejadaPorMes };
+                
+                // Processar meses já executados e redistribuir diferenças
+                for (let mes = 1; mes <= mesAtual && mes <= totalMeses; mes++) {
+                  const previsto = planejadoAjustadoPorMes[mes] || 0;
+                  const qtdPrevista = qtdPlanejadaAjustadaPorMes[mes] || 0;
+                  const executado = executadoPorPeriodo[mes] || 0;
+                  const qtdExecutada = quantidadeExecutadaPorPeriodo[mes] || 0;
+                  
+                  const diferencaValor = executado - previsto;
+                  const diferencaQtd = qtdExecutada - qtdPrevista;
+                  
+                  // Se há diferença, redistribuir nos meses futuros
+                  if (diferencaValor !== 0 && mes < totalMeses) {
+                    let valorARedistribuir = -diferencaValor; // negativo do executado - previsto
+                    let qtdARedistribuir = -diferencaQtd;
+                    
+                    // Redistribuir a partir do próximo mês
+                    for (let futuro = mes + 1; futuro <= totalMeses && valorARedistribuir !== 0; futuro++) {
+                      const valorAtualMesFuturo = planejadoAjustadoPorMes[futuro] || 0;
+                      const qtdAtualMesFuturo = qtdPlanejadaAjustadaPorMes[futuro] || 0;
+                      
+                      if (valorARedistribuir > 0) {
+                        // Adicionar ao mês futuro (executado foi menor que previsto)
+                        planejadoAjustadoPorMes[futuro] = valorAtualMesFuturo + valorARedistribuir;
+                        qtdPlanejadaAjustadaPorMes[futuro] = qtdAtualMesFuturo + qtdARedistribuir;
+                        valorARedistribuir = 0;
+                        qtdARedistribuir = 0;
+                      } else {
+                        // Remover do mês futuro (executado foi maior que previsto)
+                        const novoValor = valorAtualMesFuturo + valorARedistribuir;
+                        const novaQtd = qtdAtualMesFuturo + qtdARedistribuir;
+                        
+                        if (novoValor >= 0) {
+                          // Cabe tudo neste mês
+                          planejadoAjustadoPorMes[futuro] = novoValor;
+                          qtdPlanejadaAjustadaPorMes[futuro] = Math.max(0, novaQtd);
+                          valorARedistribuir = 0;
+                          qtdARedistribuir = 0;
+                        } else {
+                          // Não cabe, zerar este mês e continuar no próximo
+                          valorARedistribuir = novoValor;
+                          qtdARedistribuir = novaQtd;
+                          planejadoAjustadoPorMes[futuro] = 0;
+                          qtdPlanejadaAjustadaPorMes[futuro] = 0;
+                        }
+                      }
+                    }
+                  }
+                }
+                
+                // Montar dados da tabela
                 let planejadoAcumulado = 0;
+                let qtdPlanejadaAcumulada = 0;
+                let executadoAcumulado = 0;
+                let qtdExecutadaAcumulada = 0;
                 
                 for (let mes = 1; mes <= totalMeses; mes++) {
-                  const planejadoMes = planejadoPorMes[mes] || 0;
-                  planejadoAcumulado += planejadoMes;
-                  const executadoAcum = executadoAcumuladoPorMes[mes] || (mes > 1 ? executadoAcumuladoPorMes[mes - 1] || 0 : 0);
+                  const previsto = planejadoAjustadoPorMes[mes] || 0;
+                  const qtdPrevista = qtdPlanejadaAjustadaPorMes[mes] || 0;
+                  const executado = executadoPorPeriodo[mes] || 0;
+                  const qtdExecutada = quantidadeExecutadaPorPeriodo[mes] || 0;
+                  
+                  planejadoAcumulado += previsto;
+                  qtdPlanejadaAcumulada += qtdPrevista;
+                  
+                  if (mes <= mesAtual) {
+                    executadoAcumulado += executado;
+                    qtdExecutadaAcumulada += qtdExecutada;
+                  }
                   
                   chronogramData.push({
                     mes,
-                    planejadoMes,
+                    qtdPrevista,
+                    previsto,
+                    qtdExecutada: mes <= mesAtual ? qtdExecutada : null,
+                    executado: mes <= mesAtual ? executado : null,
                     planejadoAcumulado,
-                    executadoAcumulado: mes <= mesAtual ? executadoAcum : null
+                    qtdPlanejadaAcumulada,
+                    executadoAcumulado: mes <= mesAtual ? executadoAcumulado : null,
+                    qtdExecutadaAcumulada: mes <= mesAtual ? qtdExecutadaAcumulada : null
                   });
                 }
 
@@ -1127,17 +1210,27 @@ export default function MeasurementForm() {
                     <table className="w-full text-sm border-collapse">
                       <thead className="bg-slate-100">
                         <tr>
-                          <th className="px-3 py-2 text-center border">Mês</th>
-                          <th className="px-3 py-2 text-right border">Planejado Mês</th>
-                          <th className="px-3 py-2 text-right border">Planejado Acumulado</th>
-                          <th className="px-3 py-2 text-right border bg-blue-50">Executado Acumulado</th>
-                          <th className="px-3 py-2 text-right border">Diferença</th>
+                          <th className="px-3 py-2 text-center border" rowSpan="2">Mês</th>
+                          <th className="px-3 py-2 text-center border" colSpan="2">Previsto (Ajustado)</th>
+                          <th className="px-3 py-2 text-center border bg-blue-50" colSpan="2">Executado</th>
+                          <th className="px-3 py-2 text-center border" colSpan="2">Acumulado</th>
+                        </tr>
+                        <tr>
+                          <th className="px-3 py-2 text-right border">Qtd</th>
+                          <th className="px-3 py-2 text-right border">Valor</th>
+                          <th className="px-3 py-2 text-right border bg-blue-50">Qtd</th>
+                          <th className="px-3 py-2 text-right border bg-blue-50">Valor</th>
+                          <th className="px-3 py-2 text-right border">Qtd</th>
+                          <th className="px-3 py-2 text-right border">Valor</th>
                         </tr>
                       </thead>
                       <tbody>
                         {chronogramData.map((row) => {
-                          const diferenca = row.executadoAcumulado !== null 
-                            ? row.executadoAcumulado - row.planejadoAcumulado 
+                          const diferencaQtd = row.qtdExecutada !== null 
+                            ? row.qtdExecutada - row.qtdPrevista 
+                            : null;
+                          const diferencaValor = row.executado !== null 
+                            ? row.executado - row.previsto 
                             : null;
                           
                           return (
@@ -1146,35 +1239,47 @@ export default function MeasurementForm() {
                                 {row.mes === mesAtual && '→ '}Mês {row.mes}
                               </td>
                               <td className="px-3 py-2 text-right border">
+                                {row.qtdPrevista.toFixed(2)}
+                              </td>
+                              <td className="px-3 py-2 text-right border">
                                 {new Intl.NumberFormat('pt-BR', { 
                                   style: 'currency', 
                                   currency: 'BRL' 
-                                }).format(row.planejadoMes)}
+                                }).format(row.previsto)}
+                              </td>
+                              <td className={`px-3 py-2 text-right border bg-blue-50 ${
+                                diferencaQtd !== null && diferencaQtd < 0 ? 'text-red-600' :
+                                diferencaQtd !== null && diferencaQtd > 0 ? 'text-green-600' : ''
+                              }`}>
+                                {row.qtdExecutada !== null 
+                                  ? row.qtdExecutada.toFixed(2)
+                                  : '-'
+                                }
+                              </td>
+                              <td className={`px-3 py-2 text-right border bg-blue-50 ${
+                                diferencaValor !== null && diferencaValor < 0 ? 'text-red-600' :
+                                diferencaValor !== null && diferencaValor > 0 ? 'text-green-600' : ''
+                              }`}>
+                                {row.executado !== null 
+                                  ? new Intl.NumberFormat('pt-BR', { 
+                                      style: 'currency', 
+                                      currency: 'BRL' 
+                                    }).format(row.executado)
+                                  : '-'
+                                }
                               </td>
                               <td className="px-3 py-2 text-right border font-semibold">
-                                {new Intl.NumberFormat('pt-BR', { 
-                                  style: 'currency', 
-                                  currency: 'BRL' 
-                                }).format(row.planejadoAcumulado)}
+                                {row.qtdExecutadaAcumulada !== null 
+                                  ? row.qtdExecutadaAcumulada.toFixed(2)
+                                  : '-'
+                                }
                               </td>
-                              <td className="px-3 py-2 text-right border font-semibold text-blue-600 bg-blue-50">
+                              <td className="px-3 py-2 text-right border font-semibold">
                                 {row.executadoAcumulado !== null 
                                   ? new Intl.NumberFormat('pt-BR', { 
                                       style: 'currency', 
                                       currency: 'BRL' 
                                     }).format(row.executadoAcumulado)
-                                  : '-'
-                                }
-                              </td>
-                              <td className={`px-3 py-2 text-right border font-semibold ${
-                                diferenca === null ? '' :
-                                diferenca >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {diferenca !== null 
-                                  ? (diferenca >= 0 ? '+' : '') + new Intl.NumberFormat('pt-BR', { 
-                                      style: 'currency', 
-                                      currency: 'BRL' 
-                                    }).format(diferenca)
                                   : '-'
                                 }
                               </td>
@@ -1187,10 +1292,13 @@ export default function MeasurementForm() {
                     <div className="mt-4 bg-slate-50 p-4 rounded-lg">
                       <h4 className="font-semibold mb-2">Legenda:</h4>
                       <ul className="text-sm space-y-1 text-slate-600">
-                        <li><span className="font-medium">Planejado Mês:</span> Valor previsto para execução no mês (do planejamento)</li>
-                        <li><span className="font-medium">Planejado Acumulado:</span> Valor previsto acumulado até o mês (do planejamento)</li>
-                        <li><span className="font-medium text-blue-600">Executado Acumulado:</span> Valor real acumulado até o mês (das medições)</li>
-                        <li><span className="font-medium">Diferença:</span> Execução - Planejado (positivo = adiantado, negativo = atrasado)</li>
+                        <li><span className="font-medium">Previsto (Ajustado):</span> Quantidade e valor planejados para o mês, ajustados com as diferenças dos meses anteriores</li>
+                        <li><span className="font-medium text-blue-600">Executado:</span> Quantidade e valor realmente executados no mês</li>
+                        <li><span className="font-medium">Acumulado:</span> Totais acumulados até o mês</li>
+                        <li className="mt-2 text-xs">
+                          <span className="font-medium">Redistribuição:</span> Se executado {'<'} previsto, a diferença é lançada no próximo mês. 
+                          Se executado {'>'} previsto, a diferença é removida do próximo mês (evitando valores negativos).
+                        </li>
                       </ul>
                     </div>
                   </div>
