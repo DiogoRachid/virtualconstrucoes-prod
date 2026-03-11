@@ -1234,6 +1234,7 @@ export default function MeasurementForm() {
                       codigo: item.codigo,
                       descricao: item.descricao,
                       unidade: item.unidade,
+                      quantidadeOrcada: item.quantidade_orcada || 0,
                       valorMaterialUnitario: costs.material,
                       valorMaoObraUnitario: costs.mao_obra,
                       medicoes
