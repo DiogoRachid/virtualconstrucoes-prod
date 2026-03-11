@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 
 export default function RealizadoTab({ budget, stages, items }) {
   const [distributions, setDistributions] = useState([]);
@@ -14,11 +13,9 @@ export default function RealizadoTab({ budget, stages, items }) {
       if (!budget?.id) return;
       setLoading(true);
 
-      // Carregar distribuições planejadas
       const dists = await base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: budget.id });
       setDistributions(dists);
 
-      // Carregar medições da obra
       const meds = await base44.entities.Measurement.filter({
         obra_id: budget.obra_id,
         orcamento_id: budget.id
@@ -26,7 +23,7 @@ export default function RealizadoTab({ budget, stages, items }) {
       const sortedMeds = meds.sort((a, b) => a.numero_medicao - b.numero_medicao);
       setMeasurements(sortedMeds);
 
-      // Carregar itens de todas as medições
+      // Indexar itens pelo numero_medicao
       const itemsMap = {};
       for (const med of sortedMeds) {
         const medItems = await base44.entities.MeasurementItem.filter({ medicao_id: med.id });
@@ -49,9 +46,6 @@ export default function RealizadoTab({ budget, stages, items }) {
   const totalMeses = budget?.duracao_meses || 12;
   const maxMedMes = measurements.length > 0 ? Math.max(...measurements.map(m => m.numero_medicao)) : 0;
 
-  // Criar hierarquia de etapas
-  const mainStages = stages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
-
   // Mapa de distribuição planejada: servico_id + stage_id -> { mes -> percentual }
   const planMap = {};
   distributions.forEach(d => {
@@ -60,39 +54,62 @@ export default function RealizadoTab({ budget, stages, items }) {
     planMap[key][d.mes] = d.percentual || 0;
   });
 
-  // Para cada item, calcular planejado original, ajustado e executado por mês
   const buildItemData = (item) => {
     const key = `${item.servico_id}_${item.stage_id}`;
     const planned = planMap[key] || {};
 
     const rows = [];
-    let carryOver = 0; // diferença a transferir para próximo mês
+    let carryOver = 0;
+    let cumulativeExecuted = 0; // acumulado executado para saber quando atingir 100%
 
     for (let mes = 1; mes <= totalMeses; mes++) {
       const originalPlanned = planned[mes] || 0;
-      const adjustedPlanned = Math.max(0, originalPlanned + carryOver);
-      carryOver = 0; // reset
+
+      // Se já atingiu 100% acumulado, previsto ajustado = 0
+      let adjustedPlanned;
+      if (cumulativeExecuted >= 100) {
+        adjustedPlanned = 0;
+      } else {
+        const remaining = 100 - cumulativeExecuted;
+        adjustedPlanned = Math.max(0, Math.min(remaining, originalPlanned + carryOver));
+      }
+      carryOver = 0;
 
       let executed = null;
       if (mes <= maxMedMes) {
-        const medItems = measurementItems[mes] || [];
-        const medItem = medItems.find(
-          mi => mi.servico_id === item.servico_id && mi.stage_id === item.stage_id
-        );
-        if (medItem) {
-          const qtdOrcada = item.quantidade || 0;
-          executed = qtdOrcada > 0
-            ? ((medItem.quantidade_executada_periodo || 0) / qtdOrcada) * 100
-            : 0;
-        } else {
+        if (cumulativeExecuted >= 100) {
+          // Já completou 100%, meses seguintes = 0%
           executed = 0;
-        }
+        } else {
+          // Buscar o item desta medição - primeiro tenta servico_id + stage_id, depois só servico_id
+          const medItems = measurementItems[mes] || [];
+          let medItem = medItems.find(
+            mi => mi.servico_id === item.servico_id && mi.stage_id === item.stage_id
+          );
+          // Fallback: busca só por servico_id se stage_id não bater
+          if (!medItem) {
+            medItem = medItems.find(mi => mi.servico_id === item.servico_id);
+          }
 
-        // Calcular diferença para próximo mês
-        const diff = executed - adjustedPlanned;
-        // Se executou mais: reduzir próximo mês (carryOver negativo)
-        // Se executou menos: aumentar próximo mês (carryOver positivo)
-        carryOver = -diff;
+          if (medItem) {
+            const qtdOrcada = item.quantidade || 0;
+            const rawPct = qtdOrcada > 0
+              ? ((medItem.quantidade_executada_periodo || 0) / qtdOrcada) * 100
+              : 0;
+            // Cap: não pode ultrapassar o saldo restante
+            const remaining = 100 - cumulativeExecuted;
+            executed = Math.min(rawPct, remaining);
+          } else {
+            executed = 0;
+          }
+
+          cumulativeExecuted += executed;
+
+          // Carry-over: diferença entre executado e ajustado vai para próximo mês
+          // Se executou mais: próximo mês reduz (carryOver negativo)
+          // Se executou menos: próximo mês aumenta (carryOver positivo)
+          carryOver = -(executed - adjustedPlanned);
+        }
       }
 
       rows.push({ mes, originalPlanned, adjustedPlanned, executed });
@@ -100,9 +117,13 @@ export default function RealizadoTab({ budget, stages, items }) {
     return rows;
   };
 
-  const fmtPct = (val) => val === null ? '-' : `${val.toFixed(1)}%`;
+  const fmtPct = (val) => {
+    if (val === null) return '-';
+    if (val === 0) return '0.0%';
+    return `${val.toFixed(1)}%`;
+  };
 
-  const colSpanBase = 3; // nº, código, descrição
+  const mainStages = stages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
 
   return (
     <div className="overflow-x-auto">
@@ -135,20 +156,17 @@ export default function RealizadoTab({ budget, stages, items }) {
             const subStages = stages
               .filter(s => s.parent_stage_id === mainStage.id)
               .sort((a, b) => a.ordem - b.ordem);
-
             const allSubItems = subStages.flatMap(ss => items.filter(i => i.stage_id === ss.id));
             if (mainItems.length === 0 && allSubItems.length === 0) return null;
 
             return (
               <React.Fragment key={mainStage.id}>
-                {/* Linha de etapa principal */}
                 <tr className="bg-slate-200 font-semibold">
                   <td colSpan={4 + totalMeses * 3} className="px-2 py-2 border">
                     {mainIdx + 1}. {mainStage.nome}
                   </td>
                 </tr>
 
-                {/* Itens diretos da etapa principal */}
                 {mainItems.map((item, itemIdx) => {
                   const rowData = buildItemData(item);
                   return (
@@ -162,13 +180,13 @@ export default function RealizadoTab({ budget, stages, items }) {
                         return (
                           <React.Fragment key={mes}>
                             <td className="px-1 py-1 border text-right">{fmtPct(originalPlanned || null)}</td>
-                            <td className={`px-1 py-1 border text-right bg-yellow-50 ${adjustedPlanned !== originalPlanned ? 'font-semibold text-orange-600' : ''}`}>
+                            <td className={`px-1 py-1 border text-right bg-yellow-50 ${adjustedPlanned !== originalPlanned && adjustedPlanned > 0 ? 'font-semibold text-orange-600' : ''}`}>
                               {fmtPct(adjustedPlanned || null)}
                             </td>
                             <td className={`px-1 py-1 border text-right bg-green-50 ${
                               executed === null ? 'text-slate-400' :
-                              diff > 0.05 ? 'text-blue-600 font-semibold' :
-                              diff < -0.05 ? 'text-red-600 font-semibold' : ''
+                              diff !== null && diff > 0.05 ? 'text-blue-600 font-semibold' :
+                              diff !== null && diff < -0.05 ? 'text-red-600 font-semibold' : ''
                             }`}>
                               {fmtPct(executed)}
                             </td>
@@ -179,7 +197,6 @@ export default function RealizadoTab({ budget, stages, items }) {
                   );
                 })}
 
-                {/* Subetapas */}
                 {subStages.map((subStage, subIdx) => {
                   const subItems = items.filter(i => i.stage_id === subStage.id);
                   if (subItems.length === 0) return null;
@@ -203,13 +220,13 @@ export default function RealizadoTab({ budget, stages, items }) {
                               return (
                                 <React.Fragment key={mes}>
                                   <td className="px-1 py-1 border text-right">{fmtPct(originalPlanned || null)}</td>
-                                  <td className={`px-1 py-1 border text-right bg-yellow-50 ${adjustedPlanned !== originalPlanned ? 'font-semibold text-orange-600' : ''}`}>
+                                  <td className={`px-1 py-1 border text-right bg-yellow-50 ${adjustedPlanned !== originalPlanned && adjustedPlanned > 0 ? 'font-semibold text-orange-600' : ''}`}>
                                     {fmtPct(adjustedPlanned || null)}
                                   </td>
                                   <td className={`px-1 py-1 border text-right bg-green-50 ${
                                     executed === null ? 'text-slate-400' :
-                                    diff > 0.05 ? 'text-blue-600 font-semibold' :
-                                    diff < -0.05 ? 'text-red-600 font-semibold' : ''
+                                    diff !== null && diff > 0.05 ? 'text-blue-600 font-semibold' :
+                                    diff !== null && diff < -0.05 ? 'text-red-600 font-semibold' : ''
                                   }`}>
                                     {fmtPct(executed)}
                                   </td>
@@ -228,7 +245,7 @@ export default function RealizadoTab({ budget, stages, items }) {
         </tbody>
       </table>
 
-      <div className="mt-4 flex gap-6 text-xs text-slate-600 p-3 bg-slate-50 rounded-lg">
+      <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600 p-3 bg-slate-50 rounded-lg">
         <span><span className="inline-block w-3 h-3 bg-white border border-slate-300 mr-1 rounded-sm"></span>Previsto: % original do cronograma</span>
         <span><span className="inline-block w-3 h-3 bg-yellow-100 border border-yellow-300 mr-1 rounded-sm"></span>Aj. Previsto: % ajustado (redistribuição das diferenças)</span>
         <span><span className="inline-block w-3 h-3 bg-green-100 border border-green-300 mr-1 rounded-sm"></span>Executado: % real da medição</span>
