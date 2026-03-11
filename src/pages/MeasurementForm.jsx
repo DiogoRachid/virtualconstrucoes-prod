@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, Save, CheckCircle, Loader2, AlertTriangle, TrendingUp, FileSpreadsheet, FileText, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle, Loader2, FileSpreadsheet, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart } from 'recharts';
 import { exportMeasurementXLSX, exportMeasurementPDF, exportCronogramaXLSX, exportCronogramaPDF } from '@/components/measurements/MeasurementExporter';
 import { Button } from "@/components/ui/button";
