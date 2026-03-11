@@ -1295,8 +1295,11 @@ export default function MeasurementForm() {
                               Medição {t.numero}
                             </th>
                           ))}
-                        </tr>
-                        <tr>
+                          <th className="px-2 py-2 border text-center bg-green-100" colSpan="4">
+                            Acumulado
+                          </th>
+                          </tr>
+                          <tr>
                           {totaisPorMedicao.map(t => (
                             <React.Fragment key={t.numero}>
                               <th className="px-2 py-1 border text-right text-xs bg-blue-50">Qtd Exec.</th>
@@ -1306,7 +1309,11 @@ export default function MeasurementForm() {
                               <th className="px-2 py-1 border text-right text-xs bg-blue-50">Qtd a Medir</th>
                             </React.Fragment>
                           ))}
-                        </tr>
+                          <th className="px-2 py-1 border text-right text-xs bg-green-100">Qtd Acum.</th>
+                          <th className="px-2 py-1 border text-right text-xs bg-green-100">Vlr Mat.</th>
+                          <th className="px-2 py-1 border text-right text-xs bg-green-100">Vlr M.O.</th>
+                          <th className="px-2 py-1 border text-right text-xs bg-green-100">Qtd a Medir</th>
+                          </tr>
                       </thead>
                       <tbody>
                         {servicosData.map((servico, idx) => {
