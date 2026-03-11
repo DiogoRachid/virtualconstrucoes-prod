@@ -54,18 +54,19 @@ export default function RealizadoTab({ budget, stages, items }) {
     planMap[key][d.mes] = d.percentual || 0;
   });
 
-  const buildItemData = (item) => {
+  // itemIndexInStage: posição do item entre os irmãos com mesmo servico_id+stage_id
+  // Necessário para distinguir itens duplicados (mesmo serviço na mesma etapa)
+  const buildItemData = (item, itemIndexInStage) => {
     const key = `${item.servico_id}_${item.stage_id}`;
     const planned = planMap[key] || {};
 
     const rows = [];
     let carryOver = 0;
-    let cumulativeExecuted = 0; // acumulado executado para saber quando atingir 100%
+    let cumulativeExecuted = 0;
 
     for (let mes = 1; mes <= totalMeses; mes++) {
       const originalPlanned = planned[mes] || 0;
 
-      // Se já atingiu 100% acumulado, previsto ajustado = 0
       let adjustedPlanned;
       if (cumulativeExecuted >= 100) {
         adjustedPlanned = 0;
@@ -78,25 +79,24 @@ export default function RealizadoTab({ budget, stages, items }) {
       let executed = null;
       if (mes <= maxMedMes) {
         if (cumulativeExecuted >= 100) {
-          // Já completou 100%, meses seguintes = 0%
           executed = 0;
         } else {
-          // Buscar o item desta medição - primeiro tenta servico_id + stage_id, depois só servico_id
+          // Filtrar todos os itens da medição com mesmo servico_id+stage_id e pegar pelo índice
           const medItems = measurementItems[mes] || [];
-          let medItem = medItems.find(
+          const candidates = medItems.filter(
             mi => mi.servico_id === item.servico_id && mi.stage_id === item.stage_id
           );
-          // Fallback: busca só por servico_id se stage_id não bater
-          if (!medItem) {
-            medItem = medItems.find(mi => mi.servico_id === item.servico_id);
-          }
+          // Se não achar com stage_id, tenta só por servico_id
+          const fallback = candidates.length === 0
+            ? medItems.filter(mi => mi.servico_id === item.servico_id)
+            : candidates;
+          const medItem = fallback[itemIndexInStage] || fallback[0] || null;
 
           if (medItem) {
             const qtdOrcada = item.quantidade || 0;
             const rawPct = qtdOrcada > 0
               ? ((medItem.quantidade_executada_periodo || 0) / qtdOrcada) * 100
               : 0;
-            // Cap: não pode ultrapassar o saldo restante
             const remaining = 100 - cumulativeExecuted;
             executed = Math.min(rawPct, remaining);
           } else {
@@ -104,10 +104,6 @@ export default function RealizadoTab({ budget, stages, items }) {
           }
 
           cumulativeExecuted += executed;
-
-          // Carry-over: diferença entre executado e ajustado vai para próximo mês
-          // Se executou mais: próximo mês reduz (carryOver negativo)
-          // Se executou menos: próximo mês aumenta (carryOver positivo)
           carryOver = -(executed - adjustedPlanned);
         }
       }
