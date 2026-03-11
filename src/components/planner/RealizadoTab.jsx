@@ -206,7 +206,8 @@ export default function RealizadoTab({ budget, stages, items }) {
                         </td>
                       </tr>
                       {subItems.map((item, itemIdx) => {
-                        const rowData = buildItemData(item);
+                        const sameKeyIdx = subItems.filter((x, i) => i < itemIdx && x.servico_id === item.servico_id && x.stage_id === item.stage_id).length;
+                        const rowData = buildItemData(item, sameKeyIdx);
                         return (
                           <tr key={item.id} className="hover:bg-slate-50">
                             <td className="px-2 py-1 border text-slate-500 pl-8">{mainIdx + 1}.{subIdx + 1}.{itemIdx + 1}</td>
