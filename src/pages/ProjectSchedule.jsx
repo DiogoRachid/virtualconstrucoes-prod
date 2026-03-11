@@ -198,7 +198,7 @@ export default function ProjectSchedule() {
       </Card>
 
       <Tabs defaultValue="schedule" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="schedule">
             <Calendar className="h-4 w-4 mr-2" />
             Cronograma
