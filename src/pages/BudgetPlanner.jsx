@@ -323,6 +323,19 @@ export default function BudgetPlanner() {
             months={months}
           />
         </TabsContent>
+
+        <TabsContent value="realizado" className="mt-6">
+          <Card>
+            <CardContent className="pt-4">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">Previsto vs Realizado por Serviço</h2>
+              <RealizadoTab
+                budget={budget}
+                stages={stages}
+                items={items}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
