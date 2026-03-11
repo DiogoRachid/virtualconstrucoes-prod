@@ -1318,53 +1318,72 @@ export default function MeasurementForm() {
                       <tbody>
                         {servicosData.map((servico, idx) => {
                           if (servico.isStage) {
-                            // Linha de etapa (macro serviço)
-                            return (
-                              <tr key={idx} className={`bg-slate-100 font-semibold ${servico.level === 0 ? 'text-base' : 'text-sm'}`}>
-                                <td className="px-2 py-2 border" colSpan={7 + (totaisPorMedicao.length * 5)} style={{ paddingLeft: `${servico.level * 20 + 8}px` }}>
-                                  {servico.numero} {servico.nome}
-                                </td>
-                              </tr>
-                            );
-                          } else {
-                            // Linha de serviço
-                            return (
-                              <tr key={idx} className="hover:bg-slate-50">
-                                <td className="px-2 py-1 border text-xs text-slate-500">{servico.numero}</td>
-                                <td className="px-2 py-1 border text-xs">{servico.codigo}</td>
-                                <td className="px-2 py-1 border text-xs">{servico.descricao}</td>
-                                <td className="px-2 py-1 border text-center text-xs">{servico.unidade}</td>
-                                <td className="px-2 py-1 border text-right text-xs">
-                                  {servico.valorMaterialUnitario.toFixed(2)}
-                                </td>
-                                <td className="px-2 py-1 border text-right text-xs">
-                                  {servico.valorMaoObraUnitario.toFixed(2)}
-                                </td>
-                                <td className="px-2 py-1 border text-right text-xs font-medium">
-                                  {(servico.quantidadeOrcada || 0).toFixed(2)}
-                                </td>
-                                {servico.medicoes.map(med => (
-                                  <React.Fragment key={med.numero}>
-                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-semibold">
-                                      {med.qtdExecutada.toFixed(2)}
-                                    </td>
-                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                      {med.valorMaterial.toFixed(2)}
-                                    </td>
-                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                      {med.valorMaoObra.toFixed(2)}
-                                    </td>
-                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-medium">
-                                      {med.qtdAcumulada.toFixed(2)}
-                                    </td>
-                                    <td className="px-2 py-1 border text-right text-xs bg-blue-50">
-                                      {med.qtdAMedir.toFixed(2)}
-                                    </td>
-                                  </React.Fragment>
-                                ))}
-                              </tr>
-                            );
-                          }
+                             // Linha de etapa (macro serviço)
+                             return (
+                               <tr key={idx} className={`bg-slate-100 font-semibold ${servico.level === 0 ? 'text-base' : 'text-sm'}`}>
+                                 <td className="px-2 py-2 border" colSpan={7 + (totaisPorMedicao.length * 5) + 4} style={{ paddingLeft: `${servico.level * 20 + 8}px` }}>
+                                   {servico.numero} {servico.nome}
+                                 </td>
+                               </tr>
+                             );
+                           } else {
+                             // Calcular acumulados totais
+                             const lastMed = servico.medicoes[servico.medicoes.length - 1];
+                             const qtdAcumTotal = lastMed?.qtdAcumulada || 0;
+                             const vlrMatAcum = servico.medicoes.reduce((s, m) => s + m.valorMaterial, 0);
+                             const vlrMoAcum = servico.medicoes.reduce((s, m) => s + m.valorMaoObra, 0);
+                             const qtdAMedirAcum = (servico.quantidadeOrcada || 0) - qtdAcumTotal;
+
+                             // Linha de serviço
+                             return (
+                               <tr key={idx} className="hover:bg-slate-50">
+                                 <td className="px-2 py-1 border text-xs text-slate-500">{servico.numero}</td>
+                                 <td className="px-2 py-1 border text-xs">{servico.codigo}</td>
+                                 <td className="px-2 py-1 border text-xs">{servico.descricao}</td>
+                                 <td className="px-2 py-1 border text-center text-xs">{servico.unidade}</td>
+                                 <td className="px-2 py-1 border text-right text-xs">
+                                   {servico.valorMaterialUnitario.toFixed(2)}
+                                 </td>
+                                 <td className="px-2 py-1 border text-right text-xs">
+                                   {servico.valorMaoObraUnitario.toFixed(2)}
+                                 </td>
+                                 <td className="px-2 py-1 border text-right text-xs font-medium">
+                                   {(servico.quantidadeOrcada || 0).toFixed(2)}
+                                 </td>
+                                 {servico.medicoes.map(med => (
+                                   <React.Fragment key={med.numero}>
+                                     <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-semibold">
+                                       {med.qtdExecutada.toFixed(2)}
+                                     </td>
+                                     <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                       {med.valorMaterial.toFixed(2)}
+                                     </td>
+                                     <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                       {med.valorMaoObra.toFixed(2)}
+                                     </td>
+                                     <td className="px-2 py-1 border text-right text-xs bg-blue-50 font-medium">
+                                       {med.qtdAcumulada.toFixed(2)}
+                                     </td>
+                                     <td className="px-2 py-1 border text-right text-xs bg-blue-50">
+                                       {med.qtdAMedir.toFixed(2)}
+                                     </td>
+                                   </React.Fragment>
+                                 ))}
+                                 <td className="px-2 py-1 border text-right text-xs bg-green-100 font-bold">
+                                   {qtdAcumTotal.toFixed(2)}
+                                 </td>
+                                 <td className="px-2 py-1 border text-right text-xs bg-green-100">
+                                   {vlrMatAcum.toFixed(2)}
+                                 </td>
+                                 <td className="px-2 py-1 border text-right text-xs bg-green-100">
+                                   {vlrMoAcum.toFixed(2)}
+                                 </td>
+                                 <td className={`px-2 py-1 border text-right text-xs bg-green-100 font-medium ${qtdAMedirAcum < 0 ? 'text-red-600' : ''}`}>
+                                   {qtdAMedirAcum.toFixed(2)}
+                                 </td>
+                               </tr>
+                             );
+                           }
                         })}
                         
                         <tr className="bg-slate-200 font-bold">
