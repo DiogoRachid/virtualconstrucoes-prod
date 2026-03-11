@@ -215,6 +215,10 @@ export default function ProjectSchedule() {
             <Users className="h-4 w-4 mr-2" />
             Recursos
           </TabsTrigger>
+          <TabsTrigger value="realizado">
+            <CheckSquare className="h-4 w-4 mr-2" />
+            Realizado
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="schedule" className="mt-6">
