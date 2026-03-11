@@ -607,6 +607,424 @@ export async function exportMeasurementPDF(measurementId) {
   }
 }
 
+export async function exportCronogramaXLSX(measurementId) {
+  try {
+    const measurement = (await base44.entities.Measurement.filter({ id: measurementId }))[0];
+    const budget = (await base44.entities.Budget.filter({ id: measurement.orcamento_id }))[0];
+    const project = (await base44.entities.Project.filter({ id: measurement.obra_id }))[0];
+    const projectStages = await base44.entities.ProjectStage.filter({ orcamento_id: measurement.orcamento_id });
+    const budgetItems = await base44.entities.BudgetItem.filter({ orcamento_id: measurement.orcamento_id });
+    const scheduleData = await base44.entities.ServiceMonthlyDistribution.filter({ orcamento_id: measurement.orcamento_id });
+    const allMeasurements = await base44.entities.Measurement.filter({ obra_id: measurement.obra_id, orcamento_id: measurement.orcamento_id });
+    const mesAtual = measurement.numero_medicao || 1;
+    const bdiPercentual = budget?.bdi_padrao || 30;
+
+    const costMap = {};
+    budgetItems.forEach(bi => {
+      costMap[bi.servico_id] = { material: bi.custo_unitario_material || 0, mao_obra: bi.custo_unitario_mao_obra || 0 };
+    });
+
+    // Build historic map
+    const histMap = {};
+    const sortedMeds = allMeasurements.sort((a, b) => a.numero_medicao - b.numero_medicao);
+    const prevMeds = sortedMeds.filter(m => m.numero_medicao < mesAtual);
+    const mainStages = projectStages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
+
+    for (const prevMed of prevMeds) {
+      const itemsFromMed = await base44.entities.MeasurementItem.filter({ medicao_id: prevMed.id });
+      mainStages.forEach((mainStage, mainIdx) => {
+        const mainStageItems = itemsFromMed.filter(i => i.stage_id === mainStage.id);
+        mainStageItems.forEach((item, itemIdx) => {
+          histMap[`${mainIdx + 1}.${itemIdx + 1}_${prevMed.numero_medicao}`] = item.quantidade_executada_periodo || 0;
+        });
+        const subStages = projectStages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+        subStages.forEach((subStage, subIdx) => {
+          const subItems = itemsFromMed.filter(i => i.stage_id === subStage.id);
+          subItems.forEach((item, itemIdx) => {
+            histMap[`${mainIdx + 1}.${subIdx + 1}.${itemIdx + 1}_${prevMed.numero_medicao}`] = item.quantidade_executada_periodo || 0;
+          });
+        });
+      });
+    }
+
+    // Get current measurement items
+    const currentItems = await base44.entities.MeasurementItem.filter({ medicao_id: measurementId });
+
+    // Build stage hierarchy
+    const hierarchy = [];
+    mainStages.forEach((mainStage, mainIdx) => {
+      const mainStageItems = currentItems.filter(i => i.stage_id === mainStage.id);
+      hierarchy.push({ id: mainStage.id, nome: mainStage.nome, number: `${mainIdx + 1}.`, level: 0, items: mainStageItems });
+      const subStages = projectStages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+      subStages.forEach((subStage, subIdx) => {
+        const subItems = currentItems.filter(i => i.stage_id === subStage.id);
+        hierarchy.push({ id: subStage.id, nome: subStage.nome, number: `${mainIdx + 1}.${subIdx + 1}`, level: 1, items: subItems });
+      });
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('Cronograma', { views: [{ state: 'frozen', xSplit: 7, ySplit: 2 }] });
+
+    // Build columns
+    const cols = [
+      { header: 'Nº', width: 8 }, { header: 'Código', width: 12 }, { header: 'Descrição', width: 45 },
+      { header: 'Un', width: 6 }, { header: 'Mat. Unit.', width: 12 }, { header: 'M.O. Unit.', width: 12 }, { header: 'Qtd Prev.', width: 10 }
+    ];
+    for (let i = 1; i <= mesAtual; i++) {
+      cols.push({ header: `Med${i} Qtd`, width: 10 }, { header: `Med${i} Mat`, width: 12 }, { header: `Med${i} M.O.`, width: 12 }, { header: `Med${i} Acum`, width: 10 }, { header: `Med${i} Saldo`, width: 10 });
+    }
+    cols.push({ header: 'Acum. Qtd', width: 10 }, { header: 'Acum. Mat', width: 14 }, { header: 'Acum. M.O.', width: 14 }, { header: 'Acum. Saldo', width: 12 });
+    ws.columns = cols;
+
+    // Header row 1 - merged per medição
+    const row1 = ws.getRow(1);
+    ['Nº','Código','Descrição','Un','Mat. Unit.','M.O. Unit.','Qtd Prev.'].forEach((h, i) => {
+      const cell = row1.getCell(i + 1);
+      cell.value = h; cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD0D0D0' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+    for (let i = 1; i <= mesAtual; i++) {
+      const startCol = 7 + (i - 1) * 5 + 1;
+      ws.mergeCells(1, startCol, 1, startCol + 4);
+      const cell = row1.getCell(startCol);
+      cell.value = `Medição ${i}`; cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E8FF' } };
+      cell.alignment = { horizontal: 'center' };
+    }
+    const acumStart = 7 + mesAtual * 5 + 1;
+    ws.mergeCells(1, acumStart, 1, acumStart + 3);
+    const acumCell = row1.getCell(acumStart);
+    acumCell.value = 'Acumulado'; acumCell.font = { bold: true };
+    acumCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4EDDA' } };
+    acumCell.alignment = { horizontal: 'center' };
+
+    // Header row 2 sub-headers
+    const row2 = ws.getRow(2);
+    for (let i = 1; i <= mesAtual; i++) {
+      const base = 7 + (i - 1) * 5 + 1;
+      ['Qtd Exec.','Vlr Mat.','Vlr M.O.','Qtd Acum.','Qtd a Medir'].forEach((h, j) => {
+        const cell = row2.getCell(base + j);
+        cell.value = h; cell.font = { bold: true, size: 8 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E8FF' } };
+        cell.alignment = { horizontal: 'right' };
+      });
+    }
+    ['Qtd Acum.','Vlr Mat.','Vlr M.O.','Qtd a Medir'].forEach((h, j) => {
+      const cell = row2.getCell(acumStart + j);
+      cell.value = h; cell.font = { bold: true, size: 8 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4EDDA' } };
+      cell.alignment = { horizontal: 'right' };
+    });
+
+    let rowIdx = 3;
+    const totaisPorMedicao = Array.from({ length: mesAtual }, () => ({ mat: 0, mo: 0 }));
+
+    hierarchy.forEach(stage => {
+      const hasItems = (sid) => currentItems.some(i => i.stage_id === sid) || projectStages.some(s => s.parent_stage_id === sid && currentItems.some(i => i.stage_id === s.id));
+      if (stage.level === 0 && !hasItems(stage.id)) return;
+      if (stage.level > 0 && stage.items.length === 0) return;
+
+      const stageRow = ws.getRow(rowIdx++);
+      stageRow.getCell(1).value = `${stage.number} ${stage.nome}`;
+      stageRow.getCell(1).font = { bold: true };
+      const totalCols = 7 + mesAtual * 5 + 4;
+      for (let c = 1; c <= totalCols; c++) {
+        stageRow.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: stage.level === 0 ? 'FFD0D0D0' : 'FFE8E8E8' } };
+      }
+
+      stage.items.forEach((item, itemIdx) => {
+        const costs = costMap[item.servico_id] || { material: 0, mao_obra: 0 };
+        const itemNumber = `${stage.number}.${itemIdx + 1}`;
+        const dataRow = ws.getRow(rowIdx++);
+        dataRow.getCell(1).value = itemNumber;
+        dataRow.getCell(2).value = item.codigo;
+        dataRow.getCell(3).value = item.descricao;
+        dataRow.getCell(4).value = item.unidade;
+        dataRow.getCell(5).value = costs.material;
+        dataRow.getCell(6).value = costs.mao_obra;
+        dataRow.getCell(7).value = item.quantidade_orcada || 0;
+
+        let qtdAcum = 0;
+        for (let numMed = 1; numMed <= mesAtual; numMed++) {
+          let qtdExec = numMed === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${numMed}`] || 0);
+          qtdAcum += qtdExec;
+          const valMat = qtdExec * costs.material;
+          const valMo = qtdExec * costs.mao_obra;
+          totaisPorMedicao[numMed - 1].mat += valMat;
+          totaisPorMedicao[numMed - 1].mo += valMo;
+          const base = 7 + (numMed - 1) * 5 + 1;
+          dataRow.getCell(base).value = qtdExec;
+          dataRow.getCell(base + 1).value = valMat; dataRow.getCell(base + 1).numFmt = '#,##0.00';
+          dataRow.getCell(base + 2).value = valMo; dataRow.getCell(base + 2).numFmt = '#,##0.00';
+          dataRow.getCell(base + 3).value = qtdAcum;
+          dataRow.getCell(base + 4).value = (item.quantidade_orcada || 0) - qtdAcum;
+        }
+        const vlrMatAcum = Array.from({ length: mesAtual }, (_, i) => {
+          const qe = i + 1 === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${i + 1}`] || 0);
+          return qe * costs.material;
+        }).reduce((a, b) => a + b, 0);
+        const vlrMoAcum = Array.from({ length: mesAtual }, (_, i) => {
+          const qe = i + 1 === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${i + 1}`] || 0);
+          return qe * costs.mao_obra;
+        }).reduce((a, b) => a + b, 0);
+        dataRow.getCell(acumStart).value = qtdAcum;
+        dataRow.getCell(acumStart + 1).value = vlrMatAcum; dataRow.getCell(acumStart + 1).numFmt = '#,##0.00';
+        dataRow.getCell(acumStart + 2).value = vlrMoAcum; dataRow.getCell(acumStart + 2).numFmt = '#,##0.00';
+        dataRow.getCell(acumStart + 3).value = (item.quantidade_orcada || 0) - qtdAcum;
+      });
+    });
+
+    // Totais rodapé
+    rowIdx++;
+    const totMatAcum = totaisPorMedicao.reduce((s, t) => s + t.mat, 0);
+    const totMoAcum = totaisPorMedicao.reduce((s, t) => s + t.mo, 0);
+    const subtAcum = totMatAcum + totMoAcum;
+    const bdiAcum = subtAcum * (bdiPercentual / 100);
+
+    [['SUBTOTAL MATERIAL:', totaisPorMedicao.map(t => t.mat), totMatAcum],
+     ['SUBTOTAL MÃO DE OBRA:', totaisPorMedicao.map(t => t.mo), totMoAcum],
+     [`BDI (${bdiPercentual}%):`, totaisPorMedicao.map(t => (t.mat + t.mo) * bdiPercentual / 100), bdiAcum],
+     ['TOTAL COM BDI:', totaisPorMedicao.map(t => (t.mat + t.mo) * (1 + bdiPercentual / 100)), subtAcum + bdiAcum]
+    ].forEach(([label, perMed, acum]) => {
+      const r = ws.getRow(rowIdx++);
+      r.getCell(7).value = label; r.getCell(7).font = { bold: true }; r.getCell(7).alignment = { horizontal: 'right' };
+      perMed.forEach((v, i) => {
+        const base = 7 + i * 5 + 2;
+        r.getCell(base).value = v; r.getCell(base).numFmt = 'R$ #,##0.00'; r.getCell(base).font = { bold: true };
+      });
+      r.getCell(acumStart + 1).value = acum; r.getCell(acumStart + 1).numFmt = 'R$ #,##0.00'; r.getCell(acumStart + 1).font = { bold: true };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const fileName = `Cronograma_Med${measurement.numero_medicao}_${measurement.obra_nome}.xlsx`.replace(/[/\\?%*:|"<>]/g, '_');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    return { success: true, message: 'Cronograma XLSX exportado com sucesso!' };
+  } catch (error) {
+    console.error('Erro ao exportar cronograma XLSX:', error);
+    return { success: false, message: 'Erro ao exportar: ' + error.message };
+  }
+}
+
+export async function exportCronogramaPDF(measurementId) {
+  try {
+    const measurement = (await base44.entities.Measurement.filter({ id: measurementId }))[0];
+    const budget = (await base44.entities.Budget.filter({ id: measurement.orcamento_id }))[0];
+    const project = (await base44.entities.Project.filter({ id: measurement.obra_id }))[0];
+    const projectStages = await base44.entities.ProjectStage.filter({ orcamento_id: measurement.orcamento_id });
+    const budgetItems = await base44.entities.BudgetItem.filter({ orcamento_id: measurement.orcamento_id });
+    const allMeasurements = await base44.entities.Measurement.filter({ obra_id: measurement.obra_id, orcamento_id: measurement.orcamento_id });
+    const mesAtual = measurement.numero_medicao || 1;
+    const bdiPercentual = budget?.bdi_padrao || 30;
+
+    const costMap = {};
+    budgetItems.forEach(bi => {
+      costMap[bi.servico_id] = { material: bi.custo_unitario_material || 0, mao_obra: bi.custo_unitario_mao_obra || 0 };
+    });
+
+    // Historic map
+    const histMap = {};
+    const sortedMeds = allMeasurements.sort((a, b) => a.numero_medicao - b.numero_medicao);
+    const prevMeds = sortedMeds.filter(m => m.numero_medicao < mesAtual);
+    const mainStages = projectStages.filter(s => !s.parent_stage_id).sort((a, b) => a.ordem - b.ordem);
+    for (const prevMed of prevMeds) {
+      const itemsFromMed = await base44.entities.MeasurementItem.filter({ medicao_id: prevMed.id });
+      mainStages.forEach((mainStage, mainIdx) => {
+        const mainStageItems = itemsFromMed.filter(i => i.stage_id === mainStage.id);
+        mainStageItems.forEach((item, itemIdx) => {
+          histMap[`${mainIdx + 1}.${itemIdx + 1}_${prevMed.numero_medicao}`] = item.quantidade_executada_periodo || 0;
+        });
+        const subStages = projectStages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+        subStages.forEach((subStage, subIdx) => {
+          const subItems = itemsFromMed.filter(i => i.stage_id === subStage.id);
+          subItems.forEach((item, itemIdx) => {
+            histMap[`${mainIdx + 1}.${subIdx + 1}.${itemIdx + 1}_${prevMed.numero_medicao}`] = item.quantidade_executada_periodo || 0;
+          });
+        });
+      });
+    }
+
+    const currentItems = await base44.entities.MeasurementItem.filter({ medicao_id: measurementId });
+
+    const hierarchy = [];
+    mainStages.forEach((mainStage, mainIdx) => {
+      hierarchy.push({ id: mainStage.id, nome: mainStage.nome, number: `${mainIdx + 1}.`, level: 0, items: currentItems.filter(i => i.stage_id === mainStage.id) });
+      const subStages = projectStages.filter(s => s.parent_stage_id === mainStage.id).sort((a, b) => a.ordem - b.ordem);
+      subStages.forEach((subStage, subIdx) => {
+        hierarchy.push({ id: subStage.id, nome: subStage.nome, number: `${mainIdx + 1}.${subIdx + 1}`, level: 1, items: currentItems.filter(i => i.stage_id === subStage.id) });
+      });
+    });
+
+    const hasItems = (sid) => currentItems.some(i => i.stage_id === sid) || projectStages.some(s => s.parent_stage_id === sid && currentItems.some(i => i.stage_id === s.id));
+
+    const doc = new jsPDF('landscape');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let yPos = 15;
+
+    // Logo
+    try { doc.addImage("https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/e482e0b04_logofundoclaro.jpg", 'JPEG', 15, yPos, 70, 17); } catch(e) {}
+
+    doc.setFontSize(16); doc.setFont(undefined, 'bold');
+    doc.text('CRONOGRAMA DE MEDIÇÕES', pageWidth / 2, yPos + 10, { align: 'center' });
+    yPos += 25;
+
+    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+    doc.text(`Obra: ${measurement.obra_nome}  |  Orçamento: ${budget?.descricao || ''}  |  Medição: ${mesAtual}  |  Emissão: ${new Date().toLocaleDateString('pt-BR')}`, 15, yPos);
+    yPos += 10;
+
+    // Dynamic column layout based on number of measurements
+    // Fixed cols: Nº(8), Cód(12), Desc(40), Un(6), Mat(10), MO(10), Prev(8) = ~94
+    // Per measurement: 5 cols * 10 = 50  |  Accumulated: 4 cols * 10 = 40
+    // Total available: ~277mm
+    const fixedW = 94;
+    const perMedW = 48;
+    const acumW = 40;
+    const totalNeeded = fixedW + mesAtual * perMedW + acumW;
+    const scale = Math.min(1, 270 / totalNeeded);
+    const fw = (w) => w * scale;
+
+    const colX = [];
+    let cx = 10;
+    [8,12,40,6,10,10,8].forEach(w => { colX.push(cx); cx += fw(w); });
+    for (let m = 0; m < mesAtual; m++) {
+      for (let c = 0; c < 5; c++) { colX.push(cx); cx += fw(9.6); }
+    }
+    for (let c = 0; c < 4; c++) { colX.push(cx); cx += fw(10); }
+
+    const drawHeaders = () => {
+      const hy = yPos;
+      // Row 1
+      doc.setFillColor(41, 98, 255); doc.setTextColor(255, 255, 255); doc.setFontSize(6); doc.setFont(undefined, 'bold');
+      doc.rect(10, hy, 270, 5, 'F');
+      ['Nº','Cód','Descrição','Un','Mat.U','M.O.U','Prev'].forEach((h, i) => doc.text(h, colX[i] + 1, hy + 3.5));
+      for (let m = 0; m < mesAtual; m++) {
+        const base = 7 + m * 5;
+        doc.text(`Medição ${m + 1}`, colX[base] + 1, hy + 3.5);
+      }
+      doc.setFillColor(40, 167, 69);
+      const acumBaseX = colX[7 + mesAtual * 5];
+      doc.rect(acumBaseX, hy, fw(40), 5, 'F');
+      doc.text('Acumulado', acumBaseX + 1, hy + 3.5);
+      // Row 2
+      doc.setFillColor(100, 150, 255); doc.rect(colX[7], hy + 5, mesAtual * fw(48), 4, 'F');
+      for (let m = 0; m < mesAtual; m++) {
+        const base = 7 + m * 5;
+        ['Qtd','Mat','M.O.','Acum','Saldo'].forEach((h, j) => doc.text(h, colX[base + j] + 1, hy + 8));
+      }
+      doc.setFillColor(60, 180, 80); doc.rect(acumBaseX, hy + 5, fw(40), 4, 'F');
+      ['Qtd','Mat','M.O.','Saldo'].forEach((h, j) => doc.text(h, colX[7 + mesAtual * 5 + j] + 1, hy + 8));
+      doc.setTextColor(0, 0, 0);
+      yPos += 10;
+    };
+
+    drawHeaders();
+
+    const totaisPorMedicao = Array.from({ length: mesAtual }, () => ({ mat: 0, mo: 0 }));
+
+    hierarchy.forEach(stage => {
+      if (stage.level === 0 && !hasItems(stage.id)) return;
+      if (stage.level > 0 && stage.items.length === 0) return;
+
+      if (yPos > 188) { doc.addPage(); yPos = 15; drawHeaders(); }
+      doc.setFillColor(stage.level === 0 ? 208 : 232, stage.level === 0 ? 208 : 232, stage.level === 0 ? 208 : 232);
+      doc.rect(10, yPos, 270, 5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(7);
+      doc.text(`${stage.number} ${stage.nome}`, 12, yPos + 3.5);
+      yPos += 5;
+
+      doc.setFont(undefined, 'normal'); doc.setFontSize(6);
+      stage.items.forEach((item, itemIdx) => {
+        if (yPos > 190) { doc.addPage(); yPos = 15; drawHeaders(); }
+        const costs = costMap[item.servico_id] || { material: 0, mao_obra: 0 };
+        const itemNumber = `${stage.number}.${itemIdx + 1}`;
+        doc.text(itemNumber, colX[0] + 1, yPos + 3);
+        doc.text((item.codigo || '').substring(0, 8), colX[1] + 1, yPos + 3);
+        doc.text((item.descricao || '').substring(0, 24), colX[2] + 1, yPos + 3);
+        doc.text(item.unidade || '', colX[3] + 1, yPos + 3);
+        doc.text(costs.material.toFixed(1), colX[4] + 1, yPos + 3);
+        doc.text(costs.mao_obra.toFixed(1), colX[5] + 1, yPos + 3);
+        doc.text((item.quantidade_orcada || 0).toFixed(2), colX[6] + 1, yPos + 3);
+
+        let qtdAcum = 0;
+        for (let m = 0; m < mesAtual; m++) {
+          const qtdExec = m + 1 === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${m + 1}`] || 0);
+          qtdAcum += qtdExec;
+          const valMat = qtdExec * costs.material;
+          const valMo = qtdExec * costs.mao_obra;
+          totaisPorMedicao[m].mat += valMat;
+          totaisPorMedicao[m].mo += valMo;
+          const base = 7 + m * 5;
+          doc.text(qtdExec.toFixed(2), colX[base] + 1, yPos + 3);
+          doc.text(valMat.toFixed(0), colX[base + 1] + 1, yPos + 3);
+          doc.text(valMo.toFixed(0), colX[base + 2] + 1, yPos + 3);
+          doc.text(qtdAcum.toFixed(2), colX[base + 3] + 1, yPos + 3);
+          doc.text(((item.quantidade_orcada || 0) - qtdAcum).toFixed(2), colX[base + 4] + 1, yPos + 3);
+        }
+        const vlrMatAcum = Array.from({ length: mesAtual }, (_, i) => {
+          const qe = i + 1 === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${i + 1}`] || 0);
+          return qe * costs.material;
+        }).reduce((a, b) => a + b, 0);
+        const vlrMoAcum = Array.from({ length: mesAtual }, (_, i) => {
+          const qe = i + 1 === mesAtual ? (item.quantidade_executada_periodo || 0) : (histMap[`${itemNumber}_${i + 1}`] || 0);
+          return qe * costs.mao_obra;
+        }).reduce((a, b) => a + b, 0);
+        const acumBase = 7 + mesAtual * 5;
+        doc.text(qtdAcum.toFixed(2), colX[acumBase] + 1, yPos + 3);
+        doc.text(vlrMatAcum.toFixed(0), colX[acumBase + 1] + 1, yPos + 3);
+        doc.text(vlrMoAcum.toFixed(0), colX[acumBase + 2] + 1, yPos + 3);
+        doc.text(((item.quantidade_orcada || 0) - qtdAcum).toFixed(2), colX[acumBase + 3] + 1, yPos + 3);
+        yPos += 5;
+      });
+    });
+
+    // Totais
+    if (yPos > 170) { doc.addPage(); yPos = 20; }
+    yPos += 3;
+    const totMatAcum = totaisPorMedicao.reduce((s, t) => s + t.mat, 0);
+    const totMoAcum = totaisPorMedicao.reduce((s, t) => s + t.mo, 0);
+    const subtAcum = totMatAcum + totMoAcum;
+    const bdiAcum = subtAcum * (bdiPercentual / 100);
+
+    [['SUBTOTAL MAT:', totaisPorMedicao.map(t => t.mat), totMatAcum],
+     ['SUBTOTAL M.O.:', totaisPorMedicao.map(t => t.mo), totMoAcum],
+     [`BDI (${bdiPercentual}%):`, totaisPorMedicao.map(t => (t.mat + t.mo) * bdiPercentual / 100), bdiAcum],
+     ['TOTAL BDI:', totaisPorMedicao.map(t => (t.mat + t.mo) * (1 + bdiPercentual / 100)), subtAcum + bdiAcum]
+    ].forEach(([label, perMed, acum]) => {
+      doc.setFillColor(220, 220, 220); doc.rect(10, yPos, 270, 5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(6.5);
+      doc.text(label, colX[5] + 1, yPos + 3.5);
+      perMed.forEach((v, i) => {
+        const base = 7 + i * 5;
+        doc.text(formatCurrency(v), colX[base + 1] + 1, yPos + 3.5);
+      });
+      const acumBase = 7 + mesAtual * 5;
+      doc.setTextColor(0, 100, 0);
+      doc.text(formatCurrency(acum), colX[acumBase + 1] + 1, yPos + 3.5);
+      doc.setTextColor(0, 0, 0);
+      yPos += 6;
+    });
+
+    // Rodapé
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7); doc.setTextColor(100);
+      doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    }
+
+    const fileName = `Cronograma_Med${measurement.numero_medicao}_${measurement.obra_nome}.pdf`.replace(/[/\\?%*:|"<>]/g, '_');
+    doc.save(fileName);
+    return { success: true, message: 'Cronograma PDF exportado com sucesso!' };
+  } catch (error) {
+    console.error('Erro ao exportar cronograma PDF:', error);
+    return { success: false, message: 'Erro ao exportar: ' + error.message };
+  }
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
