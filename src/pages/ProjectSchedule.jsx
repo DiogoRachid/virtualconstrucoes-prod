@@ -5,12 +5,13 @@ import { createPageUrl } from '@/utils';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Calendar, TrendingUp, PieChart as PieChartIcon, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, TrendingUp, PieChart as PieChartIcon, Users, CheckSquare } from 'lucide-react';
 import { toast } from "sonner";
 import ScheduleEditor from '@/components/planner/ScheduleEditor';
 import SCurveChart from '@/components/planner/SCurveChart';
 import ABCAnalysis from '@/components/planner/ABCAnalysis';
 import StaffingCalculator from '@/components/planner/StaffingCalculator';
+import RealizadoTab from '@/components/planner/RealizadoTab';
 
 export default function ProjectSchedule() {
   const urlParams = new URLSearchParams(window.location.search);
