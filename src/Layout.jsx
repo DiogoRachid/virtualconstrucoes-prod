@@ -263,11 +263,8 @@ export default function Layout({ children, currentPageName }) {
           <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-700">
             {!sidebarCollapsed && (
               <img 
-                src={darkMode 
-                  ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png"
-                  : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg"
-                } 
-                alt="Virtual Construções" 
+                src={darkMode ? logoEscura : logoClara}
+                alt={nomeEmpresa}
                 className="h-10 object-contain"
               />
             )}
