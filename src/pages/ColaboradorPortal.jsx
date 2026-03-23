@@ -31,10 +31,11 @@ export default function ColaboradorPortal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    base44.auth.me().then(u => {
-      setUser(u);
-      setLoading(false);
-    });
+    const session = sessionStorage.getItem('portal_colaborador_auth');
+    if (session) {
+      setUser(JSON.parse(session));
+    }
+    setLoading(false);
   }, []);
 
   if (loading) {
@@ -45,10 +46,9 @@ export default function ColaboradorPortal() {
     );
   }
 
-  // Admin tem acesso total — redireciona para dashboard principal
-  const isAdmin = user?.role === 'admin' || user?.tipo_portal === 'administrador';
-  if (isAdmin) {
-    window.location.href = createPageUrl('Dashboard');
+  // Sem sessão — redireciona para login
+  if (!loading && !user) {
+    window.location.href = createPageUrl('ColaboradorLogin');
     return null;
   }
 
@@ -60,7 +60,7 @@ export default function ColaboradorPortal() {
         <Lock className="h-16 w-16 text-slate-300 mb-4" />
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Sem Módulos Habilitados</h2>
         <p className="text-slate-500 max-w-sm">Seu acesso ainda não foi configurado. Entre em contato com o administrador do sistema.</p>
-        <button onClick={() => base44.auth.logout()} className="mt-6 flex items-center gap-2 text-red-500 hover:text-red-600 text-sm font-medium">
+        <button onClick={() => { sessionStorage.removeItem('portal_colaborador_auth'); window.location.href = createPageUrl('PortalSelect'); }} className="mt-6 flex items-center gap-2 text-red-500 hover:text-red-600 text-sm font-medium">
           <LogOut className="h-4 w-4" /> Sair
         </button>
       </div>
@@ -82,7 +82,7 @@ export default function ColaboradorPortal() {
             <p className="text-xs text-slate-500">Portal do Colaborador</p>
           </div>
         </div>
-        <button onClick={() => base44.auth.logout()} className="flex items-center gap-2 text-slate-500 hover:text-red-500 text-sm transition-colors">
+        <button onClick={() => { sessionStorage.removeItem('portal_colaborador_auth'); window.location.href = createPageUrl('PortalSelect'); }} className="flex items-center gap-2 text-slate-500 hover:text-red-500 text-sm transition-colors">
           <LogOut className="h-4 w-4" /> Sair
         </button>
       </header>
