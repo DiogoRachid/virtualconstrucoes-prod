@@ -12,27 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Tabela INSS 2024 (simplificada)
-function calcINSS(salario) {
-  if (salario <= 1412) return salario * 0.075;
-  if (salario <= 2666.68) return salario * 0.09;
-  if (salario <= 4000.03) return salario * 0.12;
-  if (salario <= 7786.02) return salario * 0.14;
-  return 908.85; // teto
-}
-
-// Tabela IRRF 2024
-function calcIRRF(baseCalculo) {
-  if (baseCalculo <= 2259.20) return 0;
-  if (baseCalculo <= 2826.65) return baseCalculo * 0.075 - 169.44;
-  if (baseCalculo <= 3751.05) return baseCalculo * 0.15 - 381.44;
-  if (baseCalculo <= 4664.68) return baseCalculo * 0.225 - 662.77;
-  return baseCalculo * 0.275 - 896.00;
-}
+// Apenas CLT tem descontos trabalhistas
+const isCLT = (vinculo) => vinculo === 'clt';
 
 const EMPTY_ROW = (emp) => ({
   colaborador_id: emp.id,
   colaborador_nome: emp.nome_completo,
+  _tipo_vinculo: emp.tipo_vinculo || 'clt',
   obra_id: emp.obra_id || '',
   obra_nome: emp.obra_nome || '',
   dias_trabalhados: 22,
@@ -67,17 +53,15 @@ const EMPTY_ROW = (emp) => ({
 
 function calcTotais(row) {
   const tipo_salario = row._tipo_salario || 'mensal';
+  const clt = isCLT(row._tipo_vinculo);
   const salarioBase = parseFloat(row.salario_base) || 0;
   const diasTrab = parseFloat(row.dias_trabalhados) || 0;
   const faltas = parseFloat(row.faltas) || 0;
   const horasExtras50 = parseFloat(row.horas_extras_50) || 0;
   const horasExtras100 = parseFloat(row.horas_extras_100) || 0;
 
-  // Valor hora
   const valorHora = tipo_salario === 'hora' ? salarioBase : salarioBase / 220;
   const salarioProporcional = tipo_salario === 'hora' ? salarioBase * (diasTrab * 8) : salarioBase;
-
-  // Horas extras
   const valorHE = (horasExtras50 * valorHora * 1.5) + (horasExtras100 * valorHora * 2);
 
   const proventos = salarioProporcional
@@ -95,16 +79,16 @@ function calcTotais(row) {
     + (parseFloat(row.insalubridade) || 0)
     + (parseFloat(row.periculosidade) || 0);
 
-  const inss = parseFloat(row.inss) !== 0 ? parseFloat(row.inss) || 0 : Math.round(calcINSS(valorBruto) * 100) / 100;
-  const baseIRRF = valorBruto - inss;
-  const irrf = parseFloat(row.irrf) !== 0 ? parseFloat(row.irrf) || 0 : Math.round(Math.max(0, calcIRRF(baseIRRF)) * 100) / 100;
-  const fgts = parseFloat(row.fgts) !== 0 ? parseFloat(row.fgts) || 0 : Math.round(valorBruto * 0.08 * 100) / 100;
+  // Descontos trabalhistas apenas para CLT, e sempre manuais
+  const inss = clt ? (parseFloat(row.inss) || 0) : 0;
+  const irrf = clt ? (parseFloat(row.irrf) || 0) : 0;
+  const fgts = clt ? (parseFloat(row.fgts) || 0) : 0;
+  const descontoFaltas = clt && faltas > 0 ? (salarioBase / 30) * faltas : 0;
 
-  const descontoFaltas = faltas > 0 ? (salarioBase / 30) * faltas : 0;
   const totalDescontos = inss + irrf
-    + (parseFloat(row.desconto_vt) || 0)
+    + (clt ? (parseFloat(row.desconto_vt) || 0) : 0)
     + descontoFaltas
-    + (parseFloat(row.desconto_atrasos) || 0)
+    + (clt ? (parseFloat(row.desconto_atrasos) || 0) : 0)
     + (parseFloat(row.adiantamento) || 0)
     + (parseFloat(row.outros_descontos) || 0);
 
@@ -150,7 +134,10 @@ export default function PayrollForm() {
 
   useEffect(() => {
     if (employees.length && rows.length === 0 && !payrollId) {
-      const empsToLoad = selectedEmpId === 'all' ? employees : employees.filter(e => e.id === selectedEmpId);
+      // Excluir terceirizados da lista em lote; no filtro individual todos aparecem
+      const empsToLoad = selectedEmpId === 'all'
+        ? employees.filter(e => e.tipo_vinculo !== 'terceirizado')
+        : employees.filter(e => e.id === selectedEmpId);
       setRows(empsToLoad.map(emp => ({ ...EMPTY_ROW(emp), _tipo_salario: emp.tipo_salario || 'mensal' })));
     }
   }, [employees]);
@@ -275,8 +262,8 @@ export default function PayrollForm() {
               }}>
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os colaboradores</SelectItem>
-                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.nome_completo}</SelectItem>)}
+                  <SelectItem value="all">CLT / PJ (exceto terceirizados)</SelectItem>
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.nome_completo} {e.tipo_vinculo === 'terceirizado' ? '(Terceirizado)' : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -287,12 +274,16 @@ export default function PayrollForm() {
       {/* Planilha de holerites */}
       {rows.map((row, idx) => {
         const calcs = calcTotais(row);
+        const clt = isCLT(row._tipo_vinculo);
         return (
-          <Card key={idx} className="border-l-4 border-l-blue-500">
+          <Card key={idx} className={`border-l-4 ${clt ? 'border-l-blue-500' : 'border-l-orange-400'}`}>
             <CardHeader className="py-3 px-5 bg-slate-50 border-b flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base">{row.colaborador_nome}</CardTitle>
-                <p className="text-xs text-slate-500">Salário base: {fmtBRL(row.salario_base)} {row._tipo_salario === 'hora' ? '/h' : '/mês'}</p>
+                <p className="text-xs text-slate-500">
+                  Salário base: {fmtBRL(row.salario_base)} {row._tipo_salario === 'hora' ? '/h' : '/mês'}
+                  {!clt && <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-semibold uppercase">{row._tipo_vinculo || 'pj'} — sem descontos trabalhistas</span>}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">Valor Líquido</p>
@@ -342,40 +333,48 @@ export default function PayrollForm() {
                 </div>
               </div>
 
-              {/* Descontos */}
-              <div>
-                <p className="text-xs font-bold text-red-700 uppercase mb-2 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span>Descontos
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  <F label="INSS (auto)">
-                    <Input type="number" step="0.01" value={row.inss !== 0 ? row.inss : calcs.inss}
-                      onChange={e => setRow(idx, 'inss', parseFloat(e.target.value) || 0)}
-                      className="h-7 text-xs text-right bg-red-50" />
-                  </F>
-                  <F label="IRRF (auto)">
-                    <Input type="number" step="0.01" value={row.irrf !== 0 ? row.irrf : calcs.irrf}
-                      onChange={e => setRow(idx, 'irrf', parseFloat(e.target.value) || 0)}
-                      className="h-7 text-xs text-right bg-red-50" />
-                  </F>
-                  <F label="FGTS (auto)">
-                    <Input type="number" step="0.01" value={row.fgts !== 0 ? row.fgts : calcs.fgts}
-                      onChange={e => setRow(idx, 'fgts', parseFloat(e.target.value) || 0)}
-                      className="h-7 text-xs text-right bg-orange-50" />
-                  </F>
-                  {numInput(idx, 'desconto_vt', 'Desc. Vale Transporte (6%)', 'bg-red-50')}
-                  <F label="Desc. Faltas (auto)"><p className="text-xs font-semibold h-7 flex items-center px-2 bg-red-50 rounded border text-red-700">{fmtBRL(calcs.desconto_faltas)}</p></F>
-                  {numInput(idx, 'desconto_atrasos', 'Desc. Atrasos', 'bg-red-50')}
-                  {numInput(idx, 'adiantamento', 'Adiantamento', 'bg-red-50')}
-                  {numInput(idx, 'outros_descontos', 'Outros Descontos', 'bg-red-50')}
-                  <F label="Descrição Outros">
-                    <Input value={row.outros_descontos_desc || ''} onChange={e => setRow(idx, 'outros_descontos_desc', e.target.value)} className="h-7 text-xs" placeholder="Descreva..." />
-                  </F>
+              {/* Descontos — apenas CLT */}
+              {clt ? (
+                <div>
+                  <p className="text-xs font-bold text-red-700 uppercase mb-2 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span>Descontos
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <F label="INSS">
+                      <Input type="number" step="0.01" value={row.inss || ''}
+                        onChange={e => setRow(idx, 'inss', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs text-right bg-red-50" placeholder="0,00" />
+                    </F>
+                    <F label="IRRF">
+                      <Input type="number" step="0.01" value={row.irrf || ''}
+                        onChange={e => setRow(idx, 'irrf', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs text-right bg-red-50" placeholder="0,00" />
+                    </F>
+                    <F label="FGTS">
+                      <Input type="number" step="0.01" value={row.fgts || ''}
+                        onChange={e => setRow(idx, 'fgts', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs text-right bg-orange-50" placeholder="0,00" />
+                    </F>
+                    {numInput(idx, 'desconto_vt', 'Desc. Vale Transp. (6%)', 'bg-red-50')}
+                    <F label="Desc. Faltas (calc.)"><p className="text-xs font-semibold h-7 flex items-center px-2 bg-red-50 rounded border text-red-700">{fmtBRL(calcs.desconto_faltas)}</p></F>
+                    {numInput(idx, 'desconto_atrasos', 'Desc. Atrasos', 'bg-red-50')}
+                    {numInput(idx, 'adiantamento', 'Adiantamento', 'bg-red-50')}
+                    {numInput(idx, 'outros_descontos', 'Outros Descontos', 'bg-red-50')}
+                    <F label="Descrição Outros">
+                      <Input value={row.outros_descontos_desc || ''} onChange={e => setRow(idx, 'outros_descontos_desc', e.target.value)} className="h-7 text-xs" placeholder="Descreva..." />
+                    </F>
+                  </div>
+                  <div className="mt-2 text-right">
+                    <span className="text-sm font-bold text-red-700">Total Descontos: {fmtBRL(calcs.total_descontos)}</span>
+                  </div>
                 </div>
-                <div className="mt-2 text-right">
-                  <span className="text-sm font-bold text-red-700">Total Descontos: {fmtBRL(calcs.total_descontos)}</span>
+              ) : (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm text-orange-700">
+                  Sem descontos trabalhistas — valor bruto = valor líquido a pagar.
+                  {numInput(idx, 'adiantamento', 'Adiantamento')}
+                  {numInput(idx, 'outros_descontos', 'Outros Descontos')}
                 </div>
-              </div>
+              )}
 
               {/* Resumo */}
               <div className="bg-slate-50 rounded-lg p-3 grid grid-cols-3 gap-4 text-sm border">
