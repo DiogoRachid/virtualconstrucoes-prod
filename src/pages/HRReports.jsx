@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '@/utils';
-import { FileText, Printer, Filter, Users, Clock, FileSignature, Building2, DollarSign } from 'lucide-react';
+import { FileText, Printer, Filter, Users, Clock, FileSignature, Building2, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ export default function HRReports() {
     obra_id: 'all',
     equipe_id: 'all',
     funcao: '',
+    mes_referencia: moment().format('MM/YYYY'),
     periodo_inicio: moment().startOf('month').format('YYYY-MM-DD'),
     periodo_fim: moment().endOf('month').format('YYYY-MM-DD')
   });
@@ -58,6 +59,11 @@ export default function HRReports() {
   const { data: costCenters = [] } = useQuery({
     queryKey: ['costCenters'],
     queryFn: () => base44.entities.CostCenter.list()
+  });
+
+  const { data: payrolls = [] } = useQuery({
+    queryKey: ['payrolls'],
+    queryFn: () => base44.entities.Payroll.list()
   });
 
   const filteredEmployees = employees.filter(emp => {
@@ -320,6 +326,99 @@ export default function HRReports() {
           </div>
         );
 
+      case 'payroll': {
+        const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+        const filteredPayrolls = payrolls.filter(p => {
+          if (filters.mes_referencia && p.mes_referencia !== filters.mes_referencia) return false;
+          if (filters.obra_id !== 'all' && p.obra_id !== filters.obra_id) return false;
+          return true;
+        });
+        const totalBruto = filteredPayrolls.reduce((s, p) => s + (p.valor_bruto || 0), 0);
+        const totalInss = filteredPayrolls.reduce((s, p) => s + (p.inss || 0), 0);
+        const totalIrrf = filteredPayrolls.reduce((s, p) => s + (p.irrf || 0), 0);
+        const totalFgts = filteredPayrolls.reduce((s, p) => s + (p.fgts || 0), 0);
+        const totalVT = filteredPayrolls.reduce((s, p) => s + (p.vale_transporte || 0), 0);
+        const totalVC = filteredPayrolls.reduce((s, p) => s + (p.vale_compras || 0), 0);
+        const totalProventos = filteredPayrolls.reduce((s, p) => s + (p.total_proventos || 0), 0);
+        const totalDescontos = filteredPayrolls.reduce((s, p) => s + (p.total_descontos || 0), 0);
+        const totalLiquido = filteredPayrolls.reduce((s, p) => s + (p.valor_liquido || 0), 0);
+
+        return (
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Relatório de Folha de Pagamento — {filters.mes_referencia}</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-xs text-green-700 font-semibold">Total Proventos</p>
+                <p className="text-lg font-bold text-green-800">{fmtBRL(totalProventos)}</p>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-xs text-red-700 font-semibold">Total Descontos</p>
+                <p className="text-lg font-bold text-red-800">{fmtBRL(totalDescontos)}</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-700 font-semibold">Total Líquido</p>
+                <p className="text-lg font-bold text-blue-800">{fmtBRL(totalLiquido)}</p>
+              </div>
+              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-xs text-orange-700 font-semibold">FGTS (encargo)</p>
+                <p className="text-lg font-bold text-orange-800">{fmtBRL(totalFgts)}</p>
+              </div>
+            </div>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="p-2 border text-left">Colaborador</th>
+                  <th className="p-2 border text-left">Obra</th>
+                  <th className="p-2 border text-right">Sal. Base</th>
+                  <th className="p-2 border text-right">HE</th>
+                  <th className="p-2 border text-right">VT</th>
+                  <th className="p-2 border text-right">Vale Compras</th>
+                  <th className="p-2 border text-right bg-green-800">Prov.</th>
+                  <th className="p-2 border text-right">INSS</th>
+                  <th className="p-2 border text-right">IRRF</th>
+                  <th className="p-2 border text-right">Faltas</th>
+                  <th className="p-2 border text-right bg-red-800">Desc.</th>
+                  <th className="p-2 border text-right bg-blue-800">Líquido</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPayrolls.map((p, i) => (
+                  <tr key={p.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <td className="p-2 border font-medium">{p.colaborador_nome}</td>
+                    <td className="p-2 border text-slate-500">{p.obra_nome || '-'}</td>
+                    <td className="p-2 border text-right">{fmtBRL(p.salario_base)}</td>
+                    <td className="p-2 border text-right">{fmtBRL(p.valor_horas_extras)}</td>
+                    <td className="p-2 border text-right">{fmtBRL(p.vale_transporte)}</td>
+                    <td className="p-2 border text-right">{fmtBRL(p.vale_compras)}</td>
+                    <td className="p-2 border text-right font-semibold text-green-700 bg-green-50">{fmtBRL(p.total_proventos)}</td>
+                    <td className="p-2 border text-right text-red-600">{fmtBRL(p.inss)}</td>
+                    <td className="p-2 border text-right text-red-600">{fmtBRL(p.irrf)}</td>
+                    <td className="p-2 border text-right text-red-600">{fmtBRL(p.desconto_faltas)}</td>
+                    <td className="p-2 border text-right font-semibold text-red-700 bg-red-50">{fmtBRL(p.total_descontos)}</td>
+                    <td className="p-2 border text-right font-bold text-blue-700 bg-blue-50">{fmtBRL(p.valor_liquido)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-200 font-bold">
+                <tr>
+                  <td colSpan={2} className="p-2 border">TOTAL</td>
+                  <td className="p-2 border text-right">{fmtBRL(filteredPayrolls.reduce((s,p)=>s+(p.salario_base||0),0))}</td>
+                  <td className="p-2 border text-right">{fmtBRL(filteredPayrolls.reduce((s,p)=>s+(p.valor_horas_extras||0),0))}</td>
+                  <td className="p-2 border text-right">{fmtBRL(totalVT)}</td>
+                  <td className="p-2 border text-right">{fmtBRL(totalVC)}</td>
+                  <td className="p-2 border text-right text-green-800">{fmtBRL(totalProventos)}</td>
+                  <td className="p-2 border text-right">{fmtBRL(totalInss)}</td>
+                  <td className="p-2 border text-right">{fmtBRL(totalIrrf)}</td>
+                  <td className="p-2 border text-right">{fmtBRL(filteredPayrolls.reduce((s,p)=>s+(p.desconto_faltas||0),0))}</td>
+                  <td className="p-2 border text-right text-red-800">{fmtBRL(totalDescontos)}</td>
+                  <td className="p-2 border text-right text-blue-800">{fmtBRL(totalLiquido)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        );
+      }
+
       default:
         return null;
     }
@@ -352,6 +451,7 @@ export default function HRReports() {
                 <SelectItem value="contracts">Contratos</SelectItem>
                 <SelectItem value="teams">Equipe por Obra</SelectItem>
                 <SelectItem value="costs">Custos de Pessoal</SelectItem>
+                <SelectItem value="payroll">Folha de Pagamento</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -395,6 +495,14 @@ export default function HRReports() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Mês Referência (MM/AAAA)</Label>
+            <Input
+              value={filters.mes_referencia}
+              onChange={e => setFilters(prev => ({ ...prev, mes_referencia: e.target.value }))}
+              placeholder="Ex: 03/2026"
+            />
           </div>
           {(reportType === 'frequency') && (
             <>
