@@ -457,6 +457,16 @@ export default function AccountsPayable() {
                 Dar Baixa
               </DropdownMenuItem>
             )}
+            {row.status === 'pago' && (
+              <DropdownMenuItem onClick={() => {
+                setEditPaymentDate(row.data_pagamento || format(new Date(), 'yyyy-MM-dd'));
+                setEditPaymentBankAccountId(row.conta_bancaria_id || '');
+                setEditPaymentDialog(row);
+              }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar Pagamento
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link to={createPageUrl(`AccountPayableForm?id=${row.id}`)} className="flex items-center gap-2">
                 <Pencil className="h-4 w-4" />

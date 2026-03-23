@@ -417,6 +417,16 @@ export default function AccountsReceivable() {
                 </DropdownMenuItem>
               </>
             )}
+            {row.status === 'recebido' && (
+              <DropdownMenuItem onClick={() => {
+                setEditReceiveDate(row.data_recebimento || format(new Date(), 'yyyy-MM-dd'));
+                setEditReceiveBankAccountId(row.conta_bancaria_id || '');
+                setEditReceiveDialog(row);
+              }}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar Recebimento
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link to={createPageUrl(`AccountReceivableForm?id=${row.id}`)} className="flex items-center gap-2">
                 <Pencil className="h-4 w-4" />
