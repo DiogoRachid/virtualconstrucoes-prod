@@ -140,6 +140,9 @@ const menuItems = [
   }
 ];
 
+const DEFAULT_LOGO_CLARA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
+const DEFAULT_LOGO_ESCURA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png";
+
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -150,6 +153,7 @@ export default function Layout({ children, currentPageName }) {
   });
   const [expandedMenus, setExpandedMenus] = useState([]);
   const [user, setUser] = useState(null);
+  const [companySettings, setCompanySettings] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('darkMode') === 'true';
@@ -173,12 +177,18 @@ export default function Layout({ children, currentPageName }) {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    const loadUser = async () => {
+    const loadData = async () => {
       const userData = await base44.auth.me();
       setUser(userData);
+      const settings = await base44.entities.CompanySettings.list();
+      if (settings.length > 0) setCompanySettings(settings[0]);
     };
-    loadUser();
+    loadData();
   }, []);
+
+  const logoClara = companySettings?.logo_url_clara || DEFAULT_LOGO_CLARA;
+  const logoEscura = companySettings?.logo_url_escura || DEFAULT_LOGO_ESCURA;
+  const nomeEmpresa = companySettings?.nome_empresa || 'Virtual Construções';
 
   const toggleSubmenu = (title) => {
     setExpandedMenus(prev => 
