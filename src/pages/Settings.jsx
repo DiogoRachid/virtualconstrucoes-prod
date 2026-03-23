@@ -462,6 +462,20 @@ export default function Settings() {
           </TabsContent>
         )}
       </Tabs>
+    {/* Dialog configuração de módulos */}
+    <Dialog open={!!modulesDialogUser} onOpenChange={() => setModulesDialogUser(null)}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Acesso de {modulesDialogUser?.full_name}</DialogTitle>
+        </DialogHeader>
+        {modulesDialogUser && (
+          <UserModulesConfig
+            user={modulesDialogUser}
+            onClose={() => setModulesDialogUser(null)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
