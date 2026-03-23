@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import {
   HardHat, Building2, Award, Users, Phone, Mail, MapPin, Globe,
   ChevronDown, Menu, X, ArrowRight, CheckCircle2, Shield, BarChart3,
-  Wrench, Home, Landmark, FileText
+  Wrench, Home, Landmark, FileText, MessageCircle
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
