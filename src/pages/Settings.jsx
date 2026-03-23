@@ -463,6 +463,12 @@ export default function Settings() {
             </Card>
           </TabsContent>
         )}
+        {/* ABA PORTAIS */}
+        {isAdmin && (
+          <TabsContent value="portais">
+            <PortalUsersConfig />
+          </TabsContent>
+        )}
       </Tabs>
     {/* Dialog configuração de módulos */}
     <Dialog open={!!modulesDialogUser} onOpenChange={() => setModulesDialogUser(null)}>
