@@ -213,12 +213,12 @@ export default function Layout({ children, currentPageName }) {
       <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
       
       {/* Mobile Header */}
-      <header className={`lg:hidden fixed top-0 left-0 right-0 h-16 border-b z-50 flex items-center justify-between px-4 transition-colors ${darkMode ? 'bg-[#1e3a5f] border-[#2d4a6f]' : 'bg-white border-slate-200'}`}>
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 border-b z-50 flex items-center justify-between px-4 transition-colors bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
         <Button 
           variant="ghost" 
           size="icon"
           onClick={() => setSidebarOpen(true)}
-          className={darkMode ? 'text-slate-200' : ''}
+          className="text-slate-700 dark:text-slate-200"
         >
           <Menu className="h-6 w-6" />
         </Button>
@@ -234,7 +234,7 @@ export default function Layout({ children, currentPageName }) {
           variant="ghost"
           size="icon"
           onClick={() => setDarkMode(!darkMode)}
-          className={darkMode ? 'text-slate-200' : ''}
+          className="text-slate-700 dark:text-slate-200"
         >
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
