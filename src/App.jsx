@@ -14,6 +14,7 @@ import PortalSelect from './pages/PortalSelect';
 import ColaboradorPortal from './pages/ColaboradorPortal';
 import AdminLogin from './pages/AdminLogin';
 import ColaboradorLogin from './pages/ColaboradorLogin';
+import ProtectedAdminRoute from '@/lib/ProtectedAdminRoute';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
