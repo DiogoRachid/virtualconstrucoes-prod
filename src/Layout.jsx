@@ -33,6 +33,7 @@ import {
                         UploadCloud,
                         History,
                         DollarSign,
+                        DatabaseBackup,
                         Ruler,
                         ChevronLeft,
                         ChevronRight,
@@ -136,6 +137,11 @@ const menuItems = [
     title: 'Versões',
     icon: History,
     page: 'VersionHistory'
+  },
+  {
+    title: 'Backup',
+    icon: DatabaseBackup,
+    page: 'Backup'
   }
 ];
 
