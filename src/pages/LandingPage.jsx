@@ -365,21 +365,28 @@ export default function LandingPage() {
             <span className="text-blue-600 font-semibold text-sm uppercase tracking-wider">Contato</span>
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mt-2">Fale Conosco</h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-4 gap-6">
             <a href={`mailto:${emailEmpresa}`} className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow border border-slate-100 group">
               <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
                 <Mail className="h-6 w-6 text-blue-600" />
               </div>
               <h3 className="font-semibold text-slate-900 mb-1">E-mail</h3>
-              <p className="text-blue-600 text-sm">{emailEmpresa}</p>
+              <p className="text-blue-600 text-sm break-all">{emailEmpresa}</p>
             </a>
-            <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center border border-slate-100">
-              <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
+            <a href={`tel:${whatsappNum}`} className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow border border-slate-100 group">
+              <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
                 <Phone className="h-6 w-6 text-blue-600" />
               </div>
               <h3 className="font-semibold text-slate-900 mb-1">Telefone</h3>
               <p className="text-slate-600 text-sm">{telefone}</p>
-            </div>
+            </a>
+            <a href={`https://wa.me/55${whatsappNum}`} target="_blank" rel="noopener noreferrer" className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow border border-slate-100 group">
+              <div className="h-12 w-12 bg-green-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors">
+                <MessageCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-slate-900 mb-1">WhatsApp</h3>
+              <p className="text-green-600 text-sm">{telefone}</p>
+            </a>
             <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center text-center border border-slate-100">
               <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
                 <MapPin className="h-6 w-6 text-blue-600" />
