@@ -20,10 +20,9 @@ export default function AdminLogin() {
 
   useEffect(() => {
     base44.entities.CompanySettings.list().then(r => { if (r.length > 0) setCompanySettings(r[0]); });
-    // Se já autenticado como admin no sistema base44, redireciona direto
-    base44.auth.me().then(u => {
-      if (u?.role === 'admin') navigate(createPageUrl('Dashboard'));
-    }).catch(() => {});
+    // Se já tem sessão ativa, redireciona direto
+    const session = sessionStorage.getItem('portal_admin_auth');
+    if (session) navigate(createPageUrl('Dashboard'), { replace: true });
   }, []);
 
   const logoUrl = companySettings?.logo_url_escura || LOGO_ESCURA;
