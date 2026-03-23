@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings as SettingsIcon, User, Shield, Building2, Loader2, Check, Upload, ImageIcon } from 'lucide-react';
+import { Settings as SettingsIcon, User, Shield, Building2, Loader2, Check, Upload, ImageIcon, HardHat } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import UserModulesConfig from '@/components/settings/UserModulesConfig';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +46,7 @@ const PERMISSION_DESCRIPTIONS = {
 
 export default function Settings() {
   const [currentUser, setCurrentUser] = useState(null);
+  const [modulesDialogUser, setModulesDialogUser] = useState(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
