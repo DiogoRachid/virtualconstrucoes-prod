@@ -187,6 +187,7 @@ export default function Settings() {
           {isAdmin && <TabsTrigger value="empresa">Empresa</TabsTrigger>}
           <TabsTrigger value="profile">Meu Perfil</TabsTrigger>
           {isAdmin && <TabsTrigger value="permissions">Permissões</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="portais">Usuários dos Portais</TabsTrigger>}
         </TabsList>
 
         {/* ABA EMPRESA */}
