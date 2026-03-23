@@ -98,8 +98,8 @@ const obras = [
 const numeros = [
   { valor: "25+", label: "Anos de Experiência" },
   { valor: "60+", label: "Obras Entregues" },
-  { valor: "Londrina", label: "Sede – PR" },
-  { valor: "100%", label: "Compromisso com Qualidade" }
+  { valor: "Londrina/PR", label: "Sede" },
+  { valor: "100%", label: "Obras Públicas" }
 ];
 
 export default function LandingPage() {
@@ -190,14 +190,14 @@ export default function LandingPage() {
         </div>
         <div className="relative text-center text-white px-4 max-w-4xl mx-auto">
           <div className="inline-flex items-center gap-2 bg-blue-600/30 border border-blue-400/40 rounded-full px-4 py-2 text-sm mb-6 backdrop-blur">
-            <HardHat className="h-4 w-4" /> Construção Civil em Londrina/PR
+            <Shield className="h-4 w-4" /> Especialistas em Obras Públicas — Londrina/PR
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Construindo Sonhos<br />
-            <span className="text-blue-400">com Qualidade</span> e Solidez
+            Construindo o Brasil<br />
+            <span className="text-blue-400">com Qualidade</span> e Transparência
           </h1>
           <p className="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-10">
-            Há mais de duas décadas, a Virtual Construções Civis desenvolve empreendimentos residenciais e institucionais em Londrina e região com excelência técnica e compromisso com o cliente.
+            Há mais de duas décadas, a Virtual Construções Civis executa obras públicas em Londrina e região — universidades, hospitais, infraestrutura e equipamentos urbanos — com excelência técnica e total conformidade legal.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button onClick={() => scrollTo('obras')}
@@ -236,16 +236,16 @@ export default function LandingPage() {
             <div>
               <span className="text-blue-600 font-semibold text-sm uppercase tracking-wider">Sobre a Empresa</span>
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mt-2 mb-6">
-                Tradição e Competência em Construção Civil
+                Tradição e Competência em Obras Públicas
               </h2>
               <p className="text-slate-600 leading-relaxed mb-4">
-                A <strong>Virtual Construções Civis Ltda</strong> é uma construtora e incorporadora sediada em <strong>Londrina/PR</strong>, com vasta experiência em empreendimentos residenciais, comerciais e obras institucionais.
+                A <strong>Virtual Construções Civis Ltda</strong> é uma empresa especializada na execução de <strong>obras públicas</strong>, sediada em <strong>Londrina/PR</strong>, com mais de 25 anos de atuação no mercado de construção civil.
               </p>
               <p className="text-slate-600 leading-relaxed mb-4">
-                Ao longo de nossa trajetória, construímos condomínios residenciais de alto padrão, blocos acadêmicos para a UEL, instalações hospitalares e edifícios para entidades profissionais do Norte do Paraná.
+                Nossa trajetória foi construída atendendo órgãos públicos — como a <strong>Universidade Estadual de Londrina (UEL)</strong> e o <strong>Hospital Universitário (HU)</strong> — além de prefeituras e autarquias do Norte do Paraná e região.
               </p>
               <p className="text-slate-600 leading-relaxed mb-6">
-                Contamos com equipe técnica qualificada, maquinário próprio e processos de gestão modernos — incluindo sistema ERP proprietário para controle total das obras, orçamentos, planejamento e equipes.
+                Participamos ativamente de licitações públicas, com regularidade fiscal e técnica plena, garantindo a entrega de obras dentro do prazo, do orçamento e com máxima qualidade.
               </p>
               <div className="space-y-3">
                 {[
