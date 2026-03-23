@@ -13,85 +13,85 @@ const LOGO_CLARA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/p
 
 const servicos = [
   {
-    icon: Home,
-    titulo: "Incorporação Residencial",
-    desc: "Desenvolvimento e construção de condomínios residenciais modernos em Londrina e região, com alto padrão de acabamento.",
+    icon: Building2,
+    titulo: "Edificações Públicas",
+    desc: "Construção de hospitais universitários, blocos acadêmicos, creches, escolas, delegacias e demais equipamentos públicos.",
     color: "bg-blue-50 text-blue-600"
   },
   {
-    icon: Building2,
-    titulo: "Edificações Comerciais",
-    desc: "Construção de edifícios comerciais, salas e escritórios, atendendo às necessidades do mercado corporativo londrinense.",
-    color: "bg-emerald-50 text-emerald-600"
-  },
-  {
     icon: Landmark,
-    titulo: "Obras Institucionais",
-    desc: "Execução de blocos e edificações para universidades, hospitais universitários e entidades públicas e privadas.",
+    titulo: "Obras para Universidades",
+    desc: "Execução de blocos de salas de aula, laboratórios e instalações para universidades públicas como a UEL e demais IES.",
     color: "bg-violet-50 text-violet-600"
   },
   {
     icon: Wrench,
-    titulo: "Reforma e Requalificação",
-    desc: "Reformas e modernização de edificações existentes com qualidade técnica e conformidade com as normas vigentes.",
+    titulo: "Infraestrutura e Saneamento",
+    desc: "Pavimentação, drenagem, redes de água e esgoto e demais obras de infraestrutura para municípios e órgãos estaduais.",
     color: "bg-orange-50 text-orange-600"
   },
   {
     icon: HardHat,
-    titulo: "Gerenciamento de Obras",
-    desc: "Gestão técnica e administrativa de obras, desde a concepção do projeto até a entrega das chaves ao cliente.",
+    titulo: "Reforma de Edificações Públicas",
+    desc: "Reformas e modernização de prédios públicos com rigor técnico e conformidade com normas e legislação vigentes.",
     color: "bg-cyan-50 text-cyan-600"
+  },
+  {
+    icon: Home,
+    titulo: "Habitação de Interesse Social",
+    desc: "Desenvolvimento de conjuntos habitacionais e empreendimentos residenciais vinculados a programas governamentais.",
+    color: "bg-emerald-50 text-emerald-600"
   },
   {
     icon: FileText,
     titulo: "Projetos e Consultoria",
-    desc: "Elaboração de projetos executivos, laudos técnicos, ART e suporte em todas as fases da construção.",
+    desc: "Elaboração de projetos executivos, laudos técnicos, ART e suporte em todas as fases de licitação e execução.",
     color: "bg-rose-50 text-rose-600"
   }
 ];
 
 const obras = [
   {
-    nome: "Residencial Villaggio Arvoredo",
+    nome: "Hospital Universitário (HU/UEL)",
     local: "Londrina – PR",
-    tipo: "Lançamento Residencial",
-    status: "Lançamento",
-    img: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80"
-  },
-  {
-    nome: "Bloco de Salas de Aula CCS/UEL",
-    local: "Londrina – PR",
-    tipo: "Obra Institucional",
-    status: "Em Andamento",
-    img: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&q=80"
-  },
-  {
-    nome: "Hospital Universitário / HU",
-    local: "Londrina – PR",
-    tipo: "Obra Institucional",
+    tipo: "Obra Pública – Saúde",
     status: "Entregue",
     img: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=600&q=80"
   },
   {
+    nome: "Bloco de Salas de Aula CCS/UEL",
+    local: "Londrina – PR",
+    tipo: "Obra Pública – Educação",
+    status: "Em Andamento",
+    img: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&q=80"
+  },
+  {
     nome: "Assoc. Odontológica do Norte PR",
     local: "Londrina – PR",
-    tipo: "Obra Comercial / Institucional",
+    tipo: "Obra Pública – Saúde",
     status: "Entregue",
     img: "https://images.unsplash.com/photo-1524230572899-a752b3835840?w=600&q=80"
   },
   {
-    nome: "Edifício Residencial Alto Padrão",
+    nome: "Residencial Villaggio Arvoredo",
     local: "Londrina – PR",
-    tipo: "Residencial",
+    tipo: "Residencial (Exceção)",
     status: "Entregue",
-    img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80"
+    img: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80"
   },
   {
-    nome: "Conjunto Comercial Centro",
-    local: "Londrina – PR",
-    tipo: "Comercial",
+    nome: "Edificação Pública Municipal",
+    local: "Região Norte – PR",
+    tipo: "Obra Pública",
     status: "Entregue",
-    img: "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80"
+    img: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=600&q=80"
+  },
+  {
+    nome: "Infraestrutura Urbana",
+    local: "Londrina – PR",
+    tipo: "Obra Pública – Infraestrutura",
+    status: "Entregue",
+    img: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80"
   }
 ];
 
