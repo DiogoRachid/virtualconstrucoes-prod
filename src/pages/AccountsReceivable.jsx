@@ -638,6 +638,55 @@ export default function AccountsReceivable() {
         description="Tem certeza que deseja excluir esta conta?"
       />
 
+      {/* Dialog de edição de recebimento */}
+      <Dialog open={!!editReceiveDialog} onOpenChange={() => setEditReceiveDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Recebimento</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-slate-600 text-sm">
+              Editando recebimento de <strong>{editReceiveDialog?.descricao}</strong> —{' '}
+              <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(editReceiveDialog?.valor || 0))}</strong>
+            </p>
+            <div>
+              <Label>Data do Recebimento</Label>
+              <Input
+                type="date"
+                value={editReceiveDate}
+                onChange={(e) => setEditReceiveDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label>Conta Bancária (Crédito)</Label>
+              <select
+                value={editReceiveBankAccountId}
+                onChange={(e) => setEditReceiveBankAccountId(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Selecione a conta bancária</option>
+                {bankAccounts.map(ba => (
+                  <option key={ba.id} value={ba.id}>
+                    {ba.nome} - Saldo: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ba.saldo_atual || 0)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditReceiveDialog(null)}>Cancelar</Button>
+            <Button
+              onClick={() => editReceiveMutation.mutate({ id: editReceiveDialog.id, date: editReceiveDate, bankAccountId: editReceiveBankAccountId })}
+              disabled={editReceiveMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de recebimento */}
       <Dialog open={!!receiveDialog} onOpenChange={() => setReceiveDialog(null)}>
         <DialogContent>

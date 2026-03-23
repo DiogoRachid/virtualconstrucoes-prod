@@ -766,6 +766,56 @@ export default function AccountsPayable() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog de edição de pagamento */}
+      <Dialog open={!!editPaymentDialog} onOpenChange={() => setEditPaymentDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-slate-600 text-sm">
+              Editando pagamento de <strong>{editPaymentDialog?.descricao}</strong> —{' '}
+              <strong>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(editPaymentDialog?.valor || 0))}</strong>
+            </p>
+            <div>
+              <Label>Data do Pagamento</Label>
+              <Input
+                type="date"
+                value={editPaymentDate}
+                onChange={(e) => setEditPaymentDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label>Conta Bancária (Débito)</Label>
+              <select
+                value={editPaymentBankAccountId}
+                onChange={(e) => setEditPaymentBankAccountId(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Selecione a conta bancária</option>
+                {bankAccounts.map(ba => (
+                  <option key={ba.id} value={ba.id}>
+                    {ba.nome} - Saldo: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ba.saldo_atual || 0)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPaymentDialog(null)}>Cancelar</Button>
+            <Button
+              onClick={() => editPaymentMutation.mutate({ id: editPaymentDialog.id, date: editPaymentDate, bankAccountId: editPaymentBankAccountId })}
+              disabled={editPaymentMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {editPaymentMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de baixa em lote */}
       <Dialog open={batchPaymentDialog} onOpenChange={setBatchPaymentDialog}>
         <DialogContent>
