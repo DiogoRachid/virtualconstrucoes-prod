@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpCircle, MoreHorizontal, Pencil, Trash2, AlertTriangle, CheckCircle, Send, CalendarCheck } from 'lucide-react';
+import { ArrowUpCircle, MoreHorizontal, Pencil, Trash2, AlertTriangle, CheckCircle, Send, CalendarCheck, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { format, isAfter, isBefore, addDays } from 'date-fns';
