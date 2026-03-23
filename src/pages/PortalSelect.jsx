@@ -26,7 +26,7 @@ export default function PortalSelect() {
       border: "border-blue-200 hover:border-blue-400",
       badge: "Acesso Total",
       badgeColor: "bg-blue-100 text-blue-700",
-      href: createPageUrl('Dashboard')
+      href: createPageUrl('AdminLogin')
     },
     {
       icon: HardHat,
@@ -36,7 +36,7 @@ export default function PortalSelect() {
       border: "border-orange-200 hover:border-orange-400",
       badge: "Acesso Restrito",
       badgeColor: "bg-orange-100 text-orange-700",
-      href: createPageUrl('ColaboradorPortal')
+      href: createPageUrl('ColaboradorLogin')
     }
   ];
 
