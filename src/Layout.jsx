@@ -40,7 +40,8 @@ import {
                         Calendar,
                         FileInput,
                         Truck,
-                        ShoppingCart
+                        ShoppingCart,
+                        Globe
                         } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
@@ -137,6 +138,11 @@ const menuItems = [
     title: 'Backup',
     icon: DatabaseBackup,
     page: 'Backup'
+  },
+  {
+    title: 'Site da Empresa',
+    icon: Globe,
+    page: 'LandingPage'
   }
 ];
 
