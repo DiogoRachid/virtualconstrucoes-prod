@@ -205,7 +205,9 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogout = () => {
-    base44.auth.logout();
+    sessionStorage.removeItem('portal_admin_auth');
+    sessionStorage.removeItem('portal_colaborador_auth');
+    window.location.href = '/PortalSelect';
   };
 
   const getPermissionLabel = (perm) => {
