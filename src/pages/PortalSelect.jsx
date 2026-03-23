@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Shield, HardHat, ArrowLeft, Lock } from 'lucide-react';
 
 const LOGO_CLARA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
+const LOGO_ESCURA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png";
 
 export default function PortalSelect() {
   const [companySettings, setCompanySettings] = useState(null);
@@ -13,7 +14,7 @@ export default function PortalSelect() {
     base44.entities.CompanySettings.list().then(r => { if (r.length > 0) setCompanySettings(r[0]); });
   }, []);
 
-  const logoUrl = companySettings?.logo_url_clara || LOGO_CLARA;
+  const logoUrl = companySettings?.logo_url_escura || LOGO_ESCURA;
   const nomeEmpresa = companySettings?.nome_empresa || 'Virtual Construções Civis';
 
   const portais = [
