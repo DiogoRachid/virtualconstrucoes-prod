@@ -193,6 +193,33 @@ export default function AccountsReceivable() {
     }
   });
 
+  const editReceiveMutation = useMutation({
+    mutationFn: async ({ id, date, bankAccountId }) => {
+      const selectedBankAccount = bankAccounts.find(ba => ba.id === bankAccountId);
+      await base44.entities.AccountReceivable.update(id, {
+        data_recebimento: date,
+        conta_bancaria_id: bankAccountId,
+        conta_bancaria_nome: selectedBankAccount?.nome
+      });
+      // Atualizar transação vinculada
+      const linkedTransactions = await base44.entities.Transaction.filter({ conta_receber_id: id });
+      for (const t of linkedTransactions) {
+        await base44.entities.Transaction.update(t.id, {
+          data: date,
+          conta_bancaria_id: bankAccountId,
+          conta_bancaria_nome: selectedBankAccount?.nome
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accountsReceivable'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      toast.success('Recebimento atualizado');
+      setEditReceiveDialog(null);
+    },
+    onError: () => toast.error('Erro ao atualizar recebimento')
+  });
+
   const sendReminder = async (account) => {
     // Simular envio de lembrete
     toast.success(`Lembrete enviado para ${account.cliente_nome || 'cliente'}`);
