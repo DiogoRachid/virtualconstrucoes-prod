@@ -216,6 +216,7 @@ export default function Settings() {
       <Tabs defaultValue="empresa" className="space-y-6">
         <TabsList>
           {isAdmin && <TabsTrigger value="empresa">Empresa</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="site">Site</TabsTrigger>}
           <TabsTrigger value="profile">Meu Perfil</TabsTrigger>
           {isAdmin && <TabsTrigger value="permissions">Permissões</TabsTrigger>}
           {isAdmin && <TabsTrigger value="portais">Usuários dos Portais</TabsTrigger>}
