@@ -166,7 +166,7 @@ export default function DiarioObraPage() {
     if (!selecionados.length) return;
     setExporting('lote');
     selecionados.sort((a, b) => a.data.localeCompare(b.data));
-    await exportDiariosLotePDF(selecionados, cs, currentUser, cs?.logo_url_clara);
+    await exportDiariosLotePDF(selecionados, cs, currentUser);
     setExporting(null);
   };
 
