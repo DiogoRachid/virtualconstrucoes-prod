@@ -180,6 +180,7 @@ function UserTable({ entity, title, description, showCargo, emptyData, showModul
                 <TableHead>E-mail</TableHead>
                 <TableHead>CPF</TableHead>
                 {showCargo && <TableHead>Cargo</TableHead>}
+                {showModulos && <TableHead>Módulos</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -191,6 +192,13 @@ function UserTable({ entity, title, description, showCargo, emptyData, showModul
                   <TableCell>{rec.email}</TableCell>
                   <TableCell>{rec.cpf}</TableCell>
                   {showCargo && <TableCell>{rec.cargo || '—'}</TableCell>}
+                  {showModulos && (
+                    <TableCell>
+                      <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        {(rec.modulos_habilitados || []).length} módulos
+                      </span>
+                    </TableCell>
+                  )}
                   <TableCell>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rec.status === 'ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                       {rec.status === 'ativo' ? 'Ativo' : 'Inativo'}
