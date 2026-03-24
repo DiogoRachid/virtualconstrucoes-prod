@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,7 @@ export default function ImportInvoiceMappingPage() {
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [inputs, setInputs] = useState([]);
 
   const params = new URLSearchParams(window.location.search);
   const invoiceId = params.get('id');
