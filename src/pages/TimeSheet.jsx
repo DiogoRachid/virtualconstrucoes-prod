@@ -237,7 +237,7 @@ export default function TimeSheet() {
               <div className="header text-center mb-4">
                 <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg" alt="Logo" className="h-14 mx-auto mb-2" />
                 <h1 className="text-xl font-bold">FOLHA DE PONTO</h1>
-                <p className="text-slate-500 text-sm">{new Date(selectedMonth + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                <p className="text-slate-500 text-sm">{(() => { const [y,m] = selectedMonth.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); })()}</p>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm bg-slate-50 p-3 rounded-lg">
