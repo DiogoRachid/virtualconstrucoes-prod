@@ -180,9 +180,17 @@ export default function Benefits() {
                   )}
                   <StatusBadge status={benefit.status} />
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
-                  <Users className="h-4 w-4" />
-                  <span>{getBeneficiaryCount(benefit.id)} beneficiário(s)</span>
+                {benefit.regra_calculo && benefit.regra_calculo !== 'fixo' && (
+                  <p className="text-xs text-blue-600 mt-1 font-medium">{regraLabels[benefit.regra_calculo]}</p>
+                )}
+                <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <span>{getBeneficiaryCount(benefit.id)} beneficiário(s)</span>
+                  </div>
+                  <Link to={createPageUrl('BenefitReceipt')} className="text-xs text-emerald-600 hover:underline flex items-center gap-1">
+                    <FileText className="h-3 w-3" /> Recibo
+                  </Link>
                 </div>
               </CardContent>
             </Card>
