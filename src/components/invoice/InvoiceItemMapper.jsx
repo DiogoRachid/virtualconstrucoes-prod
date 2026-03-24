@@ -31,12 +31,36 @@ export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
   });
 
   const linkMutation = useMutation({
-    mutationFn: () => base44.functions.invoke('linkInvoiceItemToInput', {
-      invoiceItemId,
-      inputId: selectedInputId,
-      conversionFactor: parseFloat(conversionFactor) || 1,
-      motivo
-    }),
+    mutationFn: async () => {
+      const conversionFactorNum = parseFloat(conversionFactor) || 1;
+      const selectedInput = inputs.find(i => i.id === selectedInputId);
+      
+      // Atualizar InvoiceItem com dados do insumo vinculado
+      await base44.entities.InvoiceItem.update(invoiceItemId, {
+        insumo_id: selectedInputId,
+        insumo_codigo: selectedInput.codigo,
+        insumo_nome: selectedInput.descricao,
+        unidade_insumo: selectedInput.unidade,
+        quantidade_convertida: invoiceItem.quantidade_xml * conversionFactorNum,
+        valor_unitario_convertido: invoiceItem.valor_unitario_xml / conversionFactorNum,
+        motivo_ajuste: motivo,
+        status_mapeamento: 'mapeado'
+      });
+
+      // Criar registro no histórico de insumos
+      await base44.entities.InputPurchaseHistory.create({
+        insumo_id: selectedInputId,
+        insumo_codigo: selectedInput.codigo,
+        insumo_nome: selectedInput.descricao,
+        quantidade: invoiceItem.quantidade_xml * conversionFactorNum,
+        unidade: selectedInput.unidade,
+        valor_unitario: invoiceItem.valor_unitario_xml / conversionFactorNum,
+        valor_total: invoiceItem.valor_total,
+        fornecedor_id: invoiceItem.nota_fiscal_id, // será preenchido com ID real depois
+        data_compra: new Date().toISOString().split('T')[0],
+        tipo_transacao: 'compra'
+      });
+    },
     onSuccess: () => {
       onLinked?.();
     }
