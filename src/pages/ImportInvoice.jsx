@@ -51,24 +51,47 @@ export default function ImportInvoicePage() {
             const parsedData = parseInvoiceXml(xmlContent);
             
             // Criar a nota fiscal com os dados extraídos
+            const emissionDate = new Date(parsedData.emissionDate).toISOString().split('T')[0];
+            
+            let fornecedorId = selectedSupplier;
+            
+            // Se não houver fornecedor selecionado, buscar pelo CNPJ
+            if (!fornecedorId && parsedData.supplier.cnpj) {
+              const suppliers = await base44.entities.Supplier.filter({ cnpj: parsedData.supplier.cnpj });
+              if (suppliers.length > 0) {
+                fornecedorId = suppliers[0].id;
+              } else {
+                // Criar novo fornecedor se não encontrar
+                const novoFornecedor = await base44.entities.Supplier.create({
+                  razao_social: parsedData.supplier.name,
+                  cnpj: parsedData.supplier.cnpj,
+                  status: 'ativo',
+                  tipo_servico: 'Fornecimento de Materiais',
+                  endereco: `${parsedData.supplier.address.street}, ${parsedData.supplier.address.number}`,
+                  cidade: parsedData.supplier.address.city,
+                  estado: parsedData.supplier.address.state,
+                  cep: parsedData.supplier.address.zipCode,
+                });
+                fornecedorId = novoFornecedor.id;
+              }
+            }
+
             const invoiceData = {
-              numero_documento: parsedData.invoiceNumber,
-              serie_nf: parsedData.invoiceSeries,
-              data_compra: new Date(parsedData.emissionDate).toISOString().split('T')[0],
+              numero_nota: parsedData.invoiceNumber,
+              serie: parsedData.invoiceSeries,
+              data_emissao: emissionDate,
+              fornecedor_id: fornecedorId,
               fornecedor_nome: parsedData.supplier.name || parsedData.supplier.fantasyName,
               fornecedor_cnpj: parsedData.supplier.cnpj,
               obra_id: selectedWork,
               obra_nome: works.find(w => w.id === selectedWork)?.nome || '',
-              valor: parsedData.totals.amount,
-              observacoes: `Importado do XML. ${parsedData.additionalInfo.notes.substring(0, 200)}...`,
-              status: 'em_aberto',
-              tipo: parsedData.invoiceType === 'saída' ? 'entrada' : 'entrada',
+              valor_total: parsedData.totals.amount,
+              valor_produtos: parsedData.totals.amount - parsedData.totals.icms - parsedData.totals.ipi,
+              valor_icms: parsedData.totals.icms,
+              valor_ipi: parsedData.totals.ipi,
+              observacoes: `Importado do XML em ${new Date().toLocaleDateString('pt-BR')}`,
+              status: 'importada',
             };
-
-            // Se houver fornecedor selecionado, usar esse ID
-            if (selectedSupplier) {
-              invoiceData.fornecedor_id = selectedSupplier;
-            }
 
             // Criar registro de nota fiscal
             const invoice = await base44.entities.Invoice.create(invoiceData);
