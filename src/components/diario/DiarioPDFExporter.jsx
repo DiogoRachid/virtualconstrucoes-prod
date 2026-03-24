@@ -26,58 +26,31 @@ export function getCurrentUser() {
   return '';
 }
 
-// Carrega imagem e converte para base64 via canvas (a imagem já está no DOM como <img> renderizada)
-// Usa allorigins como proxy para evitar CORS
-async function loadImageBase64(url) {
-  // Tenta 1: buscar via proxy allorigins (sempre funciona, sem CORS)
+// Extrai base64 de um elemento <img> já renderizado no DOM usando canvas
+// Isso contorna CORS porque a imagem já foi carregada pelo browser
+function extractBase64FromImgElement(imgEl) {
   try {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error('proxy failed');
-    const blob = await res.blob();
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    const dims = await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.width, height: img.height });
-      img.onerror = () => resolve({ width: 200, height: 60 });
-      img.src = dataUrl;
-    });
-    return { dataUrl, width: dims.width, height: dims.height };
-  } catch {}
-
-  // Tenta 2: fetch direto (funciona se o servidor tiver CORS)
-  try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('direct failed');
-    const blob = await res.blob();
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    const dims = await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ width: img.width, height: img.height });
-      img.onerror = () => resolve({ width: 200, height: 60 });
-      img.src = dataUrl;
-    });
-    return { dataUrl, width: dims.width, height: dims.height };
-  } catch {}
-
-  return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = imgEl.naturalWidth || imgEl.width;
+    canvas.height = imgEl.naturalHeight || imgEl.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0);
+    const dataUrl = canvas.toDataURL('image/png');
+    return { dataUrl, width: canvas.width, height: canvas.height };
+  } catch {
+    return null;
+  }
 }
 
 // Pré-carrega a logo UMA vez antes de gerar o PDF
-async function preloadLogo(companySettings) {
-  const logoUrl = companySettings?.logo_url_clara;
-  if (!logoUrl) return null;
-  return await loadImageBase64(logoUrl);
+// Recebe o elemento <img> do DOM (já renderizado) para evitar CORS
+async function preloadLogo(companySettings, logoImgElement) {
+  // Prioridade 1: usar elemento <img> já no DOM (sem CORS)
+  if (logoImgElement && logoImgElement.complete && logoImgElement.naturalWidth > 0) {
+    const result = extractBase64FromImgElement(logoImgElement);
+    if (result) return result;
+  }
+  return null;
 }
 
 function drawHeader(doc, companySettings, logoData, pageW, marginX, contentW) {
