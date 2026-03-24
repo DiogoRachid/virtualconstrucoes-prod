@@ -99,18 +99,15 @@ export default function ImportInvoicePage() {
             // Criar itens da nota fiscal
             for (const item of parsedData.items) {
               await base44.entities.InvoiceItem.create({
-                invoice_id: invoice.id,
-                codigo_produto: item.productCode,
-                descricao: item.productName,
+                nota_fiscal_id: invoice.id,
+                codigo_xml: item.productCode,
+                descricao_xml: item.productName,
                 ncm: item.ncm,
-                unidade: item.unit,
-                quantidade: item.quantity,
-                valor_unitario: item.unitPrice,
+                unidade_xml: item.unit,
+                quantidade_xml: item.quantity,
+                valor_unitario_xml: item.unitPrice,
                 valor_total: item.totalValue,
-                icms: item.icmsValue,
-                ipi: item.ipiValue,
-                pis: item.pisValue,
-                cofins: item.cofinsValue,
+                status_mapeamento: 'nao_mapeado',
               });
             }
 
