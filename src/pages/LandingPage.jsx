@@ -258,17 +258,11 @@ export default function LandingPage() {
             <div>
               <span className="text-blue-600 font-semibold text-sm uppercase tracking-wider">Sobre a Empresa</span>
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mt-2 mb-6">
-                Tradição e Competência em Obras Públicas
+                {sobreTitulo}
               </h2>
-              <p className="text-slate-600 leading-relaxed mb-4">
-                A <strong>Virtual Construções Civis Ltda</strong> é uma empresa especializada na execução de <strong>obras públicas</strong>, sediada em <strong>Londrina/PR</strong>, com mais de 25 anos de atuação no mercado de construção civil.
-              </p>
-              <p className="text-slate-600 leading-relaxed mb-4">
-                Nossa trajetória foi construída atendendo órgãos públicos — como a <strong>Universidade Estadual de Londrina (UEL)</strong> e o <strong>Hospital Universitário (HU)</strong> — além de prefeituras e autarquias do Norte do Paraná e região.
-              </p>
-              <p className="text-slate-600 leading-relaxed mb-6">
-                Participamos ativamente de licitações públicas, com regularidade fiscal e técnica plena, garantindo a entrega de obras dentro do prazo, do orçamento e com máxima qualidade.
-              </p>
+              <p className="text-slate-600 leading-relaxed mb-4" dangerouslySetInnerHTML={{ __html: sobreTexto1 }} />
+              <p className="text-slate-600 leading-relaxed mb-4" dangerouslySetInnerHTML={{ __html: sobreTexto2 }} />
+              <p className="text-slate-600 leading-relaxed mb-6" dangerouslySetInnerHTML={{ __html: sobreTexto3 }} />
               <div className="space-y-3">
                 {[
                 "CNPJ regularizado e certidões em dia",
