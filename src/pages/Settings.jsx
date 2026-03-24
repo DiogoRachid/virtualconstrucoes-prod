@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import AdminProfileEditor from '@/components/settings/AdminProfileEditor';
 
 const DEFAULT_SERVICOS = [
   { titulo: 'Edificações Públicas', descricao: 'Construção de hospitais universitários, blocos acadêmicos, creches, escolas, delegacias e demais equipamentos públicos.', cor: 'bg-blue-50 text-blue-600' },
