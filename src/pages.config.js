@@ -96,7 +96,6 @@ import PurchasingList from './pages/PurchasingList';
 import Reports from './pages/Reports';
 import ServiceEditor from './pages/ServiceEditor';
 import Services from './pages/Services';
-import Settings from './pages/Settings';
 import SupplierDetail from './pages/SupplierDetail';
 import SupplierForm from './pages/SupplierForm';
 import Suppliers from './pages/Suppliers';
@@ -166,7 +165,6 @@ export const PAGES = {
     "Reports": Reports,
     "ServiceEditor": ServiceEditor,
     "Services": Services,
-    "Settings": Settings,
     "SupplierDetail": SupplierDetail,
     "SupplierForm": SupplierForm,
     "Suppliers": Suppliers,

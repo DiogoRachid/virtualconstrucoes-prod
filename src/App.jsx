@@ -16,6 +16,7 @@ import AdminLogin from './pages/AdminLogin';
 import ColaboradorLogin from './pages/ColaboradorLogin';
 import ProtectedAdminRoute from '@/lib/ProtectedAdminRoute';
 import BenefitReceipt from './pages/BenefitReceipt';
+import Settings from './pages/Settings';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
       <Route path="/ColaboradorLogin" element={<ColaboradorLogin />} />
       <Route path="/ColaboradorPortal" element={<ColaboradorPortal />} />
       <Route path="/BenefitReceipt" element={<ProtectedAdminRoute><LayoutWrapper currentPageName="BenefitReceipt"><BenefitReceipt /></LayoutWrapper></ProtectedAdminRoute>} />
+      <Route path="/Settings" element={<ProtectedAdminRoute><LayoutWrapper currentPageName="Settings"><Settings /></LayoutWrapper></ProtectedAdminRoute>} />
 
       <Route path="/" element={<LandingPage />} />
       {Object.entries(Pages).map(([path, Page]) => (
