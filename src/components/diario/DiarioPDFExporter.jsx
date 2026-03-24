@@ -26,26 +26,29 @@ export function getCurrentUser() {
   return '';
 }
 
-// Carrega imagem via canvas para evitar problemas de CORS e retorna base64
-function loadImageBase64(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.width, height: img.height });
-      } catch {
-        resolve(null);
-      }
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
+// Carrega imagem via fetch→blob→base64 (contorna CORS do Supabase)
+async function loadImageBase64(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    // Precisamos das dimensões reais para calcular o aspect ratio
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = () => resolve({ width: 200, height: 60 }); // fallback proporcional
+      img.src = dataUrl;
+    });
+    return { dataUrl, width: dims.width, height: dims.height };
+  } catch {
+    return null;
+  }
 }
 
 // Pré-carrega a logo UMA vez antes de gerar o PDF
