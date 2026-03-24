@@ -100,12 +100,12 @@ export default function Benefits() {
   });
 
   const resetForm = () => {
-    setFormData({ nome: '', tipo: 'outro', valor: '', descricao: '', status: 'ativo' });
+    setFormData({ nome: '', tipo: 'outro', valor: '', regra_calculo: 'fixo', descricao: '', status: 'ativo' });
   };
 
   const handleEdit = (benefit) => {
     setEditItem(benefit);
-    setFormData({ ...benefit, valor: benefit.valor || '' });
+    setFormData({ ...benefit, valor: benefit.valor || '', regra_calculo: benefit.regra_calculo || 'fixo' });
     setShowForm(true);
   };
 
