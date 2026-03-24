@@ -226,11 +226,10 @@ function drawFooters(doc, nomEmpresa, preenchidoPor, pageW, marginX) {
 }
 
 // Exportação individual
-export async function exportDiarioPDF(diario, companySettings, preenchidoPor, logoImgElement) {
+export async function exportDiarioPDF(diario, companySettings, preenchidoPor, logoData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = 210, marginX = 14, contentW = pageW - marginX * 2;
   const autor = preenchidoPor || getCurrentUser();
-  const logoData = await preloadLogo(companySettings, logoImgElement);
 
   drawDiario(doc, { ...diario, preenchido_por: autor }, companySettings, logoData, pageW, marginX, contentW);
   drawFooters(doc, companySettings?.nome_empresa || 'Virtual Construções Civis', autor, pageW, marginX);
@@ -239,11 +238,10 @@ export async function exportDiarioPDF(diario, companySettings, preenchidoPor, lo
 }
 
 // Exportação em lote (múltiplos diários, 1 PDF único)
-export async function exportDiariosLotePDF(diarios, companySettings, preenchidoPor, logoImgElement) {
+export async function exportDiariosLotePDF(diarios, companySettings, preenchidoPor, logoData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = 210, marginX = 14, contentW = pageW - marginX * 2;
   const autor = preenchidoPor || getCurrentUser();
-  const logoData = await preloadLogo(companySettings, logoImgElement);
 
   for (let i = 0; i < diarios.length; i++) {
     if (i > 0) doc.addPage();
