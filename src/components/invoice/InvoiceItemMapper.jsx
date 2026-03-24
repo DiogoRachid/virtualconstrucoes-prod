@@ -77,7 +77,6 @@ export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
 
   if (!invoiceItem) return <div>Carregando...</div>;
 
-  const selectedInput = inputs.find(i => i.id === selectedInputId);
   const unitMismatch = selectedInput && selectedInput.unidade !== invoiceItem.unidade_xml;
 
   return (
@@ -95,22 +94,57 @@ export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Busca de Insumo */}
-        <div className="space-y-2">
-          <Label htmlFor="input-select">Selecione o Insumo</Label>
-          <Select value={selectedInputId} onValueChange={setSelectedInputId}>
-            <SelectTrigger id="input-select">
-              <SelectValue placeholder="Buscar insumo cadastrado" />
-            </SelectTrigger>
-            <SelectContent>
-              {inputs.map(input => (
-                <SelectItem key={input.id} value={input.id}>
-                  {input.codigo} - {input.descricao} ({input.unidade})
-                </SelectItem>
+        {/* Busca Dinâmica de Insumo */}
+        <div className="space-y-2 relative">
+          <Label htmlFor="search-input">Buscar Insumo</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <Input
+              id="search-input"
+              type="text"
+              placeholder="Digite código ou descrição..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              className="pl-9"
+            />
+          </div>
+
+          {/* Resultados da Busca */}
+          {showResults && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {searchResults.map(input => (
+                <button
+                  key={input.id}
+                  onClick={() => {
+                    setSelectedInputId(input.id);
+                    setSearchQuery(`${input.codigo} - ${input.descricao}`);
+                    setShowResults(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 hover:bg-slate-100 border-b last:border-0 transition-colors ${
+                    selectedInputId === input.id ? 'bg-blue-50 font-medium' : ''
+                  }`}
+                >
+                  <div className="font-medium text-slate-900">{input.codigo} - {input.descricao}</div>
+                  <div className="text-xs text-slate-500">Unidade: {input.unidade}</div>
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          )}
+
+          {showResults && searchResults.length === 0 && searchQuery.trim().length >= 2 && (
+            <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border rounded-lg shadow-lg p-3 text-center text-sm text-slate-500">
+              Nenhum insumo encontrado
+            </div>
+          )}
         </div>
+
+        {/* Exibir insumo selecionado */}
+        {selectedInput && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+            <p className="font-medium text-green-900">✓ Selecionado: {selectedInput.codigo} - {selectedInput.descricao}</p>
+          </div>
+        )}
 
         {/* Alerta de Unidade Diferentes */}
         {unitMismatch && (
