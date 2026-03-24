@@ -560,7 +560,14 @@ export default function Settings() {
           </TabsContent>
         )}
 
-        {/* ABA PERFIL */}
+        {/* ABA MINHA CONTA (Portal Admin) */}
+        {isPortalAdmin && (
+          <TabsContent value="minha-conta">
+            <AdminProfileEditor adminId={portalAdminSession?.id} />
+          </TabsContent>
+        )}
+
+        {/* ABA PERFIL (usuário plataforma) */}
         <TabsContent value="profile">
           <Card>
             <CardHeader>
