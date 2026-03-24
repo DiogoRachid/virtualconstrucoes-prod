@@ -265,6 +265,7 @@ export default function TimeSheet() {
                       <th className="px-2 py-2 border">Retorno</th>
                       <th className="px-2 py-2 border">Saída</th>
                       <th className="px-2 py-2 border">Total Horas</th>
+                      <th className="px-2 py-2 border">Ocorrência</th>
                       <th className="px-2 py-2 border">Obs.</th>
                     </tr>
                   </thead>
