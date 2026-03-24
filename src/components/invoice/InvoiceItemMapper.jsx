@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Search } from 'lucide-react';
@@ -7,21 +7,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
+export default function InvoiceItemMapper({ invoiceItemId, inputsList = [], onLinked }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInputId, setSelectedInputId] = useState('');
   const [conversionFactor, setConversionFactor] = useState('1');
   const [motivo, setMotivo] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
+  const [invoiceItem, setInvoiceItem] = useState(null);
 
-  const { data: invoiceItem } = useQuery({
-    queryKey: ['invoiceItem', invoiceItemId],
-    queryFn: () => base44.entities.InvoiceItem.read(invoiceItemId)
-  });
+  // Carregar item uma única vez
+  useEffect(() => {
+    const loadItem = async () => {
+      const items = await base44.entities.InvoiceItem.filter({ id: invoiceItemId });
+      if (items[0]) setInvoiceItem(items[0]);
+    };
+    loadItem();
+  }, [invoiceItemId]);
 
-  // Busca dinâmica de insumos
-  const handleSearch = async (query) => {
+  // Busca offline nos insumos carregados
+  const handleSearch = (query) => {
     setSearchQuery(query);
     if (query.trim().length < 2) {
       setSearchResults([]);
@@ -29,12 +34,11 @@ export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
       return;
     }
 
-    const allInputs = await base44.entities.Input.list();
-    const filtered = allInputs.filter(input =>
+    const filtered = inputsList.filter(input =>
       input.descricao?.toLowerCase().includes(query.toLowerCase()) ||
       input.codigo?.toLowerCase().includes(query.toLowerCase())
     );
-    setSearchResults(filtered.slice(0, 10)); // Limitar a 10 resultados
+    setSearchResults(filtered.slice(0, 10));
     setShowResults(true);
   };
 
