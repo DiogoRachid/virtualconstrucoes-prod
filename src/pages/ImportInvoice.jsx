@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { parseInvoiceXml } from '@/components/invoice/InvoiceXmlParser';
 
 export default function ImportInvoicePage() {
   const navigate = useNavigate();
