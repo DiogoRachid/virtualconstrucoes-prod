@@ -1,39 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedInputId, setSelectedInputId] = useState('');
   const [conversionFactor, setConversionFactor] = useState('1');
   const [motivo, setMotivo] = useState('');
-  const [showUnitAlert, setShowUnitAlert] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
 
   const { data: invoiceItem } = useQuery({
     queryKey: ['invoiceItem', invoiceItemId],
     queryFn: () => base44.entities.InvoiceItem.read(invoiceItemId)
   });
 
-  const { data: inputs = [] } = useQuery({
-    queryKey: ['inputs'],
-    queryFn: () => base44.entities.Input.list()
-  });
+  // Busca dinâmica de insumos
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    const allInputs = await base44.entities.Input.list();
+    const filtered = allInputs.filter(input =>
+      input.descricao?.toLowerCase().includes(query.toLowerCase()) ||
+      input.codigo?.toLowerCase().includes(query.toLowerCase())
+    );
+    setSearchResults(filtered.slice(0, 10)); // Limitar a 10 resultados
+    setShowResults(true);
+  };
+
+  const selectedInput = searchResults.find(i => i.id === selectedInputId);
 
   const linkMutation = useMutation({
     mutationFn: async () => {
       const conversionFactorNum = parseFloat(conversionFactor) || 1;
-      const selectedInput = inputs.find(i => i.id === selectedInputId);
       
       // Atualizar InvoiceItem com dados do insumo vinculado
       await base44.entities.InvoiceItem.update(invoiceItemId, {
@@ -56,7 +65,7 @@ export default function InvoiceItemMapper({ invoiceItemId, onLinked }) {
         unidade: selectedInput.unidade,
         valor_unitario: invoiceItem.valor_unitario_xml / conversionFactorNum,
         valor_total: invoiceItem.valor_total,
-        fornecedor_id: invoiceItem.nota_fiscal_id, // será preenchido com ID real depois
+        fornecedor_id: invoiceItem.nota_fiscal_id,
         data_compra: new Date().toISOString().split('T')[0],
         tipo_transacao: 'compra'
       });
