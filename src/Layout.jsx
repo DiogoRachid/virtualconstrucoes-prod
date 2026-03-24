@@ -41,7 +41,8 @@ import {
                         FileInput,
                         Truck,
                         ShoppingCart,
-                        Globe
+                        Globe,
+                        BookOpen
                         } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import {
