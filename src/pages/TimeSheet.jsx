@@ -125,14 +125,19 @@ export default function TimeSheet() {
         if (!hasEdits) continue;
 
         const horas = calcHoras(entrada, saida, saida_almoco, retorno_almoco);
+        const ocorrencia = getTipoOcorrencia(day);
         const payload = {
           colaborador_id: selectedEmployee,
           colaborador_nome: selectedEmp?.nome_completo || '',
           data: day.date,
-          entrada, saida, saida_almoco, retorno_almoco,
-          horas_trabalhadas: horas,
+          entrada: ocorrencia ? '' : entrada,
+          saida: ocorrencia ? '' : saida,
+          saida_almoco: ocorrencia ? '' : saida_almoco,
+          retorno_almoco: ocorrencia ? '' : retorno_almoco,
+          horas_trabalhadas: ocorrencia ? 0 : horas,
           tipo_registro: 'manual',
           status: 'aprovado',
+          ocorrencia,
           observacoes: obs || ''
         };
 
