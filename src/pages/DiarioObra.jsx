@@ -84,6 +84,7 @@ export default function DiarioObraPage() {
   const [selected, setSelected] = useState(new Set());
   const [currentUser, setCurrentUser] = useState('');
   const logoRef = useRef(null);
+  const [logoBase64, setLogoBase64] = useState(null);
 
   // Filtros
   const [filterObra, setFilterObra] = useState('');
