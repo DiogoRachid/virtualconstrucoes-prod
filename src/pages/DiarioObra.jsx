@@ -200,9 +200,13 @@ export default function DiarioObraPage() {
   const clearFilters = () => { setFilterObra(''); setFilterMes(''); setFilterAno(''); setSelected(new Set()); };
   const hasFilters = filterObra || filterMes || filterAno;
 
+  const logoUrl = cs?.logo_url_clara;
+
   // ── LISTA ──
   if (view === 'list') return (
     <div className="max-w-5xl mx-auto">
+      {/* Logo hidden para captura via canvas (sem CORS) */}
+      {logoUrl && <img ref={logoRef} src={logoUrl} alt="" crossOrigin="anonymous" style={{ display: 'none' }} />}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
