@@ -141,6 +141,12 @@ export default function LandingPage() {
   const ctaTitulo = companySettings?.site_cta_titulo || 'Sistema de Gestão de Obras';
   const ctaTexto = companySettings?.site_cta_texto || 'Acesse nosso ERP interno para gerenciar orçamentos, planejamento, medições, financeiro, RH e muito mais — tudo em um só lugar.';
 
+  const servicos = (companySettings?.site_servicos?.length > 0 ? companySettings.site_servicos : servicosDefault).map(s => ({
+    ...s,
+    color: s.cor || s.color || 'bg-blue-50 text-blue-600'
+  }));
+  const obras = companySettings?.site_obras?.length > 0 ? companySettings.site_obras : obrasDefault;
+
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
     setMenuOpen(false);
