@@ -49,7 +49,7 @@ export default function InvoicePayableConfigPage() {
   });
 
   // Initialize installments from invoice value
-  React.useEffect(() => {
+  useEffect(() => {
     if (invoice && paymentInstallments.length === 0) {
       const singleInstallment = {
         id: 1,
