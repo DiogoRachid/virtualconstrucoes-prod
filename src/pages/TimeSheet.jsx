@@ -339,10 +339,11 @@ export default function TimeSheet() {
                 </table>
               </div>
 
-              <div className="summary mt-4 p-4 bg-blue-50 rounded-lg grid grid-cols-3 gap-4 text-sm">
+              <div className="summary mt-4 p-4 bg-blue-50 rounded-lg grid grid-cols-4 gap-4 text-sm">
                 <p><strong>Dias Trabalhados:</strong> {diasTrabalhados}</p>
                 <p><strong>Total de Horas:</strong> {totalHoras.toFixed(2)}h</p>
                 <p className={totalFaltas > 0 ? 'text-red-600 font-semibold' : ''}><strong>Faltas:</strong> {totalFaltas}</p>
+                <p className={totalAtestados > 0 ? 'text-yellow-700 font-semibold' : ''}><strong>Atestados:</strong> {totalAtestados}</p>
               </div>
 
               <div className="assinatura mt-12 flex justify-between">
