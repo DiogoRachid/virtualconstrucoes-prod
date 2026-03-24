@@ -156,22 +156,8 @@ export default function Settings() {
         site_numeros_tipo: companySettings.site_numeros_tipo || '',
         site_cta_titulo: companySettings.site_cta_titulo || '',
         site_cta_texto: companySettings.site_cta_texto || '',
-        site_servicos: companySettings.site_servicos?.length > 0 ? companySettings.site_servicos : [
-          { titulo: 'Edificações Públicas', descricao: 'Construção de hospitais universitários, blocos acadêmicos, creches, escolas, delegacias e demais equipamentos públicos.', cor: 'bg-blue-50 text-blue-600' },
-          { titulo: 'Obras para Universidades', descricao: 'Execução de blocos de salas de aula, laboratórios e instalações para universidades públicas como a UEL e demais IES.', cor: 'bg-violet-50 text-violet-600' },
-          { titulo: 'Infraestrutura e Saneamento', descricao: 'Pavimentação, drenagem, redes de água e esgoto e demais obras de infraestrutura para municípios e órgãos estaduais.', cor: 'bg-orange-50 text-orange-600' },
-          { titulo: 'Reforma de Edificações Públicas', descricao: 'Reformas e modernização de prédios públicos com rigor técnico e conformidade com normas e legislação vigentes.', cor: 'bg-cyan-50 text-cyan-600' },
-          { titulo: 'Habitação de Interesse Social', descricao: 'Desenvolvimento de conjuntos habitacionais e empreendimentos residenciais vinculados a programas governamentais.', cor: 'bg-emerald-50 text-emerald-600' },
-          { titulo: 'Projetos e Consultoria', descricao: 'Elaboração de projetos executivos, laudos técnicos, ART e suporte em todas as fases de licitação e execução.', cor: 'bg-rose-50 text-rose-600' },
-        ],
-        site_obras: companySettings.site_obras?.length > 0 ? companySettings.site_obras : [
-          { nome: 'Hospital Universitário (HU/UEL)', local: 'Londrina – PR', tipo: 'Obra Pública – Saúde', status: 'Entregue', img: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=600&q=80' },
-          { nome: 'Bloco de Salas de Aula CCS/UEL', local: 'Londrina – PR', tipo: 'Obra Pública – Educação', status: 'Em Andamento', img: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&q=80' },
-          { nome: 'Assoc. Odontológica do Norte PR', local: 'Londrina – PR', tipo: 'Obra Pública – Saúde', status: 'Entregue', img: 'https://images.unsplash.com/photo-1524230572899-a752b3835840?w=600&q=80' },
-          { nome: 'Residencial Villaggio Arvoredo', local: 'Londrina – PR', tipo: 'Residencial (Exceção)', status: 'Entregue', img: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80' },
-          { nome: 'Edificação Pública Municipal', local: 'Região Norte – PR', tipo: 'Obra Pública', status: 'Entregue', img: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=600&q=80' },
-          { nome: 'Infraestrutura Urbana', local: 'Londrina – PR', tipo: 'Obra Pública – Infraestrutura', status: 'Entregue', img: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80' },
-        ]
+        site_servicos: companySettings.site_servicos?.length > 0 ? companySettings.site_servicos : DEFAULT_SERVICOS,
+        site_obras: companySettings.site_obras?.length > 0 ? companySettings.site_obras : DEFAULT_OBRAS
       });
     }
   }, [companySettings.id]);
