@@ -104,6 +104,8 @@ export default function Dashboard() {
   // Alertas de RH
   const today = new Date();
   const in30 = new Date(today); in30.setDate(in30.getDate() + 30);
+  const in60 = new Date(today); in60.setDate(in60.getDate() + 60);
+
   const alertasContratoExp = contracts.filter(c => {
     if (!c.data_fim_experiencia) return false;
     const fim = new Date(c.data_fim_experiencia + 'T00:00:00');
@@ -117,9 +119,29 @@ export default function Dashboard() {
   const alertasFerias = contracts.filter(c => {
     if (!c.ferias_proximas) return false;
     const ferias = new Date(c.ferias_proximas + 'T00:00:00');
-    const in60 = new Date(today); in60.setDate(in60.getDate() + 60);
     return ferias >= today && ferias <= in60 && c.status === 'vigente';
   });
+
+  // Próximos vencimentos de contratos de experiência (todos nos próximos 90 dias)
+  const in90 = new Date(today); in90.setDate(in90.getDate() + 90);
+  const vencimentosExp = contracts
+    .filter(c => c.status === 'vigente' && (c.data_fim_experiencia || c.prorrogacao_experiencia))
+    .map(c => {
+      const datas = [];
+      if (c.data_fim_experiencia) {
+        const d = new Date(c.data_fim_experiencia + 'T00:00:00');
+        if (d >= today && d <= in90) datas.push({ contrato: c, data: d, tipo: '1ª Experiência' });
+      }
+      if (c.prorrogacao_experiencia) {
+        const d = new Date(c.prorrogacao_experiencia + 'T00:00:00');
+        if (d >= today && d <= in90) datas.push({ contrato: c, data: d, tipo: 'Prorrogação' });
+      }
+      return datas;
+    })
+    .flat()
+    .sort((a, b) => a.data - b.data);
+
+  const diffDias = (d) => Math.ceil((d - today) / (1000 * 60 * 60 * 24));
 
   // Cálculos
   const totalSaldo = bankAccounts.reduce((sum, acc) => sum + (acc.saldo_atual || 0), 0);
