@@ -87,13 +87,26 @@ export default function TimeSheet() {
     setEditedRecords(prev => ({ ...prev, [`${dateStr}_${field}`]: value }));
   };
 
-  // Verificar se é falta (dia útil sem registro e sem horário preenchido)
+  // Verificar se foi marcado manualmente como falta ou atestado
+  const getTipoOcorrencia = (day) => {
+    const key = `${day.date}_ocorrencia`;
+    if (editedRecords[key] !== undefined) return editedRecords[key];
+    if (day.record?.ocorrencia) return day.record.ocorrencia;
+    return '';
+  };
+
+  // Verificar se é falta (dia útil sem registro e sem horário preenchido, ou marcado como falta)
   const isFalta = (day) => {
     if (day.isWeekend) return false;
+    const ocorrencia = getTipoOcorrencia(day);
+    if (ocorrencia === 'falta') return true;
+    if (ocorrencia === 'atestado') return false;
     const entrada = getFieldValue(day, 'entrada');
     const saida = getFieldValue(day, 'saida');
     return !entrada && !saida;
   };
+
+  const isAtestado = (day) => getTipoOcorrencia(day) === 'atestado';
 
   const saveMutation = useMutation({
     mutationFn: async () => {
