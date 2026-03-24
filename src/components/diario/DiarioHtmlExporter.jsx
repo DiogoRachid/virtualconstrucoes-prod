@@ -312,7 +312,7 @@ export async function exportDiariosLotePDF(diarios, companySettings, preenchidoP
   </style>
 </head>
 <body>
-  ${diarios.map(d => generateDiarioHtml(d, companySettings, preenchidoPor, logoUrl)).join('')}
+  ${diarios.map(d => generateDiarioHtml(d, companySettings, preenchidoPor)).join('')}
   <script>
     window.addEventListener('load', () => {
       setTimeout(() => window.print(), 500);
