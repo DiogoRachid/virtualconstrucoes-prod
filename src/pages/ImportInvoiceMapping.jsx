@@ -41,7 +41,7 @@ export default function ImportInvoiceMappingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoiceItems', invoiceId] });
-      navigate(createPageUrl('AccountsPayable'));
+      navigate(createPageUrl(`InvoicePayableConfig?invoiceId=${invoiceId}`));
     }
   });
 
