@@ -26,32 +26,7 @@ export function getCurrentUser() {
   return '';
 }
 
-// Extrai base64 de um elemento <img> já renderizado no DOM usando canvas
-// Isso contorna CORS porque a imagem já foi carregada pelo browser
-function extractBase64FromImgElement(imgEl) {
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = imgEl.naturalWidth || imgEl.width;
-    canvas.height = imgEl.naturalHeight || imgEl.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(imgEl, 0, 0);
-    const dataUrl = canvas.toDataURL('image/png');
-    return { dataUrl, width: canvas.width, height: canvas.height };
-  } catch {
-    return null;
-  }
-}
 
-// Pré-carrega a logo UMA vez antes de gerar o PDF
-// Recebe o elemento <img> do DOM (já renderizado) para evitar CORS
-async function preloadLogo(companySettings, logoImgElement) {
-  // Prioridade 1: usar elemento <img> já no DOM (sem CORS)
-  if (logoImgElement && logoImgElement.complete && logoImgElement.naturalWidth > 0) {
-    const result = extractBase64FromImgElement(logoImgElement);
-    if (result) return result;
-  }
-  return null;
-}
 
 function drawHeader(doc, companySettings, logoData, pageW, marginX, contentW) {
   const nomEmpresa = companySettings?.nome_empresa || 'Virtual Construções Civis';
