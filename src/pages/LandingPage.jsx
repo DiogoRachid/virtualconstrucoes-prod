@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { base44 } from '@/api/base44Client';
 import {
-  HardHat, Building2, Award, Users, Phone, Mail, MapPin, Globe,
+  HardHat, Building2, Users, Phone, Mail, MapPin, Globe,
   ChevronDown, Menu, X, ArrowRight, CheckCircle2, Shield, BarChart3,
-  Wrench, Home, Landmark, FileText, MessageCircle } from
-'lucide-react';
+  FileText, MessageCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 const LOGO_CLARA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
