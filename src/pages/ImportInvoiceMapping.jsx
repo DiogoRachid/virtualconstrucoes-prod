@@ -138,9 +138,9 @@ export default function ImportInvoiceMappingPage() {
           disabled={unmappedItems.length > 0 || finalizeMutation.isPending}
           className="flex-1 bg-blue-600 hover:bg-blue-700"
         >
-          {finalizeMutation.isPending ? 'Processando...' : 'Finalizar e Criar Contas a Pagar'}
+          {finalizeMutation.isPending ? 'Processando...' : 'Próximo: Registrar Contas a Pagar'}
         </Button>
-        <Button variant="outline" onClick={() => navigate(createPageUrl('Projects'))}>
+        <Button variant="outline" onClick={() => navigate(createPageUrl('AccountsPayable'))}>
           Cancelar
         </Button>
       </div>
