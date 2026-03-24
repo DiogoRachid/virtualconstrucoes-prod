@@ -12,39 +12,33 @@ import { Button } from "@/components/ui/button";
 const LOGO_CLARA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/user_690c7efb29582ad524a0ff3e/fb3eac426_logofundoclaro.jpg";
 const LOGO_ESCURA = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6926eb0b6c1242bf806695a4/4053fb920_logofundoescuro.png";
 
-const servicos = [
+const servicosDefault = [
 {
-  icon: Building2,
   titulo: "Edificações Públicas",
   desc: "Construção de hospitais universitários, blocos acadêmicos, creches, escolas, delegacias e demais equipamentos públicos.",
   color: "bg-blue-50 text-blue-600"
 },
 {
-  icon: Landmark,
   titulo: "Obras para Universidades",
   desc: "Execução de blocos de salas de aula, laboratórios e instalações para universidades públicas como a UEL e demais IES.",
   color: "bg-violet-50 text-violet-600"
 },
 {
-  icon: Wrench,
   titulo: "Infraestrutura e Saneamento",
   desc: "Pavimentação, drenagem, redes de água e esgoto e demais obras de infraestrutura para municípios e órgãos estaduais.",
   color: "bg-orange-50 text-orange-600"
 },
 {
-  icon: HardHat,
   titulo: "Reforma de Edificações Públicas",
   desc: "Reformas e modernização de prédios públicos com rigor técnico e conformidade com normas e legislação vigentes.",
   color: "bg-cyan-50 text-cyan-600"
 },
 {
-  icon: Home,
   titulo: "Habitação de Interesse Social",
   desc: "Desenvolvimento de conjuntos habitacionais e empreendimentos residenciais vinculados a programas governamentais.",
   color: "bg-emerald-50 text-emerald-600"
 },
 {
-  icon: FileText,
   titulo: "Projetos e Consultoria",
   desc: "Elaboração de projetos executivos, laudos técnicos, ART e suporte em todas as fases de licitação e execução.",
   color: "bg-rose-50 text-rose-600"
