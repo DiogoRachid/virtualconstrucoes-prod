@@ -50,7 +50,13 @@ const MODULES = [
   { key: 'CompanySettings',     label: 'Configurações da Empresa', group: 'Sistema' },
   { key: 'VersionHistory',      label: 'Histórico de Versões',    group: 'Sistema' },
   { key: 'ServiceMonthlyDistribution', label: 'Distribuição Mensal de Serviços', group: 'Sistema' },
-];
+  { key: 'ImportLog',           label: 'Logs de Importação',      group: 'Sistema' },
+
+  { key: 'CompositionStaging',  label: 'Composições (Rascunho)',  group: 'Obras' },
+
+  { key: 'Administrador',       label: 'Administradores (Portal)', group: 'Acesso' },
+  { key: 'Colaborador',         label: 'Colaboradores (Portal)',   group: 'Acesso' },
+  ];
 
 const GROUPS = [...new Set(MODULES.map(m => m.group))];
 
