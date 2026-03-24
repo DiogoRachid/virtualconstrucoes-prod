@@ -51,12 +51,63 @@ export default function ImportInvoiceMappingPage() {
 
   const finalizeMutation = useMutation({
     mutationFn: async () => {
-      // Criar Contas a Pagar baseado nos itens vinculados
+      // Para itens não mapeados, criar novo insumo automaticamente
+      for (const item of unmappedItems) {
+        const primeiraLetra = (invoice.fornecedor_nome || 'F').charAt(0).toUpperCase();
+        const codigoInsumo = `${primeiraLetra}.${item.codigo_xml}`;
+        
+        // Verificar se já existe insumo com este código
+        const insumosExistentes = await base44.entities.Input.filter({ codigo: codigoInsumo });
+        
+        let insumoId;
+        if (insumosExistentes.length === 0) {
+          // Criar novo insumo
+          const mesAno = new Date(invoice.data_emissao).toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' });
+          const novoInsumo = await base44.entities.Input.create({
+            codigo: codigoInsumo,
+            descricao: item.descricao_xml,
+            unidade: item.unidade_xml,
+            valor_unitario: item.valor_unitario_xml,
+            categoria: 'MATERIAL',
+            data_base: mesAno,
+            fonte: `NF ${invoice.numero_nota}/${invoice.serie}`
+          });
+          insumoId = novoInsumo.id;
+        } else {
+          insumoId = insumosExistentes[0].id;
+        }
+        
+        // Vincular item ao insumo (criado ou existente)
+        const insumo = insumosExistentes.length > 0 ? insumosExistentes[0] : await base44.entities.Input.read(insumoId);
+        await base44.entities.InvoiceItem.update(item.id, {
+          insumo_id: insumoId,
+          insumo_codigo: insumo.codigo,
+          insumo_nome: insumo.descricao,
+          unidade_insumo: insumo.unidade,
+          quantidade_convertida: item.quantidade_xml,
+          valor_unitario_convertido: item.valor_unitario_xml,
+          motivo_ajuste: 'Vinculação automática - insumo criado',
+          status_mapeamento: 'mapeado'
+        });
+        
+        // Criar registro no histórico
+        await base44.entities.InputPurchaseHistory.create({
+          insumo_id: insumoId,
+          insumo_codigo: insumo.codigo,
+          insumo_nome: insumo.descricao,
+          quantidade: item.quantidade_xml,
+          unidade: item.unidade_xml,
+          valor_unitario: item.valor_unitario_xml,
+          valor_total: item.valor_total,
+          fornecedor_id: invoice.fornecedor_id,
+          fornecedor_nome: invoice.fornecedor_nome,
+          data_compra: invoice.data_emissao,
+          tipo_transacao: 'compra',
+          nota_fiscal_id: invoice.id
+        });
+      }
+      
       await base44.entities.Invoice.update(invoiceId, { status: 'processada' });
-      
-      // Lógica para gerar contas a pagar
-      // (será implementada em função separada)
-      
       return { success: true };
     },
     onSuccess: () => {
