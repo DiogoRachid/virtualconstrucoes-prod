@@ -112,32 +112,32 @@ export default function TimeSheet() {
     mutationFn: async () => {
       const promises = [];
       for (const day of days) {
+        if (day.isWeekend) continue; // Pula fins de semana
+
         const entrada = getFieldValue(day, 'entrada');
         const saida = getFieldValue(day, 'saida');
         const saida_almoco = getFieldValue(day, 'saida_almoco');
         const retorno_almoco = getFieldValue(day, 'retorno_almoco');
         const obs = getFieldValue(day, 'observacoes');
-
-        // Só salva se tiver alguma edição neste dia
-        const hasEdits = ['entrada','saida','saida_almoco','retorno_almoco','observacoes','ocorrencia'].some(
-          f => editedRecords[`${day.date}_${f}`] !== undefined
-        );
-        if (!hasEdits) continue;
-
-        const horas = calcHoras(entrada, saida, saida_almoco, retorno_almoco);
         const ocorrencia = getTipoOcorrencia(day);
+
+        // Pula se não há nada para salvar (sem horário padrão, sem edição, sem record)
+        const temAlgo = entrada || saida || ocorrencia || day.record;
+        if (!temAlgo) continue;
+
+        const horas = ocorrencia ? 0 : calcHoras(entrada, saida, saida_almoco, retorno_almoco);
         const payload = {
           colaborador_id: selectedEmployee,
           colaborador_nome: selectedEmp?.nome_completo || '',
           data: day.date,
-          entrada: ocorrencia ? '' : entrada,
-          saida: ocorrencia ? '' : saida,
-          saida_almoco: ocorrencia ? '' : saida_almoco,
-          retorno_almoco: ocorrencia ? '' : retorno_almoco,
-          horas_trabalhadas: ocorrencia ? 0 : horas,
+          entrada: ocorrencia ? '' : (entrada || ''),
+          saida: ocorrencia ? '' : (saida || ''),
+          saida_almoco: ocorrencia ? '' : (saida_almoco || ''),
+          retorno_almoco: ocorrencia ? '' : (retorno_almoco || ''),
+          horas_trabalhadas: horas,
           tipo_registro: 'manual',
           status: 'aprovado',
-          ocorrencia,
+          ocorrencia: ocorrencia || '',
           observacoes: obs || ''
         };
 
