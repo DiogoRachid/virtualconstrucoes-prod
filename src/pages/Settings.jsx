@@ -486,6 +486,34 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
+              {/* O que Fazemos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2"><Briefcase className="h-5 w-5" /> Seção "O que Fazemos" — Serviços</CardTitle>
+                  <CardDescription>Cards exibidos na seção de serviços da landing page</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SiteServicosEditor
+                    servicos={companyData.site_servicos || []}
+                    onChange={list => setCompanyData(p => ({ ...p, site_servicos: list }))}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Portfólio */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2"><FolderOpen className="h-5 w-5" /> Seção "Portfólio" — Obras Realizadas</CardTitle>
+                  <CardDescription>Cards de obras exibidos na landing page</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SiteObrasEditor
+                    obras={companyData.site_obras || []}
+                    onChange={list => setCompanyData(p => ({ ...p, site_obras: list }))}
+                  />
+                </CardContent>
+              </Card>
+
               {/* CTA Sistema */}
               <Card>
                 <CardHeader>
