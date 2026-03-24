@@ -122,6 +122,7 @@ const menuItems = [
     title: 'Obra',
     icon: Truck,
     submenu: [
+      { title: 'Diário de Obra', page: 'DiarioObra', icon: BookOpen },
       { title: 'Histórico de Insumos', page: 'InputPurchaseHistory', icon: History },
       { title: 'Pedidos de Materiais', page: 'MaterialRequisitions', icon: FileInput },
       { title: 'Lista de Compras', page: 'PurchasingList', icon: ShoppingCart },
