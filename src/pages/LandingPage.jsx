@@ -215,12 +215,11 @@ export default function LandingPage() {
           <div className="inline-flex items-center gap-2 bg-blue-600/30 border border-blue-400/40 rounded-full px-4 py-2 text-sm mb-6 backdrop-blur">
             <Shield className="h-4 w-4" /> Especialistas em Obras Públicas — Londrina/PR
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Construindo o Brasil<br />
-            <span className="text-blue-400">com Qualidade</span> e Transparência
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6 whitespace-pre-line">
+            {heroTitulo}
           </h1>
           <p className="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-10">
-            Há mais de duas décadas, a Virtual Construções Civis executa obras públicas em Londrina e região — universidades, hospitais, infraestrutura e equipamentos urbanos — com excelência técnica e total conformidade legal.
+            {heroSubtitulo}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button onClick={() => scrollTo('obras')}
