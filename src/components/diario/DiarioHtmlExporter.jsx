@@ -291,9 +291,9 @@ export async function exportDiarioPDF(diario, companySettings, preenchidoPor) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function exportDiariosLotePDF(diarios, companySettings, preenchidoPor, logoUrl) {
+export async function exportDiariosLotePDF(diarios, companySettings, preenchidoPor) {
   const htmlPages = diarios.map(d => 
-    generateDiarioHtml(d, companySettings, preenchidoPor, logoUrl)
+    generateDiarioHtml(d, companySettings, preenchidoPor)
       .replace('</head>', '<style>.page { page-break-after: always; }</style></head>')
   ).join('');
 
