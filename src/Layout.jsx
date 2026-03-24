@@ -134,7 +134,10 @@ const menuItems = [
   {
     title: 'Relatórios',
     icon: FileText,
-    page: 'Reports'
+    submenu: [
+      { title: 'Relatórios Gerais', page: 'Reports', icon: FileText },
+      { title: 'Variação de Preços', page: 'InputPriceVariationReport', icon: TrendingUp }
+    ]
   },
   {
     title: 'Backup',
