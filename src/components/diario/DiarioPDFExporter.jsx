@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import 'jspdf-autotable';
 
 const DIAS_SEMANA = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
 
@@ -12,7 +12,8 @@ function formatDate(dateStr) {
 function getDiaSemana(dateStr) {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
-  return DIAS_SEMANA[new Date(Number(y), Number(m) - 1, Number(d)).getDay()];
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return DIAS_SEMANA[date.getDay()];
 }
 
 export function getCurrentUser() {
@@ -25,16 +26,156 @@ export function getCurrentUser() {
   return '';
 }
 
-function totalEfetivo(d) {
-  return (d.mestre_obras || 0) + (d.pedreiros || 0) + (d.carpinteiros || 0) +
-    (d.armadores || 0) + (d.eletricistas || 0) + (d.encanadores || 0) +
-    (d.pintores || 0) + (d.ajudantes || 0) + (d.outros_quantidade || 0);
+// Carrega imagem e converte para base64 via canvas (a imagem já está no DOM como <img> renderizada)
+// Usa allorigins como proxy para evitar CORS
+async function loadImageBase64(url) {
+  // Tenta 1: buscar via proxy allorigins (sempre funciona, sem CORS)
+  try {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error('proxy failed');
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = () => resolve({ width: 200, height: 60 });
+      img.src = dataUrl;
+    });
+    return { dataUrl, width: dims.width, height: dims.height };
+  } catch {}
+
+  // Tenta 2: fetch direto (funciona se o servidor tiver CORS)
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('direct failed');
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = () => resolve({ width: 200, height: 60 });
+      img.src = dataUrl;
+    });
+    return { dataUrl, width: dims.width, height: dims.height };
+  } catch {}
+
+  return null;
 }
 
-// Monta o HTML de um diário para renderização
-function buildDiarioHtml(diario, companySettings, autor) {
-  const logoUrl = companySettings?.logo_url_clara || '';
-  const nomeEmpresa = companySettings?.nome_empresa || 'Virtual Construções Civis';
+// Pré-carrega a logo UMA vez antes de gerar o PDF
+async function preloadLogo(companySettings) {
+  const logoUrl = companySettings?.logo_url_clara;
+  if (!logoUrl) return null;
+  return await loadImageBase64(logoUrl);
+}
+
+function drawHeader(doc, companySettings, logoData, pageW, marginX, contentW) {
+  const nomEmpresa = companySettings?.nome_empresa || 'Virtual Construções Civis';
+
+  const LOGO_H = 18;
+  const LOGO_MAX_W = 52;
+  let logoW = 0;
+
+  if (logoData) {
+    logoW = Math.min((logoData.width / logoData.height) * LOGO_H, LOGO_MAX_W);
+    doc.addImage(logoData.dataUrl, 'PNG', marginX, 7, logoW, LOGO_H);
+  }
+
+  // Texto ao lado da logo ou centralizado
+  const textX = logoW > 0 ? marginX + logoW + 5 : pageW / 2;
+  const textAlign = logoW > 0 ? 'left' : 'center';
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(30, 30, 30);
+  if (textAlign === 'center') {
+    doc.text(nomEmpresa, pageW / 2, 14, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setTextColor(20, 80, 160);
+    doc.text('DIÁRIO DE OBRA', pageW / 2, 21, { align: 'center' });
+  } else {
+    doc.text(nomEmpresa, textX, 13);
+    doc.setFontSize(11);
+    doc.setTextColor(20, 80, 160);
+    doc.text('DIÁRIO DE OBRA', textX, 21);
+  }
+
+  const lineY = 28;
+  doc.setDrawColor(20, 80, 160);
+  doc.setLineWidth(0.8);
+  doc.line(marginX, lineY, pageW - marginX, lineY);
+
+  return lineY + 5; // Y onde começa o conteúdo
+}
+
+function drawDiario(doc, diario, companySettings, logoData, pageW, marginX, contentW) {
+  const startY = drawHeader(doc, companySettings, logoData, pageW, marginX, contentW);
+  let y = startY;
+
+  // ── BOX INFO DA OBRA ──
+  const infoBoxH = 32;
+  doc.setFillColor(240, 245, 255);
+  doc.setDrawColor(180, 200, 230);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(marginX, y, contentW, infoBoxH, 2, 2, 'FD');
+
+  const col2X = marginX + contentW * 0.52;
+
+  // Linha 1: Obra | Tempo
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 80, 160);
+  doc.text('OBRA:', marginX + 3, y + 7);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  const obraNome = doc.splitTextToSize(diario.obra_nome || '—', contentW * 0.48 - 16);
+  doc.text(obraNome[0], marginX + 17, y + 7);
+
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 80, 160);
+  doc.text('TEMPO:', col2X, y + 7);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  doc.text(diario.tempo || '—', col2X + 16, y + 7);
+
+  // Linha 2: Data | Dia de Obra
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 80, 160);
+  doc.text('DATA:', marginX + 3, y + 15);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  doc.text(`${formatDate(diario.data)} – ${getDiaSemana(diario.data)}`, marginX + 17, y + 15);
+
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 80, 160);
+  doc.text('DIA DE OBRA:', col2X, y + 15);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  doc.text(diario.dia_obra ? String(diario.dia_obra) : '—', col2X + 28, y + 15);
+
+  // Linha 3: Preenchido por | Dias Restantes
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 80, 160);
+  doc.text('PREENCHIDO POR:', marginX + 3, y + 23);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+  doc.text(diario.preenchido_por || '—', marginX + 36, y + 23);
+
+  if (diario.dias_restantes !== undefined && diario.dias_restantes !== null && diario.dias_restantes !== '') {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 80, 160);
+    doc.text('DIAS RESTANTES:', col2X, y + 23);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text(String(diario.dias_restantes), col2X + 32, y + 23);
+  }
+
+  y += infoBoxH + 6;
+
+  // ── EFETIVO ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(20, 80, 160);
+  doc.text('EFETIVO DE MÃO DE OBRA', marginX, y);
+  doc.setDrawColor(20, 80, 160); doc.setLineWidth(0.3);
+  doc.line(marginX, y + 1.5, pageW - marginX, y + 1.5);
+  y += 5;
 
   const efetivo = [
     ['Mestre de Obras', diario.mestre_obras || 0],
@@ -49,162 +190,118 @@ function buildDiarioHtml(diario, companySettings, autor) {
   if (diario.outros_funcao || diario.outros_quantidade) {
     efetivo.push([`Outros – ${diario.outros_funcao || ''}`, diario.outros_quantidade || 0]);
   }
-  const total = totalEfetivo(diario);
+  const totalEfetivo = efetivo.reduce((acc, [, q]) => acc + Number(q), 0);
 
-  const efetivoHtml = efetivo.map(([label, qty], i) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:${i % 2 === 0 ? '#f0f5ff' : '#f8faff'};border:1px solid #d0dcee;border-radius:4px;">
-      <span style="font-size:9px;color:#444;">${label}</span>
-      <span style="font-size:12px;font-weight:bold;color:#1450a0;">${qty}</span>
-    </div>
-  `).join('');
+  const cols = 4;
+  const cellW = contentW / cols;
+  const cellH = 8;
+  efetivo.forEach(([label, qty], i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = marginX + col * cellW;
+    const cy = y + row * cellH;
+    doc.setFillColor(col % 2 === 0 ? 247 : 252, col % 2 === 0 ? 249 : 253, 255);
+    doc.setDrawColor(210, 220, 235); doc.setLineWidth(0.2);
+    doc.rect(cx, cy, cellW, cellH, 'FD');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(70, 70, 70);
+    doc.text(label, cx + 2, cy + 5.2);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 80, 160);
+    doc.text(String(qty), cx + cellW - 4, cy + 5.5, { align: 'right' });
+  });
 
-  const secoesHtml = [
+  const efetivoRows = Math.ceil(efetivo.length / cols);
+  y += efetivoRows * cellH + 1;
+
+  // Total bar
+  doc.setFillColor(20, 80, 160);
+  doc.rect(marginX, y, contentW, 7, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(255, 255, 255);
+  doc.text('TOTAL DE FUNCIONÁRIOS:', marginX + 3, y + 5);
+  doc.text(String(totalEfetivo), pageW - marginX - 3, y + 5, { align: 'right' });
+  y += 10;
+
+  // ── SEÇÕES DE TEXTO ──
+  const secoes = [
     { titulo: 'SERVIÇOS EM EXECUÇÃO', conteudo: diario.servicos_execucao },
     { titulo: 'SERVIÇOS CONCLUÍDOS', conteudo: diario.servicos_concluidos },
     { titulo: 'OCORRÊNCIAS', conteudo: diario.ocorrencias },
-  ].map(s => `
-    <div style="margin-bottom:12px;">
-      <div style="font-weight:bold;font-size:10px;color:#1450a0;border-bottom:1.5px solid #1450a0;padding-bottom:3px;margin-bottom:6px;">${s.titulo}</div>
-      <div style="background:#fcfcfc;border:1px solid #ccd8e8;border-radius:4px;padding:8px;font-size:9px;color:#333;min-height:36px;white-space:pre-wrap;">${s.conteudo || '—'}</div>
-    </div>
-  `).join('');
+  ];
 
-  return `
-    <div style="font-family:Arial,sans-serif;width:794px;padding:28px 32px;box-sizing:border-box;background:#fff;color:#333;">
-      <!-- HEADER -->
-      <div style="display:flex;align-items:center;padding-bottom:10px;border-bottom:2px solid #1450a0;margin-bottom:14px;">
-        ${logoUrl ? `<img src="${logoUrl}" crossorigin="anonymous" style="height:52px;max-width:140px;object-fit:contain;margin-right:16px;" />` : ''}
-        <div>
-          <div style="font-weight:bold;font-size:15px;color:#222;">${nomeEmpresa}</div>
-          <div style="font-size:12px;color:#1450a0;font-weight:bold;letter-spacing:1px;">DIÁRIO DE OBRA</div>
-        </div>
-      </div>
+  for (const secao of secoes) {
+    if (y > 238) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(20, 80, 160);
+    doc.text(secao.titulo, marginX, y);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y + 1.5, pageW - marginX, y + 1.5);
+    y += 5;
 
-      <!-- INFO BOX -->
-      <div style="background:#f0f5ff;border:1px solid #b4c8e6;border-radius:6px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
-        <div><span style="font-weight:bold;font-size:9px;color:#1450a0;">OBRA: </span><span style="font-size:9px;">${diario.obra_nome || '—'}</span></div>
-        <div><span style="font-weight:bold;font-size:9px;color:#1450a0;">TEMPO: </span><span style="font-size:9px;">${diario.tempo || '—'}</span></div>
-        <div><span style="font-weight:bold;font-size:9px;color:#1450a0;">DATA: </span><span style="font-size:9px;">${formatDate(diario.data)} – ${getDiaSemana(diario.data)}</span></div>
-        <div><span style="font-weight:bold;font-size:9px;color:#1450a0;">DIA DE OBRA: </span><span style="font-size:9px;">${diario.dia_obra || '—'}</span></div>
-        <div><span style="font-weight:bold;font-size:9px;color:#1450a0;">PREENCHIDO POR: </span><span style="font-size:9px;">${autor || '—'}</span></div>
-        ${diario.dias_restantes !== undefined && diario.dias_restantes !== null && diario.dias_restantes !== ''
-          ? `<div><span style="font-weight:bold;font-size:9px;color:#1450a0;">DIAS RESTANTES: </span><span style="font-size:9px;">${diario.dias_restantes}</span></div>`
-          : '<div></div>'}
-      </div>
+    const texto = secao.conteudo || '—';
+    const linhas = doc.splitTextToSize(texto, contentW - 5);
+    const boxH = Math.max(linhas.length * 4.8 + 6, 14);
 
-      <!-- EFETIVO -->
-      <div style="font-weight:bold;font-size:10px;color:#1450a0;border-bottom:1.5px solid #1450a0;padding-bottom:3px;margin-bottom:8px;">EFETIVO DE MÃO DE OBRA</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px;">
-        ${efetivoHtml}
-      </div>
-      <div style="background:#1450a0;color:#fff;padding:5px 10px;border-radius:4px;display:flex;justify-content:space-between;margin-bottom:14px;">
-        <span style="font-size:9px;font-weight:bold;">TOTAL DE FUNCIONÁRIOS:</span>
-        <span style="font-size:12px;font-weight:bold;">${total}</span>
-      </div>
-
-      <!-- SEÇÕES -->
-      ${secoesHtml}
-
-      <!-- ASSINATURAS -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:24px;">
-        ${['Mestre de Obras', 'Eng. Responsável', 'Fiscalização'].map(l => `
-          <div style="text-align:center;">
-            <div style="border-top:1px solid #999;margin-bottom:4px;"></div>
-            <span style="font-size:8px;color:#666;">${l}</span>
-          </div>
-        `).join('')}
-      </div>
-
-      <!-- FOOTER -->
-      <div style="border-top:1px solid #ccc;margin-top:16px;padding-top:6px;display:flex;justify-content:space-between;font-size:7px;color:#999;">
-        <span>${nomeEmpresa} – Diário de Obra</span>
-        ${autor ? `<span>Preenchido por: ${autor}</span>` : ''}
-        <span>${formatDate(diario.data)}</span>
-      </div>
-    </div>
-  `;
-}
-
-// Converte URL de imagem para base64 via fetch (sem CORS)
-async function urlToBase64(url) {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
-// Renderiza um diário como imagem e adiciona no jsPDF
-async function renderDiarioToDoc(doc, diario, companySettings, autor, addPageBefore) {
-  // Pré-converte logo para base64 para evitar CORS no html2canvas
-  let logoSrc = companySettings?.logo_url_clara || '';
-  if (logoSrc) {
-    const b64 = await urlToBase64(logoSrc);
-    if (b64) logoSrc = b64;
+    doc.setFillColor(252, 252, 252); doc.setDrawColor(200, 210, 225); doc.setLineWidth(0.2);
+    doc.rect(marginX, y, contentW, boxH, 'FD');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
+    doc.text(linhas, marginX + 3, y + 5);
+    y += boxH + 5;
   }
 
-  // Passa logoSrc já como base64 para o HTML
-  const htmlCompany = logoSrc ? { ...companySettings, logo_url_clara: logoSrc } : companySettings;
-  const html = buildDiarioHtml(diario, htmlCompany, autor);
-
-  // Cria container off-screen
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
-  container.innerHTML = html;
-  document.body.appendChild(container);
-
-  // Aguarda imagem carregar
-  const img = container.querySelector('img');
-  if (img) {
-    await new Promise(resolve => {
-      if (img.complete && img.naturalWidth > 0) return resolve();
-      img.onload = resolve;
-      img.onerror = resolve;
-      setTimeout(resolve, 3000);
-    });
-  }
-
-  const canvas = await html2canvas(container.firstElementChild, {
-    scale: 2,
-    useCORS: false,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
+  // ── ASSINATURAS ──
+  if (y > 245) { doc.addPage(); y = 20; }
+  y += 6;
+  doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3);
+  const sigW = contentW / 3;
+  ['Mestre de Obras', 'Eng. Responsável', 'Fiscalização'].forEach((label, i) => {
+    const sx = marginX + i * sigW + sigW * 0.1;
+    const lw = sigW * 0.8;
+    doc.line(sx, y, sx + lw, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+    doc.text(label, sx + lw / 2, y + 4, { align: 'center' });
   });
 
-  document.body.removeChild(container);
+  return y + 10;
+}
 
-  const imgData = canvas.toDataURL('image/jpeg', 0.92);
-  const pageW = 210, pageH = 297;
-
-  if (addPageBefore) doc.addPage();
-  doc.addImage(imgData, 'JPEG', 0, 0, pageW, pageH, undefined, 'FAST');
+function drawFooters(doc, nomEmpresa, preenchidoPor, pageW, marginX) {
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.2);
+    doc.line(marginX, 286, pageW - marginX, 286);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130);
+    doc.text(`${nomEmpresa} – Diário de Obra`, marginX, 290);
+    if (preenchidoPor) {
+      doc.text(`Preenchido por: ${preenchidoPor}`, pageW / 2, 290, { align: 'center' });
+    }
+    doc.text(`Página ${p} de ${totalPages}`, pageW - marginX, 290, { align: 'right' });
+  }
 }
 
 // Exportação individual
 export async function exportDiarioPDF(diario, companySettings, preenchidoPor) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = 210, marginX = 14, contentW = pageW - marginX * 2;
   const autor = preenchidoPor || getCurrentUser();
-  await renderDiarioToDoc(doc, diario, companySettings, autor, false);
+  const logoData = await preloadLogo(companySettings);
+
+  drawDiario(doc, { ...diario, preenchido_por: autor }, companySettings, logoData, pageW, marginX, contentW);
+  drawFooters(doc, companySettings?.nome_empresa || 'Virtual Construções Civis', autor, pageW, marginX);
+
   doc.save(`Diario_${(diario.obra_nome || 'Obra').replace(/\s+/g, '_')}_${diario.data}.pdf`);
 }
 
 // Exportação em lote (múltiplos diários, 1 PDF único)
 export async function exportDiariosLotePDF(diarios, companySettings, preenchidoPor) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = 210, marginX = 14, contentW = pageW - marginX * 2;
   const autor = preenchidoPor || getCurrentUser();
+  const logoData = await preloadLogo(companySettings);
 
   for (let i = 0; i < diarios.length; i++) {
-    await renderDiarioToDoc(doc, diarios[i], companySettings, autor, i > 0);
+    if (i > 0) doc.addPage();
+    drawDiario(doc, { ...diarios[i], preenchido_por: autor }, companySettings, logoData, pageW, marginX, contentW);
   }
 
+  drawFooters(doc, companySettings?.nome_empresa || 'Virtual Construções Civis', autor, pageW, marginX);
   doc.save(`Diarios_Lote_${new Date().toISOString().split('T')[0]}.pdf`);
 }
