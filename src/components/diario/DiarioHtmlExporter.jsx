@@ -68,12 +68,12 @@ function generateDiarioHtml(diario, companySettings, preenchidoPor, logoUrl) {
     .header {
       display: flex;
       align-items: center;
-      gap: 15px;
-      margin-bottom: 15px;
+      gap: 10px;
+      margin-bottom: 12px;
       border-bottom: 2px solid #1450a0;
-      padding-bottom: 10px;
+      padding-bottom: 8px;
     }
-    .logo { max-height: 35px; max-width: 100px; object-fit: contain; }
+    .logo { height: 30px; object-fit: contain; max-width: 80px; }
     .header-text h1 { font-size: 18px; color: #1450a0; font-weight: bold; }
     .header-text p { font-size: 11px; color: #666; margin-top: 2px; }
 
