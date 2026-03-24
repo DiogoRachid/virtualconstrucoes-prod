@@ -13,7 +13,7 @@ import {
   Sun, Cloud, CloudRain, CloudDrizzle, CloudFog,
   Users, ChevronLeft, Calendar, HardHat, Loader2, Filter
 } from 'lucide-react';
-import { exportDiarioPDF, exportDiariosLotePDF, getCurrentUser } from '@/components/diario/DiarioPDFExporter';
+import { exportDiarioPDF, exportDiariosLotePDF, getCurrentUser } from '@/components/diario/DiarioHtmlExporter';
 import { useToast } from '@/components/ui/use-toast';
 
 const DIAS_SEMANA = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
