@@ -78,7 +78,7 @@ export default function ColaboradorPortal() {
             {user?.full_name?.[0]?.toUpperCase() || 'C'}
           </div>
           <div>
-            <p className="font-semibold text-slate-900 text-sm">{user?.full_name || 'Colaborador'}</p>
+            <p className="font-semibold text-slate-900 text-sm">{user?.nome || user?.full_name || 'Colaborador'}</p>
             <p className="text-xs text-slate-500">Portal do Colaborador</p>
           </div>
         </div>
