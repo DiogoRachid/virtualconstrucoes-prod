@@ -114,26 +114,6 @@ export default function DiarioObraPage() {
 
   const cs = companySettingsList[0] || null;
 
-  // Converte a logo para base64 assim que cs carregar (evita CORS no canvas)
-  useEffect(() => {
-    const url = cs?.logo_url_clara;
-    if (!url) return;
-    fetch(url)
-      .then(r => r.blob())
-      .then(blob => new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.onerror = rej;
-        reader.readAsDataURL(blob);
-      }))
-      .then(dataUrl => {
-        const img = new Image();
-        img.onload = () => setLogoBase64({ dataUrl, width: img.naturalWidth, height: img.naturalHeight });
-        img.src = dataUrl;
-      })
-      .catch(() => setLogoBase64(null));
-  }, [cs?.logo_url_clara]);
-
   const saveMutation = useMutation({
     mutationFn: async (data) => editingId
       ? base44.entities.DiarioObra.update(editingId, data)
