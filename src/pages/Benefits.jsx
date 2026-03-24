@@ -38,11 +38,19 @@ const tipoLabels = {
   vale_transporte: 'Vale Transporte',
   vale_alimentacao: 'Vale Alimentação',
   vale_refeicao: 'Vale Refeição',
+  vale_compras: 'Vale Compras',
+  cafe_manha: 'Café da Manhã',
   assistencia_medica: 'Assistência Médica',
   assistencia_odontologica: 'Assistência Odontológica',
   seguro_vida: 'Seguro de Vida',
   auxilio_creche: 'Auxílio Creche',
   outro: 'Outro'
+};
+
+const regraLabels = {
+  fixo: 'Fixo',
+  proporcional_faltas: 'Proporcional (desconta faltas — base 30 dias)',
+  por_dias_uteis: 'Por presença (dias úteis do mês)'
 };
 
 export default function Benefits() {
