@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings as SettingsIcon, User, Shield, Building2, Loader2, Check, Upload, ImageIcon, HardHat, Users } from 'lucide-react';
+import { Settings as SettingsIcon, User, Shield, Building2, Loader2, Check, Upload, ImageIcon, HardHat, Users, Globe, Hash } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
