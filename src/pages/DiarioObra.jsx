@@ -226,8 +226,7 @@ export default function DiarioObraPage() {
   // ── LISTA ──
   if (view === 'list') return (
     <div className="max-w-5xl mx-auto">
-      {/* Logo hidden para captura via canvas (sem CORS) */}
-      {logoUrl && <img ref={logoRef} src={logoUrl} alt="" crossOrigin="anonymous" style={{ display: 'none' }} />}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
