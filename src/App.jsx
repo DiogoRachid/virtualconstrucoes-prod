@@ -17,6 +17,7 @@ import ColaboradorLogin from './pages/ColaboradorLogin';
 import ProtectedAdminRoute from '@/lib/ProtectedAdminRoute';
 import BenefitReceipt from './pages/BenefitReceipt';
 import Settings from './pages/Settings';
+import DiarioObra from './pages/DiarioObra';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
