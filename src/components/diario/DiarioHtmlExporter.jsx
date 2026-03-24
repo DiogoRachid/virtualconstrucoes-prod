@@ -23,8 +23,9 @@ export function getCurrentUser() {
   return '';
 }
 
-function generateDiarioHtml(diario, companySettings, preenchidoPor, logoUrl) {
+function generateDiarioHtml(diario, companySettings, preenchidoPor) {
   const nomEmpresa = companySettings?.nome_empresa || 'Virtual Construções Civis';
+  const logoUrl = companySettings?.logo_url_clara || DEFAULT_LOGO_CLARA;
   const autor = preenchidoPor || getCurrentUser();
 
   const efetivo = [
