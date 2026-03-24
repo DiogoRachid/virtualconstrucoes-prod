@@ -73,8 +73,18 @@ export default function Settings() {
 
   useEffect(() => {
     const loadUser = async () => {
-      const user = await base44.auth.me();
-      setCurrentUser(user);
+      // Tenta pegar o usuário da plataforma Base44
+      try {
+        const user = await base44.auth.me();
+        if (user) { setCurrentUser(user); return; }
+      } catch (_) {}
+      // Fallback: usuário do portal admin (sessionStorage)
+      const session = sessionStorage.getItem('portal_admin_auth');
+      if (session) {
+        const adminData = JSON.parse(session);
+        // Trata como admin completo
+        setCurrentUser({ ...adminData, full_name: adminData.nome, permissao_financeiro: 'admin', role: 'admin' });
+      }
     };
     loadUser();
   }, []);
