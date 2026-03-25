@@ -90,11 +90,12 @@ export default function TableImport() {
       // Carregar TODOS os insumos (sem limite de 50)
       const allInputs = await base44.entities.Input.list('created_date', 100000);
       
-      // Mapa: "codigo|data_base" → id (para checar duplicatas exatas)
-      const inputMapExact = new Map(allInputs.map(i => [`${i.codigo?.trim()}|${i.data_base?.trim() || ''}`, i.id]));
+      // Mapa por código → registro completo
+      const inputMapByCodigo = new Map(allInputs.map(i => [i.codigo?.trim(), i]));
 
-      const creates = [];
-      const updates = [];
+      const creates = [];  // Insumos novos (código nunca visto)
+      const updates = [];  // Insumos existentes com nova data_base (atualiza + salva histórico)
+      const sameBase = []; // Mesma data_base: só atualiza valor sem criar histórico
       let skipped = 0;
 
       // --- Parse das linhas ---
@@ -110,7 +111,6 @@ export default function TableImport() {
         const unidade = cols[2]?.trim();
         const valorStr = cols[3];
 
-        // Ignorar linhas sem código ou que parecem cabeçalho
         if (!codigo || /^c[oó]d/i.test(codigo)) { skipped++; continue; }
 
         let categoria = detectCategory(unidade);
@@ -126,8 +126,7 @@ export default function TableImport() {
         }
 
         const valor = parseCurrency(valorStr);
-
-        const data = {
+        const newData = {
           codigo,
           descricao: (descricao || codigo).slice(0, 500),
           unidade: unidade || 'UN',
@@ -137,46 +136,75 @@ export default function TableImport() {
           fonte: 'SINAPI'
         };
 
-        // Chave: codigo + data_base → mesmo registro (atualiza valor)
-        // Chave: codigo + data_base diferente → novo registro (preserva histórico)
-        const keyExact = `${codigo}|${dataBase}`;
-        if (inputMapExact.has(keyExact)) {
-          // Mesma data_base: atualizar valor
-          updates.push({ id: inputMapExact.get(keyExact), data });
+        const existing = inputMapByCodigo.get(codigo);
+        if (!existing) {
+          // Código nunca visto: criar novo
+          creates.push(newData);
+        } else if (existing.data_base === dataBase) {
+          // Mesma data_base: só atualiza valor (re-importação)
+          sameBase.push({ id: existing.id, data: newData });
         } else {
-          // Nova data_base ou novo código: criar registro novo
-          creates.push(data);
+          // Nova data_base: atualiza insumo E salva valor anterior no histórico
+          updates.push({ id: existing.id, data: newData, oldValue: existing.valor_unitario, oldDataBase: existing.data_base, insumoId: existing.id });
         }
       }
 
-      const total = creates.length + updates.length;
+      const total = creates.length + updates.length + sameBase.length;
       if (total === 0) {
         toast.error('Nenhum insumo válido encontrado. Verifique o formato (separador, colunas).');
         return;
       }
 
-      // --- Criar novos ---
+      // --- Criar novos insumos ---
       if (creates.length > 0) {
         const CHUNK = 100;
         for (let i = 0; i < creates.length; i += CHUNK) {
           await base44.entities.Input.bulkCreate(creates.slice(i, i + CHUNK));
-          const pct = 30 + Math.floor(((i + CHUNK) / creates.length) * 40);
-          setProgress({ message: `Criando novos insumos... ${Math.min(i + CHUNK, creates.length)}/${creates.length}`, percent: Math.min(pct, 70) });
+          setProgress({ message: `Criando insumos... ${Math.min(i + CHUNK, creates.length)}/${creates.length}`, percent: 20 + Math.floor(((i + CHUNK) / creates.length) * 20) });
         }
       }
 
-      // --- Atualizar existentes ---
+      // --- Atualizar com nova data_base: salvar histórico + atualizar insumo ---
       if (updates.length > 0) {
+        // 1. Salvar valores ANTERIORES no histórico
+        const historicos = updates
+          .filter(u => u.oldDataBase && u.oldValue != null)
+          .map(u => ({
+            insumo_id: u.insumoId,
+            codigo: u.data.codigo,
+            descricao: u.data.descricao,
+            unidade: u.data.unidade,
+            valor_unitario: u.oldValue,
+            data_base: u.oldDataBase,
+            categoria: u.data.categoria,
+            fonte: u.data.fonte
+          }));
+
+        const CHUNK_H = 100;
+        for (let i = 0; i < historicos.length; i += CHUNK_H) {
+          await base44.entities.InputPriceHistory.bulkCreate(historicos.slice(i, i + CHUNK_H));
+          setProgress({ message: `Salvando histórico de preços... ${Math.min(i + CHUNK_H, historicos.length)}/${historicos.length}`, percent: 40 + Math.floor(((i + CHUNK_H) / historicos.length) * 15) });
+        }
+
+        // 2. Atualizar insumos com novo valor/data_base
         const CHUNK = 50;
         for (let i = 0; i < updates.length; i += CHUNK) {
           await Promise.all(updates.slice(i, i + CHUNK).map(u => base44.entities.Input.update(u.id, u.data)));
-          const pct = 70 + Math.floor(((i + CHUNK) / updates.length) * 25);
-          setProgress({ message: `Atualizando insumos... ${Math.min(i + CHUNK, updates.length)}/${updates.length}`, percent: Math.min(pct, 95) });
+          setProgress({ message: `Atualizando insumos (nova data base)... ${Math.min(i + CHUNK, updates.length)}/${updates.length}`, percent: 55 + Math.floor(((i + CHUNK) / updates.length) * 25) });
+        }
+      }
+
+      // --- Atualizar mesma data_base (re-importação) ---
+      if (sameBase.length > 0) {
+        const CHUNK = 50;
+        for (let i = 0; i < sameBase.length; i += CHUNK) {
+          await Promise.all(sameBase.slice(i, i + CHUNK).map(u => base44.entities.Input.update(u.id, u.data)));
+          setProgress({ message: `Atualizando valores... ${Math.min(i + CHUNK, sameBase.length)}/${sameBase.length}`, percent: 80 + Math.floor(((i + CHUNK) / sameBase.length) * 15) });
         }
       }
 
       setProgress({ message: 'Concluído!', percent: 100 });
-      toast.success(`Concluído! ${creates.length} criados (nova data base), ${updates.length} atualizados${skipped > 0 ? `, ${skipped} ignorados` : ''}.`);
+      toast.success(`Concluído! ${creates.length} criados, ${updates.length} atualizados (histórico salvo), ${sameBase.length} re-importados${skipped > 0 ? `, ${skipped} ignorados` : ''}.`);
   };
 
   const processCompositionsDirectly = async (lines, separator) => {

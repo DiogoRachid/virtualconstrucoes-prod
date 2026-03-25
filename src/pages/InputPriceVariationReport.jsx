@@ -29,50 +29,57 @@ export default function InputPriceVariationReport() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  // Buscar todas as datas base únicas
-  const { data: allInputs = [] } = useQuery({
-    queryKey: ['all-inputs-variation'],
-    queryFn: () => base44.entities.Input.list()
+  // Buscar histórico de preços (datas antigas) e insumos atuais
+  const { data: priceHistory = [] } = useQuery({
+    queryKey: ['input-price-history'],
+    queryFn: () => base44.entities.InputPriceHistory.list('created_date', 100000)
   });
 
+  const { data: allInputs = [] } = useQuery({
+    queryKey: ['all-inputs-variation'],
+    queryFn: () => base44.entities.Input.list('created_date', 100000)
+  });
+
+  // Datas base disponíveis: histórico + data_base atual dos insumos
   const datasBaseUnicas = useMemo(() => {
-    const datas = [...new Set(allInputs.map(i => i.data_base).filter(Boolean))];
+    const fromHistory = priceHistory.map(h => h.data_base).filter(Boolean);
+    const fromCurrent = allInputs.map(i => i.data_base).filter(Boolean);
+    const datas = [...new Set([...fromHistory, ...fromCurrent])];
     return datas.sort((a, b) => {
       const [mesA, anoA] = a.split('/');
       const [mesB, anoB] = b.split('/');
       return parseInt(anoA) - parseInt(anoB) || parseInt(mesA) - parseInt(mesB);
     });
-  }, [allInputs]);
+  }, [priceHistory, allInputs]);
 
-  // Buscar insumos com as datas base selecionadas
-  const { data: inputsX = [] } = useQuery({
-    queryKey: ['inputs-dataBase', dataBaseX],
-    queryFn: () => dataBaseX ? base44.entities.Input.filter({ data_base: dataBaseX }) : [],
-    enabled: !!dataBaseX
-  });
-
-  const { data: inputsY = [] } = useQuery({
-    queryKey: ['inputs-dataBase', dataBaseY],
-    queryFn: () => dataBaseY ? base44.entities.Input.filter({ data_base: dataBaseY }) : [],
-    enabled: !!dataBaseY
-  });
-
-  // Calcular variação de preços
+  // Calcular variação de preços combinando histórico + atual
   const variacoes = useMemo(() => {
     if (!dataBaseX || !dataBaseY) return [];
 
-    const mapX = new Map(inputsX.map(i => [i.codigo, i]));
-    const mapY = new Map(inputsY.map(i => [i.codigo, i]));
+    // Para cada data_base: priorizar histórico, fallback para valor atual do insumo
+    const buildMap = (dataBase) => {
+      const map = new Map();
+      // Primeiro: registros do histórico para esta data_base
+      priceHistory.filter(h => h.data_base === dataBase).forEach(h => {
+        map.set(h.codigo, { codigo: h.codigo, descricao: h.descricao, unidade: h.unidade, valor_unitario: h.valor_unitario, categoria: h.categoria });
+      });
+      // Depois: insumos atuais com esta data_base (sobrescreve se já existir no histórico)
+      allInputs.filter(i => i.data_base === dataBase).forEach(i => {
+        map.set(i.codigo, { codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, valor_unitario: i.valor_unitario, categoria: i.categoria });
+      });
+      return map;
+    };
+
+    const mapX = buildMap(dataBaseX);
+    const mapY = buildMap(dataBaseY);
 
     const resultados = [];
-
-    // Insumos que existem em ambas as datas base
-    inputsX.forEach(inputX => {
-      const inputY = mapY.get(inputX.codigo);
-      if (inputY) {
+    mapX.forEach((inputX, codigo) => {
+      const inputY = mapY.get(codigo);
+      if (inputY && inputX.valor_unitario > 0) {
         const variacaoPercentual = ((inputY.valor_unitario - inputX.valor_unitario) / inputX.valor_unitario) * 100;
         resultados.push({
-          codigo: inputX.codigo,
+          codigo,
           descricao: inputX.descricao,
           unidade: inputX.unidade,
           valorX: inputX.valor_unitario,
@@ -84,7 +91,7 @@ export default function InputPriceVariationReport() {
     });
 
     return resultados;
-  }, [dataBaseX, dataBaseY, inputsX, inputsY]);
+  }, [dataBaseX, dataBaseY, priceHistory, allInputs]);
 
   // Filtrar e ordenar
   const filteredVariacoes = useMemo(() => {

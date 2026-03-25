@@ -18,8 +18,8 @@ const getCachedData = async () => {
   const now = Date.now();
   if (!cacheTime || (now - cacheTime) > CACHE_DURATION) {
     const [inputs, services] = await Promise.all([
-      base44.entities.Input.list(),
-      base44.entities.Service.list()
+      base44.entities.Input.list('created_date', 100000),
+      base44.entities.Service.list('created_date', 100000)
     ]);
     cachedInputs = new Map(inputs.map(i => [i.id, i]));
     cachedServices = new Map(services.map(s => [s.id, s]));
