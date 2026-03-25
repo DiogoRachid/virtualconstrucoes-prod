@@ -72,65 +72,94 @@ export default function TableImport() {
     }
   };
 
+  const parseCurrency = (str) => {
+    if (!str) return 0;
+    // Remove espaços, R$, aspas
+    let val = str.trim().replace(/R\$\s*/g, '').replace(/"/g, '').replace(/\s/g, '');
+    if (!val) return 0;
+    // Formato BR: 1.234,56 → remover pontos de milhar, trocar vírgula por ponto
+    if (val.includes(',')) {
+      val = val.replace(/\./g, '').replace(',', '.');
+    }
+    return parseFloat(val) || 0;
+  };
+
   const processInputsDirectly = async (lines, separator) => {
-      const allInputs = await base44.entities.Input.list();
-      const inputMap = new Map(allInputs.map(i => [i.codigo, i.id]));
+      setProgress({ message: 'Lendo insumos existentes...', percent: 10 });
+      const allInputs = await base44.entities.Input.list('', 100000);
+      const inputMap = new Map(allInputs.map(i => [i.codigo?.trim(), i.id]));
       const updates = [];
       const creates = [];
-    
-      let processed = 0;
+      let skipped = 0;
     
       for (const line of lines) {
         if (!line.trim()) continue;
-        const cols = line.split(separator).map(c => c?.trim().replace(/"/g, ''));
+        const cols = line.split(separator).map(c => c?.trim().replace(/^"|"$/g, ''));
         if (cols.length < 3) continue;
     
-        const codigo = cols[0];
-        const descricao = cols[1];
-        const unidade = cols[2];
+        const codigo = cols[0]?.trim();
+        const descricao = cols[1]?.trim();
+        const unidade = cols[2]?.trim();
         const valorStr = cols[3];
     
-        let categoria = 'MATERIAL';
-        let dataBase = '09/2025';
+        // Ignorar linhas sem código ou que parecem cabeçalho
+        if (!codigo || codigo.toLowerCase() === 'codigo' || codigo.toLowerCase() === 'código') {
+          skipped++;
+          continue;
+        }
+    
+        let categoria = detectCategory(unidade);
+        let dataBase = '';
     
         if (hasCategoryColumn) {
            const catRaw = (cols[4] || '').toUpperCase().trim();
-           if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO')) categoria = 'MAO_OBRA';
-           else if (catRaw.startsWith('MAT')) categoria = 'MATERIAL';
-           dataBase = cols[5] || '09/2025';
+           if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO') || catRaw === 'MO') categoria = 'MAO_OBRA';
+           else if (catRaw.startsWith('MAT') || catRaw === 'M') categoria = 'MATERIAL';
+           dataBase = cols[5]?.trim() || '';
         } else {
-           dataBase = cols[4] || '09/2025';
+           dataBase = cols[4]?.trim() || '';
         }
     
-        if (!codigo) continue;
-        const valor = valorStr ? parseFloat(valorStr.replace('R$', '').replace('.', '').replace(',', '.')) : 0;
+        const valor = parseCurrency(valorStr);
     
         const data = { 
            codigo, 
-           descricao: descricao.slice(0, 500), 
+           descricao: (descricao || codigo).slice(0, 500), 
            unidade: unidade || 'UN', 
-           valor_unitario: valor || 0, 
+           valor_unitario: valor, 
            categoria,
-           data_base: dataBase, 
+           ...(dataBase && { data_base: dataBase }),
            fonte: 'SINAPI' 
         };
     
-        if (inputMap.has(codigo)) updates.push({ id: inputMap.get(codigo), data });
-        else creates.push(data);
-        processed++;
+        if (inputMap.has(codigo)) {
+          updates.push({ id: inputMap.get(codigo), data });
+        } else {
+          creates.push(data);
+        }
+      }
+
+      const total = creates.length + updates.length;
+      if (total === 0) {
+        toast.error('Nenhum insumo válido encontrado. Verifique o formato dos dados.');
+        return;
       }
     
       if (creates.length > 0) {
-         setProgress({ message: `Criando ${creates.length} insumos...`, percent: 50 });
-         for (let i=0; i<creates.length; i+=100) await base44.entities.Input.bulkCreate(creates.slice(i, i+100));
+         setProgress({ message: `Criando ${creates.length} novos insumos...`, percent: 50 });
+         for (let i = 0; i < creates.length; i += 100) {
+           await base44.entities.Input.bulkCreate(creates.slice(i, i + 100));
+           setProgress({ message: `Criando insumos... ${Math.min(i + 100, creates.length)}/${creates.length}`, percent: 50 + Math.floor((i / creates.length) * 25) });
+         }
       }
       if (updates.length > 0) {
          setProgress({ message: `Atualizando ${updates.length} insumos...`, percent: 75 });
-         for (let i=0; i<updates.length; i+=50) {
-            await Promise.all(updates.slice(i, i+50).map(u => base44.entities.Input.update(u.id, u.data)));
+         for (let i = 0; i < updates.length; i += 50) {
+            await Promise.all(updates.slice(i, i + 50).map(u => base44.entities.Input.update(u.id, u.data)));
+            setProgress({ message: `Atualizando insumos... ${Math.min(i + 50, updates.length)}/${updates.length}`, percent: 75 + Math.floor((i / updates.length) * 20) });
          }
       }
-      toast.success(`${processed} insumos processados.`);
+      toast.success(`Concluído! ${creates.length} criados, ${updates.length} atualizados${skipped > 0 ? `, ${skipped} ignorados` : ''}.`);
   };
 
   const processCompositionsDirectly = async (lines, separator) => {
