@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Layers, MoreHorizontal, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Layers, MoreHorizontal, Pencil, Trash2, RefreshCw, Calendar } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as Engine from '@/components/logic/CompositionEngine';
@@ -23,17 +24,25 @@ export default function Services() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [recalculating, setRecalculating] = useState(false);
+  const [dataBaseFiltro, setDataBaseFiltro] = useState('');
 
   const { data: services = [], isLoading, refetch } = useQuery({
     queryKey: ['services'],
     queryFn: () => base44.entities.Service.list()
   });
 
-  const filtered = React.useMemo(() => {
+  const datasBase = useMemo(() => {
+    const set = new Set(services.map(s => s.data_base).filter(Boolean));
+    return [...set].sort((a, b) => {
+      const [mA, yA] = a.split('/'); const [mB, yB] = b.split('/');
+      return parseInt(yB) - parseInt(yA) || parseInt(mB) - parseInt(mA);
+    });
+  }, [services]);
+
+  const filtered = useMemo(() => {
     let result = services.filter(s => 
-      !search || 
-      s.descricao?.toLowerCase().includes(search.toLowerCase()) ||
-      s.codigo?.toLowerCase().includes(search.toLowerCase())
+      (!search || s.descricao?.toLowerCase().includes(search.toLowerCase()) || s.codigo?.toLowerCase().includes(search.toLowerCase())) &&
+      (!dataBaseFiltro || s.data_base === dataBaseFiltro)
     );
 
     if (sortConfig.key) {
@@ -206,7 +215,21 @@ export default function Services() {
           onSearchChange={setSearch} 
           placeholder="Buscar serviço..." 
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {datasBase.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-slate-500" />
+              <Select value={dataBaseFiltro} onValueChange={setDataBaseFiltro}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Todas as datas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={null}>Todas as datas</SelectItem>
+                  {datasBase.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
             {selectedIds.size > 0 && (
               <>
                 <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
@@ -224,7 +247,7 @@ export default function Services() {
                 </Button>
               </>
             )}
-          </div>
+        </div>
       </div>
 
       <DataTable

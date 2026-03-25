@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
@@ -22,9 +22,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import * as Engine from '@/components/logic/CompositionEngine';
 
@@ -37,6 +37,7 @@ export default function Inputs() {
   const [bulkDate, setBulkDate] = useState('');
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [dataBaseFiltro, setDataBaseFiltro] = useState('');
   
   const [form, setForm] = useState({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' });
 
@@ -45,11 +46,18 @@ export default function Inputs() {
     queryFn: () => base44.entities.Input.list()
   });
 
-  const filtered = React.useMemo(() => {
+  const datasBase = useMemo(() => {
+    const set = new Set(inputs.map(i => i.data_base).filter(Boolean));
+    return [...set].sort((a, b) => {
+      const [mA, yA] = a.split('/'); const [mB, yB] = b.split('/');
+      return parseInt(yB) - parseInt(yA) || parseInt(mB) - parseInt(mA);
+    });
+  }, [inputs]);
+
+  const filtered = useMemo(() => {
     let result = inputs.filter(i => 
-      !search || 
-      i.descricao?.toLowerCase().includes(search.toLowerCase()) || 
-      i.codigo?.toLowerCase().includes(search.toLowerCase())
+      (!search || i.descricao?.toLowerCase().includes(search.toLowerCase()) || i.codigo?.toLowerCase().includes(search.toLowerCase())) &&
+      (!dataBaseFiltro || i.data_base === dataBaseFiltro)
     );
 
     if (sortConfig.key) {
@@ -237,9 +245,23 @@ export default function Inputs() {
         onAction={() => { setEditing(null); setForm({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' }); setOpen(true); }}
       />
       
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
          <SearchFilter searchValue={search} onSearchChange={setSearch} placeholder="Buscar insumo..." />
-         <div className="flex gap-2">
+         <div className="flex flex-wrap gap-2 items-center">
+            {datasBase.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-slate-500" />
+                <Select value={dataBaseFiltro} onValueChange={setDataBaseFiltro}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Todas as datas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={null}>Todas as datas</SelectItem>
+                    {datasBase.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {selectedIds.size > 0 && (
                 <Button variant="destructive" onClick={handleBulkDeleteInputs}>
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})

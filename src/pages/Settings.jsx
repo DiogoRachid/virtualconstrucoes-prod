@@ -129,9 +129,13 @@ export default function Settings() {
     site_sobre_texto3: 'Participamos ativamente de licitações públicas, com regularidade fiscal e técnica plena, garantindo a entrega de obras dentro do prazo, do orçamento e com máxima qualidade.',
     site_sobre_imagem: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=700&q=80',
     site_numeros_anos: '25+',
+    site_numeros_anos_label: 'Anos de Experiência',
     site_numeros_obras: '60+',
+    site_numeros_obras_label: 'Obras Entregues',
     site_numeros_sede: 'Londrina/PR',
+    site_numeros_sede_label: 'Sede',
     site_numeros_tipo: '100%',
+    site_numeros_tipo_label: 'Obras Públicas',
     site_cta_titulo: 'Sistema de Gestão de Obras',
     site_cta_texto: 'Acesse nosso ERP interno para gerenciar orçamentos, planejamento, medições, financeiro, RH e muito mais — tudo em um só lugar.',
     site_servicos: DEFAULT_SERVICOS,
@@ -166,9 +170,13 @@ export default function Settings() {
         site_sobre_texto3: companySettings.site_sobre_texto3 || 'Participamos ativamente de licitações públicas, com regularidade fiscal e técnica plena, garantindo a entrega de obras dentro do prazo, do orçamento e com máxima qualidade.',
         site_sobre_imagem: companySettings.site_sobre_imagem || 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=700&q=80',
         site_numeros_anos: companySettings.site_numeros_anos || '25+',
+        site_numeros_anos_label: companySettings.site_numeros_anos_label || 'Anos de Experiência',
         site_numeros_obras: companySettings.site_numeros_obras || '60+',
+        site_numeros_obras_label: companySettings.site_numeros_obras_label || 'Obras Entregues',
         site_numeros_sede: companySettings.site_numeros_sede || 'Londrina/PR',
+        site_numeros_sede_label: companySettings.site_numeros_sede_label || 'Sede',
         site_numeros_tipo: companySettings.site_numeros_tipo || '100%',
+        site_numeros_tipo_label: companySettings.site_numeros_tipo_label || 'Obras Públicas',
         site_cta_titulo: companySettings.site_cta_titulo || 'Sistema de Gestão de Obras',
         site_cta_texto: companySettings.site_cta_texto || 'Acesse nosso ERP interno para gerenciar orçamentos, planejamento, medições, financeiro, RH e muito mais — tudo em um só lugar.',
         site_servicos: companySettings.site_servicos?.length > 0 ? companySettings.site_servicos : DEFAULT_SERVICOS,
@@ -453,21 +461,29 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <Label>Anos de Experiência</Label>
-                      <Input value={companyData.site_numeros_anos} onChange={e => setCompanyData(p => ({ ...p, site_numeros_anos: e.target.value }))} placeholder="25+" className="mt-1.5" />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-500">Número 1 — Valor</Label>
+                      <Input value={companyData.site_numeros_anos} onChange={e => setCompanyData(p => ({ ...p, site_numeros_anos: e.target.value }))} placeholder="25+" />
+                      <Label className="text-xs text-slate-500">Número 1 — Label</Label>
+                      <Input value={companyData.site_numeros_anos_label || ''} onChange={e => setCompanyData(p => ({ ...p, site_numeros_anos_label: e.target.value }))} placeholder="Anos de Experiência" />
                     </div>
-                    <div>
-                      <Label>Obras Entregues</Label>
-                      <Input value={companyData.site_numeros_obras} onChange={e => setCompanyData(p => ({ ...p, site_numeros_obras: e.target.value }))} placeholder="60+" className="mt-1.5" />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-500">Número 2 — Valor</Label>
+                      <Input value={companyData.site_numeros_obras} onChange={e => setCompanyData(p => ({ ...p, site_numeros_obras: e.target.value }))} placeholder="60+" />
+                      <Label className="text-xs text-slate-500">Número 2 — Label</Label>
+                      <Input value={companyData.site_numeros_obras_label || ''} onChange={e => setCompanyData(p => ({ ...p, site_numeros_obras_label: e.target.value }))} placeholder="Obras Entregues" />
                     </div>
-                    <div>
-                      <Label>Sede / Localização</Label>
-                      <Input value={companyData.site_numeros_sede} onChange={e => setCompanyData(p => ({ ...p, site_numeros_sede: e.target.value }))} placeholder="Londrina/PR" className="mt-1.5" />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-500">Número 3 — Valor</Label>
+                      <Input value={companyData.site_numeros_sede} onChange={e => setCompanyData(p => ({ ...p, site_numeros_sede: e.target.value }))} placeholder="Londrina/PR" />
+                      <Label className="text-xs text-slate-500">Número 3 — Label</Label>
+                      <Input value={companyData.site_numeros_sede_label || ''} onChange={e => setCompanyData(p => ({ ...p, site_numeros_sede_label: e.target.value }))} placeholder="Sede" />
                     </div>
-                    <div>
-                      <Label>Tipo de Obra</Label>
-                      <Input value={companyData.site_numeros_tipo} onChange={e => setCompanyData(p => ({ ...p, site_numeros_tipo: e.target.value }))} placeholder="100% Obras Públicas" className="mt-1.5" />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-500">Número 4 — Valor</Label>
+                      <Input value={companyData.site_numeros_tipo} onChange={e => setCompanyData(p => ({ ...p, site_numeros_tipo: e.target.value }))} placeholder="100%" />
+                      <Label className="text-xs text-slate-500">Número 4 — Label</Label>
+                      <Input value={companyData.site_numeros_tipo_label || ''} onChange={e => setCompanyData(p => ({ ...p, site_numeros_tipo_label: e.target.value }))} placeholder="Obras Públicas" />
                     </div>
                   </div>
                 </CardContent>

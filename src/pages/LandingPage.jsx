@@ -131,10 +131,10 @@ export default function LandingPage() {
   const sobreImagem = companySettings?.site_sobre_imagem || 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=700&q=80';
 
   const numeros = [
-    { valor: companySettings?.site_numeros_anos || numerosDefault[0].valor, label: 'Anos de Experiência' },
-    { valor: companySettings?.site_numeros_obras || numerosDefault[1].valor, label: 'Obras Entregues' },
-    { valor: companySettings?.site_numeros_sede || numerosDefault[2].valor, label: 'Sede' },
-    { valor: companySettings?.site_numeros_tipo || numerosDefault[3].valor, label: 'Obras Públicas' },
+    { valor: companySettings?.site_numeros_anos || numerosDefault[0].valor, label: companySettings?.site_numeros_anos_label || 'Anos de Experiência' },
+    { valor: companySettings?.site_numeros_obras || numerosDefault[1].valor, label: companySettings?.site_numeros_obras_label || 'Obras Entregues' },
+    { valor: companySettings?.site_numeros_sede || numerosDefault[2].valor, label: companySettings?.site_numeros_sede_label || 'Sede' },
+    { valor: companySettings?.site_numeros_tipo || numerosDefault[3].valor, label: companySettings?.site_numeros_tipo_label || 'Obras Públicas' },
   ];
 
   const ctaTitulo = companySettings?.site_cta_titulo || 'Sistema de Gestão de Obras';
