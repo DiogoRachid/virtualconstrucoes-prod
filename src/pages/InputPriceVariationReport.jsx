@@ -29,15 +29,28 @@ export default function InputPriceVariationReport() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  // Buscar histórico de preços (datas antigas) e insumos atuais
+  // Buscar todos os registros com paginação
+  const fetchAll = async (entity) => {
+    const limit = 5000;
+    let all = [];
+    let skip = 0;
+    while (true) {
+      const batch = await entity.list('created_date', limit, skip);
+      all = all.concat(batch);
+      if (batch.length < limit) break;
+      skip += limit;
+    }
+    return all;
+  };
+
   const { data: priceHistory = [] } = useQuery({
     queryKey: ['input-price-history'],
-    queryFn: () => base44.entities.InputPriceHistory.list('created_date', 999999)
+    queryFn: () => fetchAll(base44.entities.InputPriceHistory)
   });
 
   const { data: allInputs = [] } = useQuery({
     queryKey: ['all-inputs-variation'],
-    queryFn: () => base44.entities.Input.list('created_date', 999999)
+    queryFn: () => fetchAll(base44.entities.Input)
   });
 
   // Datas base disponíveis: histórico + data_base atual dos insumos

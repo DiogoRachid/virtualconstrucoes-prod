@@ -13,13 +13,27 @@ export const clearCache = () => {
   cacheTime = null;
 };
 
+// Buscar todos os registros com paginação automática
+const fetchAll = async (entity) => {
+  const limit = 5000;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await entity.list('created_date', limit, skip);
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return all;
+};
+
 // Buscar todos os dados com cache
 const getCachedData = async () => {
   const now = Date.now();
   if (!cacheTime || (now - cacheTime) > CACHE_DURATION) {
     const [inputs, services] = await Promise.all([
-      base44.entities.Input.list('created_date', 100000),
-      base44.entities.Service.list('created_date', 100000)
+      fetchAll(base44.entities.Input),
+      fetchAll(base44.entities.Service)
     ]);
     cachedInputs = new Map(inputs.map(i => [i.id, i]));
     cachedServices = new Map(services.map(s => [s.id, s]));
@@ -166,6 +180,32 @@ export const recalculateService = async (serviceId) => {
     const mes = String(dataBaseMaisAntiga.getMonth() + 1).padStart(2, '0');
     const ano = dataBaseMaisAntiga.getFullYear();
     dataBaseStr = `${mes}/${ano}`;
+  }
+
+  // Salvar snapshot histórico se a data_base mudou
+  const currentService = serviceMap.get(serviceId);
+  if (currentService && currentService.data_base && currentService.custo_total > 0) {
+    const dataBaseAtual = currentService.data_base;
+    const novaDataBase = dataBaseStr;
+    if (dataBaseAtual && novaDataBase && dataBaseAtual !== novaDataBase) {
+      // Verifica se já existe snapshot para essa data_base anterior
+      const existing = await base44.entities.ServicePriceHistory.filter({
+        servico_id: serviceId,
+        data_base: dataBaseAtual
+      });
+      if (existing.length === 0) {
+        await base44.entities.ServicePriceHistory.create({
+          servico_id: serviceId,
+          codigo: currentService.codigo,
+          descricao: currentService.descricao,
+          unidade: currentService.unidade,
+          custo_total: currentService.custo_total,
+          custo_material: currentService.custo_material || 0,
+          custo_mao_obra: currentService.custo_mao_obra || 0,
+          data_base: dataBaseAtual
+        }).catch(() => {});
+      }
+    }
   }
 
   // Atualizar serviço

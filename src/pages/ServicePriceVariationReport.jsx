@@ -22,40 +22,65 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+const fetchAll = async (entity) => {
+  const limit = 5000;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await entity.list('created_date', limit, skip);
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return all;
+};
+
 export default function ServicePriceVariationReport() {
   const [dataBaseX, setDataBaseX] = useState('');
   const [dataBaseY, setDataBaseY] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  const { data: allServices = [] } = useQuery({
-    queryKey: ['all-services-variation'],
-    queryFn: () => base44.entities.Service.list('created_date', 999999)
+  // Histórico de snapshots + serviços atuais (mesma abordagem dos insumos)
+  const { data: priceHistory = [] } = useQuery({
+    queryKey: ['service-price-history'],
+    queryFn: () => fetchAll(base44.entities.ServicePriceHistory)
   });
 
-  // Datas base únicas dos serviços
+  const { data: allServices = [] } = useQuery({
+    queryKey: ['all-services-variation'],
+    queryFn: () => fetchAll(base44.entities.Service)
+  });
+
+  // Datas base únicas: histórico + serviços atuais
   const datasBaseUnicas = useMemo(() => {
-    const datas = [...new Set(allServices.map(s => s.data_base).filter(Boolean))];
+    const fromHistory = priceHistory.map(h => h.data_base).filter(Boolean);
+    const fromCurrent = allServices.map(s => s.data_base).filter(Boolean);
+    const datas = [...new Set([...fromHistory, ...fromCurrent])];
     return datas.sort((a, b) => {
       const [mesA, anoA] = a.split('/');
       const [mesB, anoB] = b.split('/');
       return parseInt(anoA) - parseInt(anoB) || parseInt(mesA) - parseInt(mesB);
     });
-  }, [allServices]);
+  }, [priceHistory, allServices]);
 
-  // Para variação de serviços usamos o custo_total registrado em cada serviço por data_base
+  // Construir mapa para uma data_base: prioriza histórico, fallback para atual
+  const buildMap = (dataBase) => {
+    const map = new Map();
+    priceHistory.filter(h => h.data_base === dataBase).forEach(h => {
+      map.set(h.codigo, { codigo: h.codigo, descricao: h.descricao, unidade: h.unidade, custo_total: h.custo_total, custo_material: h.custo_material, custo_mao_obra: h.custo_mao_obra });
+    });
+    allServices.filter(s => s.data_base === dataBase).forEach(s => {
+      map.set(s.codigo, { codigo: s.codigo, descricao: s.descricao, unidade: s.unidade, custo_total: s.custo_total, custo_material: s.custo_material, custo_mao_obra: s.custo_mao_obra });
+    });
+    return map;
+  };
+
   const variacoes = useMemo(() => {
     if (!dataBaseX || !dataBaseY) return [];
 
-    const mapX = new Map();
-    const mapY = new Map();
-
-    allServices.filter(s => s.data_base === dataBaseX).forEach(s => {
-      mapX.set(s.codigo, s);
-    });
-    allServices.filter(s => s.data_base === dataBaseY).forEach(s => {
-      mapY.set(s.codigo, s);
-    });
+    const mapX = buildMap(dataBaseX);
+    const mapY = buildMap(dataBaseY);
 
     const resultados = [];
     mapX.forEach((svcX, codigo) => {
@@ -74,7 +99,7 @@ export default function ServicePriceVariationReport() {
     });
 
     return resultados;
-  }, [dataBaseX, dataBaseY, allServices]);
+  }, [dataBaseX, dataBaseY, priceHistory, allServices]);
 
   const filteredVariacoes = useMemo(() => {
     let filtered = variacoes;
@@ -109,7 +134,7 @@ export default function ServicePriceVariationReport() {
   };
 
   const formatCurrency = (value) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
   const formatPercent = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value / 100);
@@ -147,9 +172,7 @@ export default function ServicePriceVariationReport() {
             <div>
               <Label>Data Base X (Inicial)</Label>
               <Select value={dataBaseX} onValueChange={setDataBaseX}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {datasBaseUnicas.map(data => (
                     <SelectItem key={data} value={data}>{data}</SelectItem>
@@ -160,9 +183,7 @@ export default function ServicePriceVariationReport() {
             <div>
               <Label>Data Base Y (Final)</Label>
               <Select value={dataBaseY} onValueChange={setDataBaseY}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {datasBaseUnicas.map(data => (
                     <SelectItem key={data} value={data}>{data}</SelectItem>
@@ -224,7 +245,7 @@ export default function ServicePriceVariationReport() {
             </div>
           ) : filteredVariacoes.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
-              Nenhum serviço encontrado com os filtros aplicados
+              Nenhum serviço encontrado. Certifique-se de recalcular os serviços após atualizar os insumos para gerar snapshots históricos.
             </div>
           ) : (
             <div className="overflow-x-auto">
