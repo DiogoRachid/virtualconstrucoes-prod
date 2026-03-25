@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Layers, MoreHorizontal, Pencil, Trash2, RefreshCw, Calendar } from 'lucide-react';
+import { Layers, MoreHorizontal, Pencil, Trash2, RefreshCw, Calendar, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import SearchFilter from '@/components/shared/SearchFilter';
 import DataTable from '@/components/shared/DataTable';
 import EmptyState from '@/components/ui/EmptyState';
+import RecalcProgressPanel from '@/components/services/RecalcProgressPanel';
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,6 +25,9 @@ export default function Services() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [recalculating, setRecalculating] = useState(false);
+  const [recalcItems, setRecalcItems] = useState([]);
+  const [recalcCurrent, setRecalcCurrent] = useState(0);
+  const [recalcStartTime, setRecalcStartTime] = useState(null);
   const [dataBaseFiltro, setDataBaseFiltro] = useState('');
 
   const { data: services = [], isLoading, refetch } = useQuery({
@@ -100,27 +104,29 @@ export default function Services() {
     }
   };
 
-  const handleRecalculateSelected = async () => {
-    if (selectedIds.size === 0) {
-      toast.error('Selecione ao menos um serviço');
-      return;
-    }
-
+  const runRecalc = async (ids) => {
+    const itemsList = ids.map(id => services.find(s => s.id === id)).filter(Boolean);
+    setRecalcItems(itemsList);
+    setRecalcCurrent(0);
+    setRecalcStartTime(Date.now());
     setRecalculating(true);
-    try {
-      const ids = Array.from(selectedIds);
-      await Engine.recalculateMultipleServices(ids, (current, total) => {
-        toast.loading(`Recalculando ${current}/${total}...`, { id: 'recalc' });
-      });
-      toast.success('Serviços recalculados!', { id: 'recalc' });
-      setSelectedIds(new Set());
-      refetch();
-    } catch (e) {
-      toast.error('Erro ao recalcular');
-      console.error(e);
-    } finally {
-      setRecalculating(false);
-    }
+
+    Engine.clearCache();
+    await Engine.recalculateMultipleServices(ids, (current) => {
+      setRecalcCurrent(current);
+    });
+
+    refetch();
+    setRecalculating(false);
+    setRecalcItems([]);
+    setRecalcCurrent(0);
+    setSelectedIds(new Set());
+    toast.success(`${ids.length} serviços recalculados com sucesso!`);
+  };
+
+  const handleRecalculateSelected = () => {
+    if (selectedIds.size === 0) { toast.error('Selecione ao menos um serviço'); return; }
+    runRecalc(Array.from(selectedIds));
   };
 
   const columns = [
@@ -250,21 +256,7 @@ export default function Services() {
             <Button
               size="sm"
               variant="outline"
-              onClick={async () => {
-                setRecalculating(true);
-                try {
-                  const ids = services.map(s => s.id);
-                  await Engine.recalculateMultipleServices(ids, (current, total) => {
-                    toast.loading(`Recalculando ${current}/${total}...`, { id: 'recalc-all' });
-                  });
-                  toast.success(`${ids.length} serviços recalculados!`, { id: 'recalc-all' });
-                  refetch();
-                } catch (e) {
-                  toast.error('Erro ao recalcular', { id: 'recalc-all' });
-                } finally {
-                  setRecalculating(false);
-                }
-              }}
+              onClick={() => runRecalc(services.map(s => s.id))}
               disabled={recalculating}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${recalculating ? 'animate-spin' : ''}`} />
@@ -273,6 +265,18 @@ export default function Services() {
           )}
         </div>
       </div>
+
+      {/* Painel de progresso dinâmico */}
+      {recalculating && recalcItems.length > 0 && (
+        <div className="mb-4">
+          <RecalcProgressPanel
+            items={recalcItems}
+            current={recalcCurrent}
+            total={recalcItems.length}
+            startTime={recalcStartTime}
+          />
+        </div>
+      )}
 
       <DataTable
         columns={columns} 

@@ -249,13 +249,14 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   
   const results = [];
   for (let i = 0; i < serviceIds.length; i++) {
+    if (onProgress) onProgress(i, serviceIds.length); // antes: marca como "em andamento"
     try {
       const result = await recalculateService(serviceIds[i]);
       results.push({ serviceId: serviceIds[i], success: true, ...result });
-      if (onProgress) onProgress(i + 1, serviceIds.length);
     } catch (error) {
       results.push({ serviceId: serviceIds[i], success: false, error: error.message });
     }
+    if (onProgress) onProgress(i + 1, serviceIds.length); // depois: marca como "concluído"
   }
   
   clearCache(); // Limpar cache no final
