@@ -87,9 +87,27 @@ export default function Inputs() {
   const handleSave = async () => {
     try {
       if (editing) {
+        // Salvar histórico antes de atualizar se data_base ou valor mudou
+        const valorMudou = editing.valor_unitario !== form.valor_unitario;
+        const dataMudou = editing.data_base !== form.data_base;
+        if ((valorMudou || dataMudou) && editing.data_base && editing.valor_unitario > 0) {
+          const dataBaseParaHistorico = dataMudou ? editing.data_base : editing.data_base;
+          const existing = await base44.entities.InputPriceHistory.filter({ insumo_id: editing.id, data_base: dataBaseParaHistorico });
+          if (existing.length === 0) {
+            await base44.entities.InputPriceHistory.create({
+              insumo_id: editing.id,
+              codigo: editing.codigo,
+              descricao: editing.descricao,
+              unidade: editing.unidade,
+              valor_unitario: editing.valor_unitario,
+              data_base: dataBaseParaHistorico,
+              categoria: editing.categoria,
+              fonte: editing.fonte
+            }).catch(() => {});
+          }
+        }
         await base44.entities.Input.update(editing.id, form);
         toast.success('Insumo atualizado');
-        // PROMPT 3: UPDATE CASCATA
         toast.info('Recalculando dependentes...');
         await Engine.updateDependents('INSUMO', editing.id);
         toast.success('Dependentes atualizados');
@@ -152,13 +170,35 @@ export default function Inputs() {
 
   const handleBulkUpdate = async () => {
     if (!bulkDate) return toast.error("Informe a data");
-    if (!confirm(`Atualizar a Data Base de TODOS os insumos para ${bulkDate}?`)) return;
+    if (!confirm(`Atualizar a Data Base de TODOS os insumos para ${bulkDate}? Os valores atuais serão salvos no histórico.`)) return;
 
     setBulkUpdating(true);
     try {
        const allInputs = await base44.entities.Input.list();
        const total = allInputs.length;
 
+       // 1. Salvar histórico dos valores atuais antes de atualizar
+       const inputsComDataBase = allInputs.filter(i => i.data_base && i.data_base !== bulkDate && i.valor_unitario > 0);
+       for (let i = 0; i < inputsComDataBase.length; i += 50) {
+         const chunk = inputsComDataBase.slice(i, i + 50);
+         await Promise.all(chunk.map(async input => {
+           const existing = await base44.entities.InputPriceHistory.filter({ insumo_id: input.id, data_base: input.data_base });
+           if (existing.length === 0) {
+             await base44.entities.InputPriceHistory.create({
+               insumo_id: input.id,
+               codigo: input.codigo,
+               descricao: input.descricao,
+               unidade: input.unidade,
+               valor_unitario: input.valor_unitario,
+               data_base: input.data_base,
+               categoria: input.categoria,
+               fonte: input.fonte
+             }).catch(() => {});
+           }
+         }));
+       }
+
+       // 2. Atualizar data_base de todos os insumos
        for (let i = 0; i < total; i += 100) {
           const chunk = allInputs.slice(i, i + 100);
           await Promise.all(chunk.map(input => 
@@ -166,7 +206,7 @@ export default function Inputs() {
           ));
        }
 
-       toast.success(`${total} insumos atualizados.`);
+       toast.success(`${total} insumos atualizados. Histórico salvo para ${inputsComDataBase.length} insumos.`);
        setOpenBulk(false);
        refetch();
     } catch (e) {
@@ -332,22 +372,28 @@ export default function Inputs() {
 
       <Dialog open={openBulk} onOpenChange={setOpenBulk}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Atualização em Massa</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Atualizar Data Base Global dos Insumos</DialogTitle>
+          </DialogHeader>
           <div className="py-4 space-y-4">
-             <p className="text-sm text-slate-500">
-                Isso alterará a Data Base de <strong>TODOS</strong> os insumos cadastrados.
-                Essa ação não pode ser desfeita.
-             </p>
+             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-300 space-y-1">
+               <p className="font-medium">📋 O que acontece ao confirmar:</p>
+               <ul className="list-disc pl-4 space-y-1 text-xs">
+                 <li>Os valores atuais dos insumos são <strong>salvos no histórico</strong> com a data-base atual</li>
+                 <li>A data-base de todos os insumos é atualizada para a nova data</li>
+                 <li>Após isso, acesse <strong>Serviços → Recalcular Todos</strong> para atualizar os custos das composições</li>
+               </ul>
+             </div>
              <div>
                 <Label>Nova Data Base (MM/AAAA)</Label>
-                <Input value={bulkDate} onChange={e => setBulkDate(e.target.value)} placeholder="Ex: 10/2025" />
+                <Input value={bulkDate} onChange={e => setBulkDate(e.target.value)} placeholder="Ex: 03/2026" />
              </div>
           </div>
           <DialogFooter>
              <Button variant="outline" onClick={() => setOpenBulk(false)} disabled={bulkUpdating}>Cancelar</Button>
              <Button onClick={handleBulkUpdate} disabled={bulkUpdating}>
                 {bulkUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {bulkUpdating ? 'Atualizando...' : 'Confirmar Atualização'}
+                {bulkUpdating ? 'Salvando histórico e atualizando...' : 'Confirmar Atualização'}
              </Button>
           </DialogFooter>
         </DialogContent>

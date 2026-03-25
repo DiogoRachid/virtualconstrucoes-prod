@@ -182,29 +182,26 @@ export const recalculateService = async (serviceId) => {
     dataBaseStr = `${mes}/${ano}`;
   }
 
-  // Salvar snapshot histórico se a data_base mudou
+  // Salvar snapshot histórico do valor atual antes de sobrescrever
   const currentService = serviceMap.get(serviceId);
   if (currentService && currentService.data_base && currentService.custo_total > 0) {
     const dataBaseAtual = currentService.data_base;
-    const novaDataBase = dataBaseStr;
-    if (dataBaseAtual && novaDataBase && dataBaseAtual !== novaDataBase) {
-      // Verifica se já existe snapshot para essa data_base anterior
-      const existing = await base44.entities.ServicePriceHistory.filter({
+    // Verifica se já existe snapshot para essa data_base
+    const existing = await base44.entities.ServicePriceHistory.filter({
+      servico_id: serviceId,
+      data_base: dataBaseAtual
+    });
+    if (existing.length === 0) {
+      await base44.entities.ServicePriceHistory.create({
         servico_id: serviceId,
+        codigo: currentService.codigo,
+        descricao: currentService.descricao,
+        unidade: currentService.unidade,
+        custo_total: currentService.custo_total,
+        custo_material: currentService.custo_material || 0,
+        custo_mao_obra: currentService.custo_mao_obra || 0,
         data_base: dataBaseAtual
-      });
-      if (existing.length === 0) {
-        await base44.entities.ServicePriceHistory.create({
-          servico_id: serviceId,
-          codigo: currentService.codigo,
-          descricao: currentService.descricao,
-          unidade: currentService.unidade,
-          custo_total: currentService.custo_total,
-          custo_material: currentService.custo_material || 0,
-          custo_mao_obra: currentService.custo_mao_obra || 0,
-          data_base: dataBaseAtual
-        }).catch(() => {});
-      }
+      }).catch(() => {});
     }
   }
 
