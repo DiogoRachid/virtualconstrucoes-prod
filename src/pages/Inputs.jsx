@@ -49,7 +49,7 @@ export default function Inputs() {
   const { data: allHistory = [] } = useQuery({
     queryKey: ['inputPriceHistory'],
     queryFn: async () => {
-      const limit = 5000;
+      const limit = 1000;
       let all = [];
       let skip = 0;
       while (true) {
