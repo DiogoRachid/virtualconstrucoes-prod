@@ -15,6 +15,19 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import * as Engine from '@/components/logic/CompositionEngine';
 
+const fetchAllRecords = async (entity) => {
+  const limit = 1000;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await entity.list('created_date', limit, skip);
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return all;
+};
+
 export default function TableImport() {
   const [mode, setMode] = useState('INSUMO');
   const [inputType, setInputType] = useState('PASTE');
@@ -87,8 +100,8 @@ export default function TableImport() {
   const processInputsDirectly = async (lines, separator) => {
       setProgress({ message: 'Lendo insumos existentes...', percent: 5 });
 
-      // Carregar TODOS os insumos (sem limite de 50)
-      const allInputs = await base44.entities.Input.list('created_date', 100000);
+      // Carregar TODOS os insumos sem limite
+      const allInputs = await fetchAllRecords(base44.entities.Input);
       
       // Mapa por código → registro completo
       const inputMapByCodigo = new Map(allInputs.map(i => [i.codigo?.trim(), i]));
@@ -385,8 +398,8 @@ export default function TableImport() {
 
         // Resolve codes locally (no backend functions)
         let mapping = {};
-        const allInputs = await base44.entities.Input.list();
-        const allServices = await base44.entities.Service.list();
+        const allInputs = await fetchAllRecords(base44.entities.Input);
+        const allServices = await fetchAllRecords(base44.entities.Service);
 
         setProgress({ message: 'Resolvendo códigos...', percent: 25 });
 
@@ -430,7 +443,7 @@ export default function TableImport() {
         setProgress({ message: 'Preparando vínculos...', percent: 60 });
 
         // Fetch all existing ServiceItems to check for duplicates
-        const existingItems = await base44.entities.ServiceItem.list('', 100000);
+        const existingItems = await fetchAllRecords(base44.entities.ServiceItem);
         const existingMap = new Map();
         existingItems.forEach(item => {
             const key = `${item.servico_id}|${item.tipo_item}|${item.item_id}`;
