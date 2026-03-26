@@ -48,8 +48,18 @@ export default function Inputs() {
 
   const { data: allHistory = [] } = useQuery({
     queryKey: ['inputPriceHistory'],
-    queryFn: () => base44.entities.InputPriceHistory.list(),
-    enabled: true
+    queryFn: async () => {
+      const limit = 5000;
+      let all = [];
+      let skip = 0;
+      while (true) {
+        const batch = await base44.entities.InputPriceHistory.list('created_date', limit, skip);
+        all = all.concat(batch);
+        if (batch.length < limit) break;
+        skip += limit;
+      }
+      return all;
+    }
   });
 
   // Mapa: insumo_id -> { data_base -> registro histórico }
@@ -333,25 +343,23 @@ export default function Inputs() {
       <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
          <SearchFilter searchValue={search} onSearchChange={setSearch} placeholder="Buscar insumo..." />
          <div className="flex flex-wrap gap-2 items-center">
-            {datasBase.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-slate-500" />
-                <Select value={viewDataBase} onValueChange={setViewDataBase}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Valores atuais" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={null}>Valores atuais</SelectItem>
-                    {datasBase.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {viewDataBase && (
-                  <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                    <History className="h-3 w-3" /> Histórico
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-slate-500" />
+              <Select value={viewDataBase} onValueChange={setViewDataBase}>
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="Valores atuais" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={null}>Valores atuais</SelectItem>
+                  {datasBase.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {viewDataBase && (
+                <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                  <History className="h-3 w-3" /> Histórico
+                </span>
+              )}
+            </div>
             {selectedIds.size > 0 && (
                 <Button variant="destructive" onClick={handleBulkDeleteInputs}>
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir ({selectedIds.size})
