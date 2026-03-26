@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { createPageUrl } from '@/utils';
-import { Package, Plus, Pencil, Trash2, MoreHorizontal, Calendar, Loader2 } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, MoreHorizontal, Calendar, Loader2, History } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import SearchFilter from '@/components/shared/SearchFilter';
 import DataTable from '@/components/shared/DataTable';
@@ -37,7 +37,7 @@ export default function Inputs() {
   const [bulkDate, setBulkDate] = useState('');
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [dataBaseFiltro, setDataBaseFiltro] = useState('');
+  const [viewDataBase, setViewDataBase] = useState('');
   
   const [form, setForm] = useState({ codigo: '', descricao: '', unidade: 'UN', valor_unitario: 0, categoria: 'MATERIAL', fonte: 'PROPRIA' });
 
@@ -46,18 +46,48 @@ export default function Inputs() {
     queryFn: () => base44.entities.Input.list()
   });
 
+  const { data: allHistory = [] } = useQuery({
+    queryKey: ['inputPriceHistory'],
+    queryFn: () => base44.entities.InputPriceHistory.list(),
+    enabled: true
+  });
+
+  // Mapa: insumo_id -> { data_base -> registro histórico }
+  const historyMap = useMemo(() => {
+    const map = new Map();
+    for (const h of allHistory) {
+      if (!map.has(h.insumo_id)) map.set(h.insumo_id, new Map());
+      map.get(h.insumo_id).set(h.data_base, h);
+    }
+    return map;
+  }, [allHistory]);
+
   const datasBase = useMemo(() => {
-    const set = new Set(inputs.map(i => i.data_base).filter(Boolean));
-    return [...set].sort((a, b) => {
+    const setDates = new Set([
+      ...inputs.map(i => i.data_base).filter(Boolean),
+      ...allHistory.map(h => h.data_base).filter(Boolean)
+    ]);
+    return [...setDates].sort((a, b) => {
       const [mA, yA] = a.split('/'); const [mB, yB] = b.split('/');
       return parseInt(yB) - parseInt(yA) || parseInt(mB) - parseInt(mA);
     });
-  }, [inputs]);
+  }, [inputs, allHistory]);
+
+  // Aplica valores históricos se viewDataBase estiver selecionada
+  const processedInputs = useMemo(() => {
+    if (!viewDataBase) return inputs;
+    return inputs.map(i => {
+      const hist = historyMap.get(i.id)?.get(viewDataBase);
+      if (hist) {
+        return { ...i, valor_unitario: hist.valor_unitario, data_base: hist.data_base, _isHistorico: true };
+      }
+      return { ...i, _isHistorico: false };
+    });
+  }, [inputs, viewDataBase, historyMap]);
 
   const filtered = useMemo(() => {
-    let result = inputs.filter(i => 
-      (!search || i.descricao?.toLowerCase().includes(search.toLowerCase()) || i.codigo?.toLowerCase().includes(search.toLowerCase())) &&
-      (!dataBaseFiltro || i.data_base === dataBaseFiltro)
+    let result = processedInputs.filter(i => 
+      (!search || i.descricao?.toLowerCase().includes(search.toLowerCase()) || i.codigo?.toLowerCase().includes(search.toLowerCase()))
     );
 
     if (sortConfig.key) {
@@ -75,7 +105,7 @@ export default function Inputs() {
     }
 
     return result;
-  }, [inputs, search, sortConfig]);
+  }, [processedInputs, search, sortConfig]);
 
   const handleSort = (key) => {
     setSortConfig(current => ({
@@ -250,9 +280,24 @@ export default function Inputs() {
       accessor: 'valor_unitario', 
       className: 'text-right',
       sortable: true,
-      render: r => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor_unitario)
+      render: r => (
+        <span className={r._isHistorico ? 'text-blue-600 dark:text-blue-400 font-medium' : ''}>
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor_unitario)}
+        </span>
+      )
     },
-    { header: 'Data Base', accessor: 'data_base', className: 'w-24 text-xs', sortable: true },
+    { 
+      header: 'Data Base', 
+      accessor: 'data_base', 
+      className: 'w-24 text-xs', 
+      sortable: true,
+      render: r => (
+        <span className={r._isHistorico ? 'text-blue-600 dark:text-blue-400' : ''}>
+          {r.data_base || '-'}
+          {r._isHistorico && <History className="inline h-3 w-3 ml-1 opacity-70" />}
+        </span>
+      )
+    },
     { header: 'Fonte', accessor: 'fonte', className: 'w-24 text-xs', sortable: true },
     {
       header: '',
@@ -291,15 +336,20 @@ export default function Inputs() {
             {datasBase.length > 0 && (
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-slate-500" />
-                <Select value={dataBaseFiltro} onValueChange={setDataBaseFiltro}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue placeholder="Todas as datas" />
+                <Select value={viewDataBase} onValueChange={setViewDataBase}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Valores atuais" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={null}>Todas as datas</SelectItem>
+                    <SelectItem value={null}>Valores atuais</SelectItem>
                     {datasBase.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {viewDataBase && (
+                  <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <History className="h-3 w-3" /> Histórico
+                  </span>
+                )}
               </div>
             )}
             {selectedIds.size > 0 && (
