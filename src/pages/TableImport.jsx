@@ -204,20 +204,26 @@ export default function TableImport() {
           setProgress({ message: `Salvando histórico de preços... ${Math.min(i + CHUNK_H, historicos.length)}/${historicos.length}`, percent: 40 + Math.floor(((i + CHUNK_H) / Math.max(historicos.length, 1)) * 15) });
         }
 
-        // 2. Atualizar insumos com novo valor/data_base
-        const CHUNK = 50;
-        for (let i = 0; i < updates.length; i += CHUNK) {
-          await Promise.all(updates.slice(i, i + CHUNK).map(u => base44.entities.Input.update(u.id, u.data)));
-          setProgress({ message: `Atualizando insumos (nova data base)... ${Math.min(i + CHUNK, updates.length)}/${updates.length}`, percent: 55 + Math.floor(((i + CHUNK) / updates.length) * 25) });
+        // 2. Atualizar insumos com novo valor/data_base via backend function (sem limite de requests)
+        setProgress({ message: `Atualizando ${updates.length} insumos (nova data base)...`, percent: 55 });
+        const updatesPayload = updates.map(u => ({ id: u.id, data: u.data }));
+        const CHUNK_U = 500;
+        for (let i = 0; i < updatesPayload.length; i += CHUNK_U) {
+          const slice = updatesPayload.slice(i, i + CHUNK_U);
+          await base44.functions.invoke('bulkUpdateInputs', { updates: slice });
+          setProgress({ message: `Atualizando insumos... ${Math.min(i + CHUNK_U, updatesPayload.length)}/${updatesPayload.length}`, percent: 55 + Math.floor(((i + CHUNK_U) / updatesPayload.length) * 25) });
         }
       }
 
-      // --- Atualizar mesma data_base (re-importação) ---
+      // --- Atualizar mesma data_base (re-importação) via backend function ---
       if (sameBase.length > 0) {
-        const CHUNK = 50;
-        for (let i = 0; i < sameBase.length; i += CHUNK) {
-          await Promise.all(sameBase.slice(i, i + CHUNK).map(u => base44.entities.Input.update(u.id, u.data)));
-          setProgress({ message: `Atualizando valores... ${Math.min(i + CHUNK, sameBase.length)}/${sameBase.length}`, percent: 80 + Math.floor(((i + CHUNK) / sameBase.length) * 15) });
+        setProgress({ message: `Atualizando ${sameBase.length} insumos (mesma data base)...`, percent: 80 });
+        const sameBasePayload = sameBase.map(u => ({ id: u.id, data: u.data }));
+        const CHUNK_S = 500;
+        for (let i = 0; i < sameBasePayload.length; i += CHUNK_S) {
+          const slice = sameBasePayload.slice(i, i + CHUNK_S);
+          await base44.functions.invoke('bulkUpdateInputs', { updates: slice });
+          setProgress({ message: `Atualizando valores... ${Math.min(i + CHUNK_S, sameBasePayload.length)}/${sameBasePayload.length}`, percent: 80 + Math.floor(((i + CHUNK_S) / sameBasePayload.length) * 15) });
         }
       }
 
