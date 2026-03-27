@@ -126,118 +126,141 @@ export default function TableImport() {
       return;
     }
 
-    // 2. Inicializar o painel de progresso com todas as linhas como "pending"
+    // 2. Inicializar painel
     importRowsRef.current = validRows.map(r => ({ ...r }));
     setImportRows([...importRowsRef.current]);
     setImportStartTime(Date.now());
     setImportTotals(null);
 
+    const totalRows = validRows.length;
     let totalCreated = 0;
     let totalUpdated = 0;
     let totalSameBase = 0;
     let totalErrors = 0;
-    const totalRows = validRows.length;
 
-    // Função para atualizar uma linha no painel (por referência de índice)
     const updateRow = (idx, patch) => {
       importRowsRef.current[idx] = { ...importRowsRef.current[idx], ...patch };
-      // Atualiza o state em batches de 10 para não rerender demais
-      if (idx % 10 === 0 || patch.status === 'error') {
-        setImportRows([...importRowsRef.current]);
-      }
     };
 
-    // 3. Processamento SEQUENCIAL linha a linha — sem concorrência —
-    // para evitar rate limit da API e conseguir rastrear cada falha individualmente.
-    // Cada insumo faz no máximo: 1 filter + 1 create/update + (se update) 1 filter_historico + 1 bulkCreate_historico
-    const DELAY_MS = 50; // pausa entre linhas para não sobrecarregar a API
+    const flushRows = () => setImportRows([...importRowsRef.current]);
+
+    // 3. Carregar TODOS os insumos existentes de uma vez — evita 1 filter por linha
+    setProgress({ message: 'Carregando insumos existentes...', percent: 10 });
+    const allExisting = await fetchAllRecords(base44.entities.Input);
+    const existingMap = new Map(allExisting.map(i => [i.codigo?.trim(), i]));
+
+    // 4. Separar em lotes: creates, updates (nova data_base), samebase
+    const creates = [];
+    const updates = []; // { idx, existing, row }
+    const sameBases = []; // { idx, existing, row }
 
     for (let idx = 0; idx < totalRows; idx++) {
       const row = validRows[idx];
+      const existing = existingMap.get(row.codigo);
+      if (!existing) {
+        creates.push({ idx, row });
+        updateRow(idx, { action: 'create' });
+      } else if (existing.data_base === row.data_base) {
+        sameBases.push({ idx, existing, row });
+        updateRow(idx, { action: 'samebase' });
+      } else {
+        updates.push({ idx, existing, row });
+        updateRow(idx, { action: 'update' });
+      }
+    }
+    flushRows();
 
-      // Marcar como "running"
-      updateRow(idx, { status: 'running' });
+    setProgress({ message: `Criando ${creates.length} novos insumos...`, percent: 20 });
 
-      // Pausa controlada a cada 100 linhas para liberar o navegador
-      if (idx > 0 && idx % 100 === 0) {
-        await yieldToMain();
-        setImportRows([...importRowsRef.current]);
+    // 5. CRIAR em bulk de 200
+    const BULK = 200;
+    for (let i = 0; i < creates.length; i += BULK) {
+      const chunk = creates.slice(i, i + BULK);
+      try {
+        await base44.entities.Input.bulkCreate(chunk.map(c => c.row));
+        chunk.forEach(c => { updateRow(c.idx, { status: 'create' }); totalCreated++; });
+      } catch {
+        // fallback individual
+        for (const c of chunk) {
+          try {
+            await base44.entities.Input.create(c.row);
+            updateRow(c.idx, { status: 'create' }); totalCreated++;
+          } catch (err) {
+            updateRow(c.idx, { status: 'error', errorMsg: err?.message }); totalErrors++;
+          }
+        }
+      }
+      setProgress({ message: `Criando... ${Math.min(i + BULK, creates.length)}/${creates.length}`, percent: 20 + Math.floor((i / Math.max(creates.length, 1)) * 25) });
+      flushRows();
+      await yieldToMain();
+    }
+
+    // 6. ATUALIZAR (nova data_base) — salvar histórico em bulk, depois atualizar em paralelo (10 concorrentes)
+    setProgress({ message: `Atualizando ${updates.length} insumos...`, percent: 45 });
+
+    if (updates.length > 0) {
+      // Histórico: verificar quais já existem de forma paralela (10 por vez), depois bulk create
+      const historicos = [];
+      const CONC = 10;
+      for (let i = 0; i < updates.length; i += CONC) {
+        const batch = updates.slice(i, i + CONC);
+        await Promise.all(batch.map(async ({ existing }) => {
+          if (!existing.data_base || existing.valor_unitario == null) return;
+          try {
+            const h = await base44.entities.InputPriceHistory.filter({ insumo_id: existing.id, data_base: existing.data_base });
+            if (h.length === 0) historicos.push({
+              insumo_id: existing.id, codigo: existing.codigo, descricao: existing.descricao,
+              unidade: existing.unidade, valor_unitario: existing.valor_unitario,
+              data_base: existing.data_base, categoria: existing.categoria, fonte: existing.fonte,
+            });
+          } catch { /* ignora */ }
+        }));
+      }
+      if (historicos.length > 0) {
+        for (let i = 0; i < historicos.length; i += BULK) {
+          await base44.entities.InputPriceHistory.bulkCreate(historicos.slice(i, i + BULK));
+        }
       }
 
-      setProgress({
-        message: `Processando ${idx + 1} de ${totalRows} (${row.codigo})...`,
-        percent: 5 + Math.floor((idx / totalRows) * 90),
-      });
-
-      try {
-        // Buscar se já existe
-        const existingArr = await base44.entities.Input.filter({ codigo: row.codigo });
-        const existing = existingArr[0] || null;
-
-        if (!existing) {
-          // CRIAR
-          await base44.entities.Input.create(row);
-          totalCreated++;
-          updateRow(idx, { status: 'create', action: 'create' });
-
-        } else if (existing.data_base === row.data_base) {
-          // MESMA DATA BASE — apenas atualizar valor
-          await base44.entities.Input.update(existing.id, {
-            descricao: row.descricao,
-            unidade: row.unidade,
-            valor_unitario: row.valor_unitario,
-            categoria: row.categoria,
-            fonte: row.fonte,
-            data_base: row.data_base,
-          });
-          totalSameBase++;
-          updateRow(idx, { status: 'samebase', action: 'samebase' });
-
-        } else {
-          // NOVA DATA BASE — salvar histórico do valor anterior, depois atualizar
-          if (existing.data_base && existing.valor_unitario != null) {
-            const histExist = await base44.entities.InputPriceHistory.filter({
-              insumo_id: existing.id,
-              data_base: existing.data_base,
+      // Atualizar em paralelo (10 por vez)
+      for (let i = 0; i < updates.length; i += CONC) {
+        const batch = updates.slice(i, i + CONC);
+        await Promise.all(batch.map(async ({ idx, existing, row }) => {
+          try {
+            await base44.entities.Input.update(existing.id, {
+              descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
+              categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
             });
-            if (histExist.length === 0) {
-              await base44.entities.InputPriceHistory.create({
-                insumo_id: existing.id,
-                codigo: existing.codigo,
-                descricao: existing.descricao,
-                unidade: existing.unidade,
-                valor_unitario: existing.valor_unitario,
-                data_base: existing.data_base,
-                categoria: existing.categoria,
-                fonte: existing.fonte,
-              });
-            }
+            updateRow(idx, { status: 'update' }); totalUpdated++;
+          } catch (err) {
+            updateRow(idx, { status: 'error', errorMsg: err?.message }); totalErrors++;
           }
-          await base44.entities.Input.update(existing.id, {
-            descricao: row.descricao,
-            unidade: row.unidade,
-            valor_unitario: row.valor_unitario,
-            categoria: row.categoria,
-            fonte: row.fonte,
-            data_base: row.data_base,
-          });
-          totalUpdated++;
-          updateRow(idx, { status: 'update', action: 'update' });
-        }
-
-        // Pequena pausa entre requisições para não estrangular a API
-        await new Promise(res => setTimeout(res, DELAY_MS));
-
-      } catch (err) {
-        totalErrors++;
-        updateRow(idx, { status: 'error', action: 'error', errorMsg: err?.message || 'Erro desconhecido' });
-        console.error(`Erro no insumo ${row.codigo}:`, err);
-        // Continua para o próximo — não aborta
+        }));
+        setProgress({ message: `Atualizando... ${Math.min(i + CONC, updates.length)}/${updates.length}`, percent: 45 + Math.floor((i / Math.max(updates.length, 1)) * 30) });
+        if (i % 50 === 0) { flushRows(); await yieldToMain(); }
       }
     }
 
-    // Forçar render final do painel
-    setImportRows([...importRowsRef.current]);
+    // 7. MESMA DATA BASE — atualizar em paralelo (10 por vez)
+    setProgress({ message: `Re-importando ${sameBases.length} insumos...`, percent: 75 });
+    const CONC2 = 10;
+    for (let i = 0; i < sameBases.length; i += CONC2) {
+      const batch = sameBases.slice(i, i + CONC2);
+      await Promise.all(batch.map(async ({ idx, existing, row }) => {
+        try {
+          await base44.entities.Input.update(existing.id, {
+            descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
+            categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
+          });
+          updateRow(idx, { status: 'samebase' }); totalSameBase++;
+        } catch (err) {
+          updateRow(idx, { status: 'error', errorMsg: err?.message }); totalErrors++;
+        }
+      }));
+      if (i % 50 === 0) { flushRows(); await yieldToMain(); }
+    }
+
+    flushRows();
     setImportTotals({ created: totalCreated, updated: totalUpdated, samebase: totalSameBase, errors: totalErrors });
     setProgress({ message: 'Concluído!', percent: 100 });
 
