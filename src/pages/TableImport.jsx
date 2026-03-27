@@ -1,15 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { UploadCloud, Loader2, Database, Play } from 'lucide-react';
-import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Database, Play, ClipboardPaste } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import * as Engine from '@/components/logic/CompositionEngine';
@@ -31,13 +28,10 @@ const fetchAllRecords = async (entity) => {
 
 export default function TableImport() {
   const [mode, setMode] = useState('INSUMO');
-  const [inputType, setInputType] = useState('PASTE');
   const [loading, setLoading] = useState(false);
-  const [hasCategoryColumn, setHasCategoryColumn] = useState(false);
   const [fonteDefault, setFonteDefault] = useState('SINAPI');
   const [progress, setProgress] = useState({ message: '', percent: 0 });
   const [pasteData, setPasteData] = useState('');
-  const fileInputRef = useRef(null);
 
   // Estado do painel de progresso linha a linha (só insumos)
   const [importRows, setImportRows] = useState([]);
@@ -81,7 +75,6 @@ export default function TableImport() {
         await processCompositionsDirectly(lines, separator);
       }
       setPasteData('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
       console.error(err);
       toast.error("Erro no upload: " + err.message);
@@ -112,16 +105,8 @@ export default function TableImport() {
       let categoria = detectCategory(unidade);
       let dataBase = '';
       let fonte = fonteDefault;
-      if (hasCategoryColumn) {
-        const catRaw = (cols[4] || '').toUpperCase().trim();
-        if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO') || catRaw === 'MO') categoria = 'MAO_OBRA';
-        else if (catRaw.startsWith('MAT') || catRaw === 'M') categoria = 'MATERIAL';
-        dataBase = cols[5]?.trim() || '';
-        fonte = cols[6]?.trim() || fonteDefault;
-      } else {
-        dataBase = cols[4]?.trim() || '';
-        fonte = cols[5]?.trim() || fonteDefault;
-      }
+      dataBase = cols[4]?.trim() || '';
+      fonte = cols[5]?.trim() || fonteDefault;
       validRows.push({
         codigo,
         descricao: (descricao || codigo).slice(0, 500),
@@ -430,79 +415,76 @@ export default function TableImport() {
     toast.success(`Importação finalizada! ${linksCreatedCount} vínculos criados, ${recalculated} serviços calculados${skippedDuplicates > 0 ? `, ${skippedDuplicates} duplicatas ignoradas` : ''}.`);
   };
 
-  const handleFileRead = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => handleImport(ev.target.result);
-    reader.readAsText(file, 'ISO-8859-1');
-  };
+  // Colunas esperadas para o guia visual
+  const insumoColumns = ['Código', 'Descrição', 'Unidade', 'Valor', 'Data Base', 'Fonte'];
+  const composicaoColumns = ['Cód. Pai', 'Desc. Pai', 'Un. Pai', 'Cód. Filho', 'Quantidade'];
+
+  const columns = mode === 'INSUMO' ? insumoColumns : composicaoColumns;
 
   return (
-    <div className="pb-20 max-w-4xl mx-auto space-y-6">
+    <div className="pb-20 max-w-3xl mx-auto space-y-6">
       <PageHeader
         title="Importação de Tabelas"
-        subtitle="Importe Insumos ou Composições diretamente"
+        subtitle="Copie as células do Excel e cole aqui"
         icon={Database}
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle>Importação de Dados</CardTitle>
-          <CardDescription>Carregue dados do Excel ou SINAPI</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Tipo de Dado</Label>
+        <CardContent className="pt-6 space-y-5">
+          {/* Linha de configuração */}
+          <div className="flex flex-wrap gap-4">
+            <div className="space-y-1 flex-1 min-w-[140px]">
+              <Label className="text-xs text-slate-500">O que você está importando?</Label>
               <Select value={mode} onValueChange={setMode} disabled={loading}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="INSUMO">Insumos (Direto)</SelectItem>
-                  <SelectItem value="COMPOSICAO">Composições (Direto)</SelectItem>
+                  <SelectItem value="INSUMO">Insumos</SelectItem>
+                  <SelectItem value="COMPOSICAO">Composições</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {mode === 'INSUMO' && (
-              <>
-                <div className="space-y-2">
-                  <Label>Fonte Padrão</Label>
-                  <Select value={fonteDefault} onValueChange={setFonteDefault} disabled={loading}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SINAPI">SINAPI</SelectItem>
-                      <SelectItem value="ORSE">ORSE</SelectItem>
-                      <SelectItem value="SETOP">SETOP</SelectItem>
-                      <SelectItem value="SICRO">SICRO</SelectItem>
-                      <SelectItem value="PROPRIA">Própria</SelectItem>
-                      <SelectItem value="OUTRO">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center space-x-2 pt-8">
-                  <Checkbox id="catCol" checked={hasCategoryColumn} onCheckedChange={setHasCategoryColumn} />
-                  <label htmlFor="catCol" className="text-sm font-medium leading-none">
-                    Incluir coluna de Categoria? (Posição 5)
-                  </label>
-                </div>
-              </>
+              <div className="space-y-1 flex-1 min-w-[140px]">
+                <Label className="text-xs text-slate-500">Fonte dos dados</Label>
+                <Select value={fonteDefault} onValueChange={setFonteDefault} disabled={loading}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SINAPI">SINAPI</SelectItem>
+                    <SelectItem value="ORSE">ORSE</SelectItem>
+                    <SelectItem value="SETOP">SETOP</SelectItem>
+                    <SelectItem value="SICRO">SICRO</SelectItem>
+                    <SelectItem value="PROPRIA">Própria</SelectItem>
+                    <SelectItem value="OUTRO">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-
-            <div className="space-y-2">
-              <Label>Método</Label>
-              <Tabs value={inputType} onValueChange={setInputType}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="PASTE" className="flex-1">Colar Texto</TabsTrigger>
-                  <TabsTrigger value="FILE" className="flex-1">Upload Arquivo</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
           </div>
 
+          {/* Guia visual de colunas */}
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 dark:bg-slate-800/40 p-3">
+            <p className="text-xs text-slate-500 mb-2 font-medium">
+              Monte sua planilha com estas colunas <span className="text-slate-400">(nesta ordem)</span>:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {columns.map((col, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-xs font-mono px-2 py-1 rounded shadow-sm">
+                    {col}
+                  </span>
+                  {i < columns.length - 1 && <span className="text-slate-300 text-xs">→</span>}
+                </div>
+              ))}
+            </div>
+            {mode === 'INSUMO' && (
+              <p className="text-xs text-slate-400 mt-2">Data Base e Fonte são opcionais. Cabeçalho é ignorado automaticamente.</p>
+            )}
+          </div>
+
+          {/* Área de cole */}
           {loading ? (
             <div className="space-y-4">
-              {/* Painel linha a linha só para insumos */}
               {mode === 'INSUMO' && importRows.length > 0 ? (
                 <InputImportProgressPanel
                   rows={importRows}
@@ -523,41 +505,21 @@ export default function TableImport() {
               )}
             </div>
           ) : (
-            <>
-              {inputType === 'PASTE' ? (
-                <div className="space-y-2">
-                  <Label>Cole os dados aqui (Tabulação ou Ponto-e-vírgula)</Label>
-                  <Textarea
-                    className="min-h-[200px] font-mono text-xs"
-                    value={pasteData}
-                    onChange={e => setPasteData(e.target.value)}
-                    placeholder={
-                      mode === 'INSUMO'
-                        ? (hasCategoryColumn ? "COD | DESC | UN | VALOR | CATEGORIA | DATA | FONTE" : "COD | DESC | UN | VALOR | DATA | FONTE")
-                        : "COD_PAI  |  DESCRIÇÃO_PAI  |  UN_PAI  |  COD_FILHO  |  QTD_FILHO"
-                    }
-                  />
-                  <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleImport(pasteData)} disabled={!pasteData}>
-                    <Play className="mr-2 h-4 w-4" /> Processar Importação
-                  </Button>
-                </div>
-              ) : (
-                <div className="border-2 border-dashed rounded-lg p-8 text-center bg-slate-50 space-y-4">
-                  <UploadCloud className="h-10 w-10 mx-auto text-slate-400" />
-                  <div>
-                    <p className="font-medium">Selecione o arquivo CSV ou TXT</p>
-                    <p className="text-xs text-slate-500">Codificação ISO-8859-1 suportada automaticamente</p>
-                  </div>
-                  <Input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.txt"
-                    className="max-w-xs mx-auto"
-                    onChange={handleFileRead}
-                  />
-                </div>
-              )}
-            </>
+            <div className="space-y-3">
+              <Textarea
+                className="min-h-[220px] font-mono text-xs"
+                value={pasteData}
+                onChange={e => setPasteData(e.target.value)}
+                placeholder={`Selecione as células no Excel → Ctrl+C → clique aqui → Ctrl+V`}
+              />
+              <Button
+                className="w-full bg-green-600 hover:bg-green-700 h-11 text-base"
+                onClick={() => handleImport(pasteData)}
+                disabled={!pasteData.trim()}
+              >
+                <Play className="mr-2 h-5 w-5" /> Importar
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
