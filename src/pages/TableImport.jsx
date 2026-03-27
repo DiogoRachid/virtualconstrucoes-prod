@@ -27,23 +27,6 @@ const fetchAllRecords = async (entity) => {
   return all;
 };
 
-// Executa atualizações em paralelo com limite de concorrência
-const batchUpdate = async (items, updateFn, concurrency = 20, onProgress) => {
-  let done = 0;
-  const results = { success: 0, error: 0 };
-
-  for (let i = 0; i < items.length; i += concurrency) {
-    const chunk = items.slice(i, i + concurrency);
-    const promises = chunk.map(item =>
-      updateFn(item).then(() => { results.success++; }).catch(() => { results.error++; })
-    );
-    await Promise.all(promises);
-    done += chunk.length;
-    if (onProgress) onProgress(done, items.length);
-  }
-
-  return results;
-};
 
 export default function TableImport() {
   const [mode, setMode] = useState('INSUMO');
@@ -102,16 +85,12 @@ export default function TableImport() {
   };
 
   const processInputsDirectly = async (lines, separator) => {
-    setProgress({ message: 'Lendo insumos existentes...', percent: 5 });
-    const allInputs = await fetchAllRecords(base44.entities.Input);
-    const inputMapByCodigo = new Map(allInputs.map(i => [i.codigo?.trim(), i]));
+    // --- Pré-processamento: parsear todas as linhas válidas sem tocar na API ---
+    setProgress({ message: 'Analisando linhas...', percent: 5 });
+    const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
-    const creates = [];
-    const updates = [];   // nova data_base: salvar histórico + atualizar
-    const sameBase = [];  // mesma data_base: só atualizar valor
+    const validRows = [];
     let skipped = 0;
-
-    setProgress({ message: 'Analisando linhas...', percent: 15 });
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -140,103 +119,160 @@ export default function TableImport() {
         fonte = cols[5]?.trim() || fonteDefault;
       }
 
-      const valor = parseCurrency(valorStr);
-      const newData = {
+      validRows.push({
         codigo,
         descricao: (descricao || codigo).slice(0, 500),
         unidade: unidade || 'UN',
-        valor_unitario: valor,
+        valor_unitario: parseCurrency(valorStr),
         categoria,
         data_base: dataBase,
         fonte,
-      };
-
-      const existing = inputMapByCodigo.get(codigo);
-      if (!existing) {
-        creates.push(newData);
-      } else if (existing.data_base === dataBase) {
-        sameBase.push({ id: existing.id, data: newData });
-      } else {
-        updates.push({ id: existing.id, data: newData, oldValue: existing.valor_unitario, oldDataBase: existing.data_base, insumoId: existing.id });
-      }
+      });
     }
 
-    const total = creates.length + updates.length + sameBase.length;
-    if (total === 0) {
+    if (validRows.length === 0) {
       toast.error('Nenhum insumo válido encontrado. Verifique o formato (separador, colunas).');
       return;
     }
 
-    // --- Criar novos insumos ---
-    if (creates.length > 0) {
-      const CHUNK = 100;
-      for (let i = 0; i < creates.length; i += CHUNK) {
-        await base44.entities.Input.bulkCreate(creates.slice(i, i + CHUNK));
-        setProgress({
-          message: `Criando insumos... ${Math.min(i + CHUNK, creates.length)}/${creates.length}`,
-          percent: 20 + Math.floor(((i + CHUNK) / creates.length) * 15)
-        });
-      }
-    }
+    // --- Processamento em streaming: CHUNK de 50 linhas por vez ---
+    // Para cada chunk: busca pontual apenas dos códigos do chunk, decide create/update, executa.
+    const STREAM_CHUNK = 50;
+    const CONCURRENCY = 15;
 
-    // --- Atualizar com nova data_base: salvar histórico + atualizar ---
-    if (updates.length > 0) {
-      setProgress({ message: 'Verificando histórico existente...', percent: 35 });
-      const existingHistory = await fetchAllRecords(base44.entities.InputPriceHistory);
-      const existingHistorySet = new Set(existingHistory.map(h => `${h.insumo_id}|${h.data_base}`));
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalSameBase = 0;
+    let totalErrors = 0;
+    const totalRows = validRows.length;
 
-      // Salvar histórico dos valores ANTERIORES
-      const historicos = updates
-        .filter(u => u.oldDataBase && u.oldValue != null && !existingHistorySet.has(`${u.insumoId}|${u.oldDataBase}`))
-        .map(u => ({
-          insumo_id: u.insumoId,
-          codigo: u.data.codigo,
-          descricao: u.data.descricao,
-          unidade: u.data.unidade,
-          valor_unitario: u.oldValue,
-          data_base: u.oldDataBase,
-          categoria: u.data.categoria,
-          fonte: u.data.fonte
-        }));
+    for (let chunkStart = 0; chunkStart < totalRows; chunkStart += STREAM_CHUNK) {
+      const chunk = validRows.slice(chunkStart, chunkStart + STREAM_CHUNK);
+      const codigosChunk = chunk.map(r => r.codigo);
 
-      for (let i = 0; i < historicos.length; i += 100) {
-        await base44.entities.InputPriceHistory.bulkCreate(historicos.slice(i, i + 100));
-        setProgress({
-          message: `Salvando histórico... ${Math.min(i + 100, historicos.length)}/${historicos.length}`,
-          percent: 38 + Math.floor(((i + 100) / Math.max(historicos.length, 1)) * 12)
-        });
+      setProgress({
+        message: `Processando ${chunkStart + 1}–${Math.min(chunkStart + STREAM_CHUNK, totalRows)} de ${totalRows}...`,
+        percent: 5 + Math.floor((chunkStart / totalRows) * 85)
+      });
+
+      // Busca pontual: só os insumos deste chunk pelo código
+      // Usamos filter com $in (lista de codigos)
+      let existingInChunk = [];
+      try {
+        // Buscar em paralelo em sub-grupos para não exceder limite de query
+        const SUB = 10;
+        for (let si = 0; si < codigosChunk.length; si += SUB) {
+          const subCodes = codigosChunk.slice(si, si + SUB);
+          const results = await Promise.all(
+            subCodes.map(cod => base44.entities.Input.filter({ codigo: cod }))
+          );
+          results.forEach(r => existingInChunk = existingInChunk.concat(r));
+        }
+      } catch (e) {
+        // fallback: continuar sem existentes (vai criar tudo)
       }
 
-      // Atualizar insumos via parallel batch (sem backend)
-      setProgress({ message: `Atualizando ${updates.length} insumos (nova data base)...`, percent: 50 });
-      const { success, error } = await batchUpdate(
-        updates,
-        (u) => base44.entities.Input.update(u.id, u.data),
-        20,
-        (done, total) => setProgress({
-          message: `Atualizando insumos... ${done}/${total}`,
-          percent: 50 + Math.floor((done / total) * 25)
-        })
-      );
-      if (error > 0) toast.warning(`${error} insumos falharam na atualização.`);
-    }
+      const existingMap = new Map(existingInChunk.map(i => [i.codigo?.trim(), i]));
 
-    // --- Atualizar mesma data_base (re-importação) ---
-    if (sameBase.length > 0) {
-      setProgress({ message: `Atualizando ${sameBase.length} insumos (mesma data base)...`, percent: 75 });
-      await batchUpdate(
-        sameBase,
-        (u) => base44.entities.Input.update(u.id, u.data),
-        20,
-        (done, total) => setProgress({
-          message: `Re-importando... ${done}/${total}`,
-          percent: 75 + Math.floor((done / total) * 20)
-        })
-      );
+      const creates = [];
+      const updates = []; // nova data_base
+      const sameBase = []; // mesma data_base
+
+      for (const row of chunk) {
+        const existing = existingMap.get(row.codigo);
+        if (!existing) {
+          creates.push(row);
+        } else if (existing.data_base === row.data_base) {
+          sameBase.push({ id: existing.id, data: row });
+        } else {
+          updates.push({
+            id: existing.id,
+            data: row,
+            oldValue: existing.valor_unitario,
+            oldDataBase: existing.data_base,
+            insumoId: existing.id,
+          });
+        }
+      }
+
+      // Criar novos em bulk
+      if (creates.length > 0) {
+        await base44.entities.Input.bulkCreate(creates);
+        totalCreated += creates.length;
+      }
+
+      // Atualizar com nova data_base: salvar histórico primeiro, depois atualizar
+      if (updates.length > 0) {
+        // Salvar histórico (verificação pontual por insumo_id + data_base)
+        const historicosParaSalvar = [];
+        await Promise.all(
+          updates
+            .filter(u => u.oldDataBase && u.oldValue != null)
+            .map(async (u) => {
+              try {
+                const existing = await base44.entities.InputPriceHistory.filter({
+                  insumo_id: u.insumoId,
+                  data_base: u.oldDataBase
+                });
+                if (existing.length === 0) {
+                  historicosParaSalvar.push({
+                    insumo_id: u.insumoId,
+                    codigo: u.data.codigo,
+                    descricao: u.data.descricao,
+                    unidade: u.data.unidade,
+                    valor_unitario: u.oldValue,
+                    data_base: u.oldDataBase,
+                    categoria: u.data.categoria,
+                    fonte: u.data.fonte,
+                  });
+                }
+              } catch (e) { /* ignorar erro de histórico */ }
+            })
+        );
+
+        if (historicosParaSalvar.length > 0) {
+          await base44.entities.InputPriceHistory.bulkCreate(historicosParaSalvar);
+        }
+
+        // Atualizar insumos em paralelo com concurrency limit
+        for (let i = 0; i < updates.length; i += CONCURRENCY) {
+          const batch = updates.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(
+            batch.map(u => base44.entities.Input.update(u.id, u.data))
+          );
+          results.forEach(r => r.status === 'rejected' ? totalErrors++ : totalUpdated++);
+        }
+      }
+
+      // Re-importar mesma data_base
+      if (sameBase.length > 0) {
+        for (let i = 0; i < sameBase.length; i += CONCURRENCY) {
+          const batch = sameBase.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(
+            batch.map(u => base44.entities.Input.update(u.id, u.data))
+          );
+          results.forEach(r => r.status === 'rejected' ? totalErrors++ : totalSameBase++);
+        }
+      }
+
+      await yieldToMain(); // liberar o navegador entre chunks
     }
 
     setProgress({ message: 'Concluído!', percent: 100 });
-    toast.success(`Concluído! ${creates.length} criados, ${updates.length} atualizados (histórico salvo), ${sameBase.length} re-importados${skipped > 0 ? `, ${skipped} ignorados` : ''}.`);
+
+    const parts = [
+      totalCreated > 0 ? `${totalCreated} criados` : null,
+      totalUpdated > 0 ? `${totalUpdated} atualizados (histórico salvo)` : null,
+      totalSameBase > 0 ? `${totalSameBase} re-importados` : null,
+      skipped > 0 ? `${skipped} ignorados` : null,
+      totalErrors > 0 ? `${totalErrors} erros` : null,
+    ].filter(Boolean).join(', ');
+
+    if (totalErrors > 0) {
+      toast.warning(`Concluído com avisos: ${parts}.`);
+    } else {
+      toast.success(`Concluído! ${parts}.`);
+    }
   };
 
   const processCompositionsDirectly = async (lines, separator) => {
