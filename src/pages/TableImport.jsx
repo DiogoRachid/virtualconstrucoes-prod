@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import * as Engine from '@/components/logic/CompositionEngine';
+import InputImportProgressPanel from '@/components/imports/InputImportProgressPanel';
 
 const fetchAllRecords = async (entity) => {
   const limit = 1000;
@@ -37,6 +38,12 @@ export default function TableImport() {
   const [progress, setProgress] = useState({ message: '', percent: 0 });
   const [pasteData, setPasteData] = useState('');
   const fileInputRef = useRef(null);
+
+  // Estado do painel de progresso linha a linha (só insumos)
+  const [importRows, setImportRows] = useState([]);
+  const [importStartTime, setImportStartTime] = useState(null);
+  const [importTotals, setImportTotals] = useState(null);
+  const importRowsRef = useRef([]);
 
   const detectCategory = (unit) => {
     if (!unit) return 'MATERIAL';
@@ -85,10 +92,10 @@ export default function TableImport() {
   };
 
   const processInputsDirectly = async (lines, separator) => {
-    // --- Pré-processamento: parsear todas as linhas válidas sem tocar na API ---
-    setProgress({ message: 'Analisando linhas...', percent: 5 });
     const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
+    // 1. Parsear todas as linhas válidas sem tocar na API
+    setProgress({ message: 'Analisando linhas...', percent: 2 });
     const validRows = [];
     let skipped = 0;
 
@@ -96,18 +103,15 @@ export default function TableImport() {
       if (!line.trim()) continue;
       const cols = line.split(separator).map(c => c?.trim().replace(/^"|"$/g, ''));
       if (cols.length < 3) continue;
-
       const codigo = cols[0]?.trim();
       const descricao = cols[1]?.trim();
       const unidade = cols[2]?.trim();
       const valorStr = cols[3];
-
       if (!codigo || /^c[oó]d/i.test(codigo)) { skipped++; continue; }
 
       let categoria = detectCategory(unidade);
       let dataBase = '';
       let fonte = fonteDefault;
-
       if (hasCategoryColumn) {
         const catRaw = (cols[4] || '').toUpperCase().trim();
         if (catRaw.startsWith('MAO') || catRaw.startsWith('MÃO') || catRaw === 'MO') categoria = 'MAO_OBRA';
@@ -118,7 +122,6 @@ export default function TableImport() {
         dataBase = cols[4]?.trim() || '';
         fonte = cols[5]?.trim() || fonteDefault;
       }
-
       validRows.push({
         codigo,
         descricao: (descricao || codigo).slice(0, 500),
@@ -127,6 +130,9 @@ export default function TableImport() {
         categoria,
         data_base: dataBase,
         fonte,
+        status: 'pending',
+        action: null,
+        errorMsg: null,
       });
     }
 
@@ -135,10 +141,11 @@ export default function TableImport() {
       return;
     }
 
-    // --- Processamento em streaming: CHUNK de 50 linhas por vez ---
-    // Para cada chunk: busca pontual apenas dos códigos do chunk, decide create/update, executa.
-    const STREAM_CHUNK = 50;
-    const CONCURRENCY = 15;
+    // 2. Inicializar o painel de progresso com todas as linhas como "pending"
+    importRowsRef.current = validRows.map(r => ({ ...r }));
+    setImportRows([...importRowsRef.current]);
+    setImportStartTime(Date.now());
+    setImportTotals(null);
 
     let totalCreated = 0;
     let totalUpdated = 0;
@@ -146,130 +153,119 @@ export default function TableImport() {
     let totalErrors = 0;
     const totalRows = validRows.length;
 
-    for (let chunkStart = 0; chunkStart < totalRows; chunkStart += STREAM_CHUNK) {
-      const chunk = validRows.slice(chunkStart, chunkStart + STREAM_CHUNK);
-      const codigosChunk = chunk.map(r => r.codigo);
+    // Função para atualizar uma linha no painel (por referência de índice)
+    const updateRow = (idx, patch) => {
+      importRowsRef.current[idx] = { ...importRowsRef.current[idx], ...patch };
+      // Atualiza o state em batches de 10 para não rerender demais
+      if (idx % 10 === 0 || patch.status === 'error') {
+        setImportRows([...importRowsRef.current]);
+      }
+    };
+
+    // 3. Processamento SEQUENCIAL linha a linha — sem concorrência —
+    // para evitar rate limit da API e conseguir rastrear cada falha individualmente.
+    // Cada insumo faz no máximo: 1 filter + 1 create/update + (se update) 1 filter_historico + 1 bulkCreate_historico
+    const DELAY_MS = 50; // pausa entre linhas para não sobrecarregar a API
+
+    for (let idx = 0; idx < totalRows; idx++) {
+      const row = validRows[idx];
+
+      // Marcar como "running"
+      updateRow(idx, { status: 'running' });
+
+      // Pausa controlada a cada 100 linhas para liberar o navegador
+      if (idx > 0 && idx % 100 === 0) {
+        await yieldToMain();
+        setImportRows([...importRowsRef.current]);
+      }
 
       setProgress({
-        message: `Processando ${chunkStart + 1}–${Math.min(chunkStart + STREAM_CHUNK, totalRows)} de ${totalRows}...`,
-        percent: 5 + Math.floor((chunkStart / totalRows) * 85)
+        message: `Processando ${idx + 1} de ${totalRows} (${row.codigo})...`,
+        percent: 5 + Math.floor((idx / totalRows) * 90),
       });
 
-      // Busca pontual: só os insumos deste chunk pelo código
-      // Usamos filter com $in (lista de codigos)
-      let existingInChunk = [];
       try {
-        // Buscar em paralelo em sub-grupos para não exceder limite de query
-        const SUB = 10;
-        for (let si = 0; si < codigosChunk.length; si += SUB) {
-          const subCodes = codigosChunk.slice(si, si + SUB);
-          const results = await Promise.all(
-            subCodes.map(cod => base44.entities.Input.filter({ codigo: cod }))
-          );
-          results.forEach(r => existingInChunk = existingInChunk.concat(r));
-        }
-      } catch (e) {
-        // fallback: continuar sem existentes (vai criar tudo)
-      }
+        // Buscar se já existe
+        const existingArr = await base44.entities.Input.filter({ codigo: row.codigo });
+        const existing = existingArr[0] || null;
 
-      const existingMap = new Map(existingInChunk.map(i => [i.codigo?.trim(), i]));
-
-      const creates = [];
-      const updates = []; // nova data_base
-      const sameBase = []; // mesma data_base
-
-      for (const row of chunk) {
-        const existing = existingMap.get(row.codigo);
         if (!existing) {
-          creates.push(row);
+          // CRIAR
+          await base44.entities.Input.create(row);
+          totalCreated++;
+          updateRow(idx, { status: 'create', action: 'create' });
+
         } else if (existing.data_base === row.data_base) {
-          sameBase.push({ id: existing.id, data: row });
-        } else {
-          updates.push({
-            id: existing.id,
-            data: row,
-            oldValue: existing.valor_unitario,
-            oldDataBase: existing.data_base,
-            insumoId: existing.id,
+          // MESMA DATA BASE — apenas atualizar valor
+          await base44.entities.Input.update(existing.id, {
+            descricao: row.descricao,
+            unidade: row.unidade,
+            valor_unitario: row.valor_unitario,
+            categoria: row.categoria,
+            fonte: row.fonte,
+            data_base: row.data_base,
           });
-        }
-      }
+          totalSameBase++;
+          updateRow(idx, { status: 'samebase', action: 'samebase' });
 
-      // Criar novos em bulk
-      if (creates.length > 0) {
-        await base44.entities.Input.bulkCreate(creates);
-        totalCreated += creates.length;
-      }
-
-      // Atualizar com nova data_base: salvar histórico primeiro, depois atualizar
-      if (updates.length > 0) {
-        // Salvar histórico (verificação pontual por insumo_id + data_base)
-        const historicosParaSalvar = [];
-        await Promise.all(
-          updates
-            .filter(u => u.oldDataBase && u.oldValue != null)
-            .map(async (u) => {
-              try {
-                const existing = await base44.entities.InputPriceHistory.filter({
-                  insumo_id: u.insumoId,
-                  data_base: u.oldDataBase
-                });
-                if (existing.length === 0) {
-                  historicosParaSalvar.push({
-                    insumo_id: u.insumoId,
-                    codigo: u.data.codigo,
-                    descricao: u.data.descricao,
-                    unidade: u.data.unidade,
-                    valor_unitario: u.oldValue,
-                    data_base: u.oldDataBase,
-                    categoria: u.data.categoria,
-                    fonte: u.data.fonte,
-                  });
-                }
-              } catch (e) { /* ignorar erro de histórico */ }
-            })
-        );
-
-        if (historicosParaSalvar.length > 0) {
-          await base44.entities.InputPriceHistory.bulkCreate(historicosParaSalvar);
+        } else {
+          // NOVA DATA BASE — salvar histórico do valor anterior, depois atualizar
+          if (existing.data_base && existing.valor_unitario != null) {
+            const histExist = await base44.entities.InputPriceHistory.filter({
+              insumo_id: existing.id,
+              data_base: existing.data_base,
+            });
+            if (histExist.length === 0) {
+              await base44.entities.InputPriceHistory.create({
+                insumo_id: existing.id,
+                codigo: existing.codigo,
+                descricao: existing.descricao,
+                unidade: existing.unidade,
+                valor_unitario: existing.valor_unitario,
+                data_base: existing.data_base,
+                categoria: existing.categoria,
+                fonte: existing.fonte,
+              });
+            }
+          }
+          await base44.entities.Input.update(existing.id, {
+            descricao: row.descricao,
+            unidade: row.unidade,
+            valor_unitario: row.valor_unitario,
+            categoria: row.categoria,
+            fonte: row.fonte,
+            data_base: row.data_base,
+          });
+          totalUpdated++;
+          updateRow(idx, { status: 'update', action: 'update' });
         }
 
-        // Atualizar insumos em paralelo com concurrency limit
-        for (let i = 0; i < updates.length; i += CONCURRENCY) {
-          const batch = updates.slice(i, i + CONCURRENCY);
-          const results = await Promise.allSettled(
-            batch.map(u => base44.entities.Input.update(u.id, u.data))
-          );
-          results.forEach(r => r.status === 'rejected' ? totalErrors++ : totalUpdated++);
-        }
-      }
+        // Pequena pausa entre requisições para não estrangular a API
+        await new Promise(res => setTimeout(res, DELAY_MS));
 
-      // Re-importar mesma data_base
-      if (sameBase.length > 0) {
-        for (let i = 0; i < sameBase.length; i += CONCURRENCY) {
-          const batch = sameBase.slice(i, i + CONCURRENCY);
-          const results = await Promise.allSettled(
-            batch.map(u => base44.entities.Input.update(u.id, u.data))
-          );
-          results.forEach(r => r.status === 'rejected' ? totalErrors++ : totalSameBase++);
-        }
+      } catch (err) {
+        totalErrors++;
+        updateRow(idx, { status: 'error', action: 'error', errorMsg: err?.message || 'Erro desconhecido' });
+        console.error(`Erro no insumo ${row.codigo}:`, err);
+        // Continua para o próximo — não aborta
       }
-
-      await yieldToMain(); // liberar o navegador entre chunks
     }
 
+    // Forçar render final do painel
+    setImportRows([...importRowsRef.current]);
+    setImportTotals({ created: totalCreated, updated: totalUpdated, samebase: totalSameBase, errors: totalErrors });
     setProgress({ message: 'Concluído!', percent: 100 });
 
     const parts = [
       totalCreated > 0 ? `${totalCreated} criados` : null,
-      totalUpdated > 0 ? `${totalUpdated} atualizados (histórico salvo)` : null,
+      totalUpdated > 0 ? `${totalUpdated} atualizados` : null,
       totalSameBase > 0 ? `${totalSameBase} re-importados` : null,
       skipped > 0 ? `${skipped} ignorados` : null,
-      totalErrors > 0 ? `${totalErrors} erros` : null,
+      totalErrors > 0 ? `${totalErrors} ERROS` : null,
     ].filter(Boolean).join(', ');
 
     if (totalErrors > 0) {
-      toast.warning(`Concluído com avisos: ${parts}.`);
+      toast.warning(`Concluído com ${totalErrors} erro(s): ${parts}.`);
     } else {
       toast.success(`Concluído! ${parts}.`);
     }
@@ -505,15 +501,26 @@ export default function TableImport() {
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-8 space-y-4 bg-slate-50 rounded-lg">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <div className="w-full max-w-md space-y-2">
-                <div className="flex justify-between text-sm font-medium text-blue-800">
-                  <span>{progress.message}</span>
-                  <span>{progress.percent}%</span>
+            <div className="space-y-4">
+              {/* Painel linha a linha só para insumos */}
+              {mode === 'INSUMO' && importRows.length > 0 ? (
+                <InputImportProgressPanel
+                  rows={importRows}
+                  startTime={importStartTime}
+                  totals={importTotals}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 space-y-4 bg-slate-50 rounded-lg">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <div className="w-full max-w-md space-y-2">
+                    <div className="flex justify-between text-sm font-medium text-blue-800">
+                      <span>{progress.message}</span>
+                      <span>{progress.percent}%</span>
+                    </div>
+                    <Progress value={progress.percent} />
+                  </div>
                 </div>
-                <Progress value={progress.percent} />
-              </div>
+              )}
             </div>
           ) : (
             <>
