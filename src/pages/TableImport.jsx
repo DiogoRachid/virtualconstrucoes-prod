@@ -558,34 +558,83 @@ export default function TableImport() {
     setTotals({ duplicates: skippedDuplicates });
     await yieldToMain();
 
-    // ─── FASE 5: SALVAR VÍNCULOS EM BULK ────────────────────────────────────
+    // ─── FASE 5: SALVAR VÍNCULOS EM BULK (com retry em cascata) ─────────────
     const LINK_BULK = 500;
     let linksCreated = 0;
     let linkErrors = 0;
+    let totalRetries = 0;
+    const totalBatches = Math.ceil(linksToCreate.length / LINK_BULK);
+
+    // Salva um lote com retry em cascata: 500 → 100 → 10 → 1 por vez
+    const saveBatchWithFallback = async (batch, batchLabel) => {
+      // Tentativa 1: bulk completo
+      try {
+        await withRetry(() => base44.entities.ServiceItem.bulkCreate(batch));
+        linksCreated += batch.length;
+        return;
+      } catch (err) {
+        log(`  ↺ Lote ${batchLabel} falhou (${batch.length} itens): ${err.message} — tentando sub-lotes de 100`, 'retry');
+        totalRetries++;
+      }
+
+      // Tentativa 2: sub-lotes de 100
+      const failedFrom100 = [];
+      for (let j = 0; j < batch.length; j += 100) {
+        const sub = batch.slice(j, j + 100);
+        try {
+          await withRetry(() => base44.entities.ServiceItem.bulkCreate(sub));
+          linksCreated += sub.length;
+        } catch {
+          failedFrom100.push(...sub);
+        }
+        await yieldToMain();
+      }
+
+      if (failedFrom100.length === 0) return;
+      log(`  ↺ ${failedFrom100.length} itens ainda falharam — tentando sub-lotes de 10`, 'retry');
+      totalRetries++;
+
+      // Tentativa 3: sub-lotes de 10
+      const failedFrom10 = [];
+      for (let j = 0; j < failedFrom100.length; j += 10) {
+        const sub = failedFrom100.slice(j, j + 10);
+        try {
+          await withRetry(() => base44.entities.ServiceItem.bulkCreate(sub));
+          linksCreated += sub.length;
+        } catch {
+          failedFrom10.push(...sub);
+        }
+        await yieldToMain();
+      }
+
+      if (failedFrom10.length === 0) return;
+      log(`  ↺ ${failedFrom10.length} itens ainda falharam — tentando um por um`, 'retry');
+      totalRetries++;
+
+      // Tentativa 4: um por um
+      for (const item of failedFrom10) {
+        try {
+          await withRetry(() => base44.entities.ServiceItem.create(item), 3, 600);
+          linksCreated++;
+        } catch (err) {
+          linkErrors++;
+          log(`    ✗ Falha definitiva: servico=${item.servico_codigo} item=${item.item_codigo} — ${err.message}`, 'error');
+        }
+        await new Promise(r => setTimeout(r, 80));
+      }
+    };
 
     for (let i = 0; i < linksToCreate.length; i += LINK_BULK) {
       const chunk = linksToCreate.slice(i, i + LINK_BULK);
-      try {
-        await withRetry(() => base44.entities.ServiceItem.bulkCreate(chunk));
-        linksCreated += chunk.length;
-        log(`  ✔ Lote ${Math.ceil((i + 1) / LINK_BULK)}/${Math.ceil(linksToCreate.length / LINK_BULK)}: ${linksCreated.toLocaleString('pt-BR')}/${linksToCreate.length.toLocaleString('pt-BR')} vínculos`, 'success');
-      } catch (err) {
-        linkErrors += chunk.length;
-        log(`  ✗ Erro no lote ${Math.ceil((i + 1) / LINK_BULK)}: ${err.message}`, 'error');
-        // Fallback: tentar lotes menores
-        for (let j = 0; j < chunk.length; j += 50) {
-          try {
-            await withRetry(() => base44.entities.ServiceItem.bulkCreate(chunk.slice(j, j + 50)));
-            linksCreated += Math.min(50, chunk.length - j);
-            linkErrors -= Math.min(50, chunk.length - j);
-          } catch (err2) {
-            log(`    ✗ Sub-lote falhou: ${err2.message}`, 'error');
-          }
-          await yieldToMain();
-        }
+      const batchNum = Math.ceil((i + 1) / LINK_BULK);
+
+      await saveBatchWithFallback(chunk, `${batchNum}/${totalBatches}`);
+
+      if (linksCreated % LINK_BULK === 0 || i + LINK_BULK >= linksToCreate.length) {
+        log(`  ✔ ${linksCreated.toLocaleString('pt-BR')}/${linksToCreate.length.toLocaleString('pt-BR')} vínculos salvos`, 'success');
       }
 
-      setTotals({ links: linksCreated, errors: linkErrors });
+      setTotals({ links: linksCreated, errors: linkErrors, retries: totalRetries });
       setCompProgress({
         message: `Salvando vínculos ${linksCreated.toLocaleString('pt-BR')}/${linksToCreate.length.toLocaleString('pt-BR')}...`,
         percent: 32 + Math.floor((linksCreated / Math.max(linksToCreate.length, 1)) * 50),
