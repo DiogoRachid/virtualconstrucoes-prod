@@ -253,22 +253,67 @@ export const updateDependents = async (itemType, itemId) => {
   }
 };
 
+// Coletar todos os sub-serviços recursivamente de um conjunto de IDs
+const collectAllSubServices = (serviceIds, allItemsMap) => {
+  const all = new Set(serviceIds);
+  const queue = [...serviceIds];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    const items = allItemsMap.get(id) || [];
+    for (const item of items) {
+      if (item.tipo_item === 'SERVICO' && !all.has(item.item_id)) {
+        all.add(item.item_id);
+        queue.push(item.item_id);
+      }
+    }
+  }
+  return [...all];
+};
+
+// Ordenar serviços em ordem topológica (filhos antes dos pais) para recálculo bottom-up
+const topoSort = (serviceIds, allItemsMap) => {
+  const idSet = new Set(serviceIds);
+  const visited = new Set();
+  const order = [];
+
+  const visit = (id) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const items = allItemsMap.get(id) || [];
+    for (const item of items) {
+      if (item.tipo_item === 'SERVICO' && idSet.has(item.item_id)) {
+        visit(item.item_id);
+      }
+    }
+    order.push(id);
+  };
+
+  for (const id of serviceIds) visit(id);
+  return order; // filhos primeiro, pais depois
+};
+
 // Recalcular múltiplos serviços em lote
 export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   clearCache(); // Limpar cache antes de começar
   await getCachedData(); // Carregar dados frescos
-  await getAllItemsMap(); // Pré-carregar mapa de itens uma única vez
-  
+  const allItemsMap = await getAllItemsMap(); // Pré-carregar mapa de itens uma única vez
+
+  // Expandir para incluir todos os sub-serviços recursivamente
+  const expanded = collectAllSubServices(serviceIds, allItemsMap);
+
+  // Ordenar: filhos antes dos pais (bottom-up)
+  const ordered = topoSort(expanded, allItemsMap);
+
   const results = [];
-  for (let i = 0; i < serviceIds.length; i++) {
-    if (onProgress) onProgress(i, serviceIds.length); // antes: marca como "em andamento"
+  for (let i = 0; i < ordered.length; i++) {
+    if (onProgress) onProgress(i, ordered.length);
     try {
-      const result = await recalculateService(serviceIds[i]);
-      results.push({ serviceId: serviceIds[i], success: true, ...result });
+      const result = await recalculateService(ordered[i]);
+      results.push({ serviceId: ordered[i], success: true, ...result });
     } catch (error) {
-      results.push({ serviceId: serviceIds[i], success: false, error: error.message });
+      results.push({ serviceId: ordered[i], success: false, error: error.message });
     }
-    if (onProgress) onProgress(i + 1, serviceIds.length); // depois: marca como "concluído"
+    if (onProgress) onProgress(i + 1, ordered.length);
   }
   
   clearCache(); // Limpar cache no final
