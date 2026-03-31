@@ -295,20 +295,46 @@ const topoSort = (serviceIds, allItemsMap) => {
 // Recalcular múltiplos serviços em lote
 export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   clearCache(); // Limpar cache antes de começar
-  await getCachedData(); // Carregar dados frescos
+  const { inputMap, serviceMap } = await getCachedData(); // Carregar dados frescos
   const allItemsMap = await getAllItemsMap(); // Pré-carregar mapa de itens uma única vez
 
-  // Expandir para incluir todos os sub-serviços recursivamente
-  const expanded = collectAllSubServices(serviceIds, allItemsMap);
+  // Se todos os serviços já estão incluídos, não precisa expandir — só ordenar
+  const allServiceIds = new Set(serviceMap.keys());
+  const inputSet = new Set(serviceIds);
+  const isAll = serviceIds.length >= allServiceIds.size || [...inputSet].every(id => allServiceIds.has(id));
+
+  let expanded;
+  if (isAll && serviceIds.length === allServiceIds.size) {
+    // Caso "Recalcular Todos": usar todos os IDs do cache diretamente
+    expanded = [...allServiceIds];
+  } else {
+    // Caso seleção parcial: expandir sub-serviços recursivamente
+    expanded = collectAllSubServices(serviceIds, allItemsMap);
+  }
 
   // Ordenar: filhos antes dos pais (bottom-up)
   const ordered = topoSort(expanded, allItemsMap);
+
+  // Pré-carregar histórico de preços de uma vez (evita 1 query por serviço)
+  const allHistory = await (async () => {
+    const limit = 1000;
+    let all = [];
+    let skip = 0;
+    while (true) {
+      const batch = await base44.entities.ServicePriceHistory.list('created_date', limit, skip);
+      all = all.concat(batch);
+      if (batch.length < limit) break;
+      skip += limit;
+    }
+    return all;
+  })();
+  const historySet = new Set(allHistory.map(h => `${h.servico_id}|${h.data_base}`));
 
   const results = [];
   for (let i = 0; i < ordered.length; i++) {
     if (onProgress) onProgress(i, ordered.length);
     try {
-      const result = await recalculateService(ordered[i]);
+      const result = await recalculateServiceFast(ordered[i], inputMap, serviceMap, allItemsMap, historySet);
       results.push({ serviceId: ordered[i], success: true, ...result });
     } catch (error) {
       results.push({ serviceId: ordered[i], success: false, error: error.message });
@@ -318,4 +344,91 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   
   clearCache(); // Limpar cache no final
   return results;
+};
+
+// Versão otimizada de recalculateService que reutiliza dados já carregados
+const recalculateServiceFast = async (serviceId, inputMap, serviceMap, allItemsMap, historySet) => {
+  const items = allItemsMap.get(serviceId) || [];
+
+  let custoMaterial = 0;
+  let custoMaoObra = 0;
+  let maxNivelDep = 0;
+
+  const dataBaseStr = calcDataBaseCascata(serviceId, allItemsMap, inputMap, serviceMap);
+
+  const updatePromises = [];
+  for (const item of items) {
+    let unitCost = 0;
+    if (item.tipo_item === 'INSUMO') {
+      const insumo = inputMap.get(item.item_id);
+      if (insumo) {
+        unitCost = insumo.valor_unitario || 0;
+        const totalItem = item.quantidade * unitCost;
+        if (insumo.categoria === 'MAO_OBRA') custoMaoObra += totalItem;
+        else custoMaterial += totalItem;
+      }
+    } else if (item.tipo_item === 'SERVICO') {
+      const subService = serviceMap.get(item.item_id);
+      if (subService) {
+        unitCost = subService.custo_total || 0;
+        const totalItem = item.quantidade * unitCost;
+        if (subService.custo_total > 0) {
+          const matRatio = (subService.custo_material || 0) / subService.custo_total;
+          const laborRatio = (subService.custo_mao_obra || 0) / subService.custo_total;
+          custoMaterial += totalItem * matRatio;
+          custoMaoObra += totalItem * laborRatio;
+        }
+        const depLevel = subService.nivel_max_dependencia || 0;
+        if (depLevel >= maxNivelDep) maxNivelDep = depLevel + 1;
+      }
+    }
+    const totalItem = item.quantidade * unitCost;
+    if (Math.abs((item.custo_unitario_snapshot || 0) - unitCost) > 0.0001 ||
+        Math.abs((item.custo_total_item || 0) - totalItem) > 0.0001) {
+      updatePromises.push(
+        base44.entities.ServiceItem.update(item.id, { custo_unitario_snapshot: unitCost, custo_total_item: totalItem }).catch(() => {})
+      );
+    }
+  }
+  await Promise.all(updatePromises);
+
+  const custoTotal = custoMaterial + custoMaoObra;
+  const currentService = serviceMap.get(serviceId);
+
+  // Snapshot histórico usando o Set pré-carregado (sem query extra)
+  if (currentService && currentService.data_base && currentService.custo_total > 0) {
+    const key = `${serviceId}|${currentService.data_base}`;
+    if (!historySet.has(key)) {
+      historySet.add(key); // evitar duplicata dentro do mesmo lote
+      base44.entities.ServicePriceHistory.create({
+        servico_id: serviceId,
+        codigo: currentService.codigo,
+        descricao: currentService.descricao,
+        unidade: currentService.unidade,
+        custo_total: currentService.custo_total,
+        custo_material: currentService.custo_material || 0,
+        custo_mao_obra: currentService.custo_mao_obra || 0,
+        data_base: currentService.data_base
+      }).catch(() => {});
+    }
+  }
+
+  await base44.entities.Service.update(serviceId, {
+    custo_material: custoMaterial,
+    custo_mao_obra: custoMaoObra,
+    custo_total: custoTotal,
+    nivel_max_dependencia: maxNivelDep,
+    data_base: dataBaseStr
+  });
+
+  // Atualizar cache local para que serviços-pai usem valores atualizados
+  if (currentService) {
+    currentService.custo_material = custoMaterial;
+    currentService.custo_mao_obra = custoMaoObra;
+    currentService.custo_total = custoTotal;
+    currentService.nivel_max_dependencia = maxNivelDep;
+    currentService.data_base = dataBaseStr;
+  }
+
+  return { custo_total: custoTotal, custo_material: custoMaterial, custo_mao_obra: custoMaoObra, data_base: dataBaseStr };
 };
