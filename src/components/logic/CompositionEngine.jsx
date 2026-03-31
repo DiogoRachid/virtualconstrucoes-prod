@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 let cachedInputs = null;
 let cachedServices = null;
 let cacheTime = null;
+let cachedAllItemsMap = null;
 const CACHE_DURATION = 30000; // 30 segundos
 
 // Limpar cache quando necessário
@@ -11,6 +12,7 @@ export const clearCache = () => {
   cachedInputs = null;
   cachedServices = null;
   cacheTime = null;
+  cachedAllItemsMap = null;
 };
 
 // Buscar todos os registros com paginação automática
@@ -74,49 +76,78 @@ const parseDate = (str) => {
   return new Date(parseInt(ano), parseInt(mes) - 1, 1);
 };
 
-// Buscar recursivamente todos os insumos de um serviço
-const getAllInputsFromService = async (serviceId, allItems, inputMap, serviceMap, visited = new Set()) => {
-  if (visited.has(serviceId)) return [];
+const formatDate = (date) => {
+  if (!date) return null;
+  const mes = String(date.getMonth() + 1).padStart(2, '0');
+  return `${mes}/${date.getFullYear()}`;
+};
+
+// Calcular recursivamente a data_base mais recente de um serviço em cascata
+// Considera insumos diretos + sub-serviços (usando cache já carregado + allItemsMap)
+const calcDataBaseCascata = (serviceId, allItemsMap, inputMap, serviceMap, visited = new Set()) => {
+  if (visited.has(serviceId)) return null;
   visited.add(serviceId);
-  
-  const items = allItems.filter(item => item.servico_id === serviceId);
-  const allInputs = [];
-  
+
+  const items = allItemsMap.get(serviceId) || [];
+  let maisRecente = null;
+
   for (const item of items) {
+    let dataStr = null;
+
     if (item.tipo_item === 'INSUMO') {
       const insumo = inputMap.get(item.item_id);
-      if (insumo) allInputs.push(insumo);
+      dataStr = insumo?.data_base || null;
     } else if (item.tipo_item === 'SERVICO') {
-      const subInputs = await getAllInputsFromService(item.item_id, allItems, inputMap, serviceMap, visited);
-      allInputs.push(...subInputs);
+      // Recursão: pega a data_base calculada do sub-serviço
+      dataStr = calcDataBaseCascata(item.item_id, allItemsMap, inputMap, serviceMap, visited);
+    }
+
+    if (dataStr) {
+      const d = parseDate(dataStr);
+      if (d && (!maisRecente || d > maisRecente)) {
+        maisRecente = d;
+      }
     }
   }
-  
-  return allInputs;
+
+  return maisRecente ? formatDate(maisRecente) : null;
+};
+
+
+
+const getAllItemsMap = async () => {
+  if (cachedAllItemsMap) return cachedAllItemsMap;
+  const limit = 1000;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await base44.entities.ServiceItem.list('created_date', limit, skip);
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  // Agrupar por servico_id para acesso O(1)
+  const map = new Map();
+  for (const item of all) {
+    if (!map.has(item.servico_id)) map.set(item.servico_id, []);
+    map.get(item.servico_id).push(item);
+  }
+  cachedAllItemsMap = map;
+  return map;
 };
 
 // Recalcular serviço individual
 export const recalculateService = async (serviceId) => {
-  const items = await base44.entities.ServiceItem.filter({ servico_id: serviceId });
   const { inputMap, serviceMap } = await getCachedData();
-  
+  const allItemsMap = await getAllItemsMap();
+  const items = allItemsMap.get(serviceId) || [];
+
   let custoMaterial = 0;
   let custoMaoObra = 0;
   let maxNivelDep = 0;
-  let dataBaseMaisAntiga = null;
 
-  // Buscar todos os insumos recursivamente para determinar a data_base
-  const allItems = await base44.entities.ServiceItem.list();
-  const allInputs = await getAllInputsFromService(serviceId, allItems, inputMap, serviceMap);
-  
-  for (const insumo of allInputs) {
-    if (insumo.data_base) {
-      const dataItem = parseDate(insumo.data_base);
-      if (dataItem && (!dataBaseMaisAntiga || dataItem < dataBaseMaisAntiga)) {
-        dataBaseMaisAntiga = dataItem;
-      }
-    }
-  }
+  // Calcular data_base em cascata (mais recente entre todos os insumos/sub-serviços)
+  const dataBaseStr = calcDataBaseCascata(serviceId, allItemsMap, inputMap, serviceMap);
 
   // Processar todos os itens para calcular custos
   const updatePromises = [];
@@ -129,7 +160,6 @@ export const recalculateService = async (serviceId) => {
       if (insumo) {
         unitCost = insumo.valor_unitario || 0;
         const totalItem = item.quantidade * unitCost;
-
         if (insumo.categoria === 'MAO_OBRA') {
           custoMaoObra += totalItem;
         } else {
@@ -141,24 +171,18 @@ export const recalculateService = async (serviceId) => {
       if (subService) {
         unitCost = subService.custo_total || 0;
         const totalItem = item.quantidade * unitCost;
-
         if (subService.custo_total > 0) {
           const matRatio = (subService.custo_material || 0) / subService.custo_total;
           const laborRatio = (subService.custo_mao_obra || 0) / subService.custo_total;
           custoMaterial += totalItem * matRatio;
           custoMaoObra += totalItem * laborRatio;
         }
-
         const depLevel = subService.nivel_max_dependencia || 0;
-        if (depLevel >= maxNivelDep) {
-          maxNivelDep = depLevel + 1;
-        }
+        if (depLevel >= maxNivelDep) maxNivelDep = depLevel + 1;
       }
     }
 
     const totalItem = item.quantidade * unitCost;
-    
-    // Atualizar item se mudou
     if (Math.abs((item.custo_unitario_snapshot || 0) - unitCost) > 0.0001 || 
         Math.abs((item.custo_total_item || 0) - totalItem) > 0.0001) {
       updatePromises.push(
@@ -174,19 +198,10 @@ export const recalculateService = async (serviceId) => {
 
   const custoTotal = custoMaterial + custoMaoObra;
 
-  // Formatar data base herdada dos insumos
-  let dataBaseStr = null;
-  if (dataBaseMaisAntiga) {
-    const mes = String(dataBaseMaisAntiga.getMonth() + 1).padStart(2, '0');
-    const ano = dataBaseMaisAntiga.getFullYear();
-    dataBaseStr = `${mes}/${ano}`;
-  }
-
   // Salvar snapshot histórico do valor atual antes de sobrescrever
   const currentService = serviceMap.get(serviceId);
   if (currentService && currentService.data_base && currentService.custo_total > 0) {
     const dataBaseAtual = currentService.data_base;
-    // Verifica se já existe snapshot para essa data_base
     const existing = await base44.entities.ServicePriceHistory.filter({
       servico_id: serviceId,
       data_base: dataBaseAtual
@@ -214,14 +229,13 @@ export const recalculateService = async (serviceId) => {
     data_base: dataBaseStr
   });
 
-  // Atualizar cache
-  const service = serviceMap.get(serviceId);
-  if (service) {
-    service.custo_material = custoMaterial;
-    service.custo_mao_obra = custoMaoObra;
-    service.custo_total = custoTotal;
-    service.nivel_max_dependencia = maxNivelDep;
-    service.data_base = dataBaseStr;
+  // Atualizar cache local
+  if (currentService) {
+    currentService.custo_material = custoMaterial;
+    currentService.custo_mao_obra = custoMaoObra;
+    currentService.custo_total = custoTotal;
+    currentService.nivel_max_dependencia = maxNivelDep;
+    currentService.data_base = dataBaseStr;
   }
 
   return { custo_total: custoTotal, custo_material: custoMaterial, custo_mao_obra: custoMaoObra, data_base: dataBaseStr };
@@ -243,6 +257,7 @@ export const updateDependents = async (itemType, itemId) => {
 export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   clearCache(); // Limpar cache antes de começar
   await getCachedData(); // Carregar dados frescos
+  await getAllItemsMap(); // Pré-carregar mapa de itens uma única vez
   
   const results = [];
   for (let i = 0; i < serviceIds.length; i++) {
