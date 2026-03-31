@@ -282,6 +282,29 @@ export default function ServiceEditor() {
 
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+  // Calcular custos totais localmente a partir dos itens carregados (sem depender do banco)
+  const custosLocais = useMemo(() => {
+    if (!items.length) return null;
+    let mat = 0, mo = 0;
+    items.forEach(item => {
+      const total = item.custo_total_item || 0;
+      if (item.tipo_item === 'INSUMO') {
+        const insumo = inputs.find(i => i.id === item.item_id);
+        if (insumo?.categoria === 'MAO_OBRA') mo += total;
+        else mat += total;
+      } else {
+        const sub = services.find(s => s.id === item.item_id);
+        if (sub && sub.custo_total > 0) {
+          mat += total * ((sub.custo_material || 0) / sub.custo_total);
+          mo += total * ((sub.custo_mao_obra || 0) / sub.custo_total);
+        } else {
+          mat += total; // fallback: tratar como material
+        }
+      }
+    });
+    return { mat, mo, total: mat + mo };
+  }, [items, inputs, services]);
+
   return (
     <div className="pb-20">
       <div className="flex items-center gap-4 mb-6">
@@ -570,15 +593,20 @@ export default function ServiceEditor() {
                 </>
               ) : (
                 <>
-                  <div className="text-3xl font-bold mb-4">{fmt(service.custo_total)}</div>
+                  {custosLocais && service.custo_total === 0 && (
+                    <p className="text-xs text-amber-400 mb-2">⚠ Calculado localmente — salve para persistir</p>
+                  )}
+                  <div className="text-3xl font-bold mb-4">
+                    {fmt(custosLocais ? custosLocais.total : service.custo_total)}
+                  </div>
                   <div className="space-y-2 text-sm border-t border-slate-700 pt-2">
                     <div className="flex justify-between">
                       <span>Material</span>
-                      <span>{fmt(service.custo_material)}</span>
+                      <span>{fmt(custosLocais ? custosLocais.mat : service.custo_material)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Mão de Obra</span>
-                      <span>{fmt(service.custo_mao_obra)}</span>
+                      <span>{fmt(custosLocais ? custosLocais.mo : service.custo_mao_obra)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-slate-700">
                       <span className="text-slate-400">Data Base</span>
