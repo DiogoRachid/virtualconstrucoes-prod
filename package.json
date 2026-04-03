@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "@base44/sdk": "^0.8.24",
     "@base44/vite-plugin": "^1.0.6",
     "@hello-pangea/dnd": "^17.0.0",
