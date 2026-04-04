@@ -41,6 +41,7 @@ import {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function Dashboard() {
+  console.log('BASE44 ENTITIES:', base44.entities);
   const { data: bankAccounts = [], isLoading: loadingAccounts } = useQuery({
     queryKey: ['bankAccounts'],
     queryFn: () => base44.entities.BankAccount.list()
