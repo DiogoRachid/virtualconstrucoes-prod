@@ -252,19 +252,18 @@ export default function TableImport() {
         }
       }
 
-      // Atualizar sequencialmente com delay
-      await processSeq(updates, async ({ idx, existing, row }, i) => {
-        try {
-          await withRetry(() => base44.entities.Input.update(existing.id, {
-            descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
-            categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
-          }));
-          updateRow(idx, { status: 'update' }); totalUpdated++;
-        } catch (err) {
-          updateRow(idx, { status: 'error', errorMsg: err?.message }); totalErrors++;
-        }
-        setProgress({ message: `Atualizando... ${i + 1}/${updates.length}`, percent: 45 + Math.floor(((i + 1) / Math.max(updates.length, 1)) * 30) });
-      });
+      // Atualizar em bulk (muito mais rápido)
+const updatePayloads = updates.map(({ existing, row }) => ({
+  id: existing.id,
+  descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
+  categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
+}));
+for (let i = 0; i < updatePayloads.length; i += BULK) {
+  await withRetry(() => base44.entities.Input.bulkUpdate(updatePayloads.slice(i, i + BULK)));
+  updates.slice(i, i + BULK).forEach(({ idx }) => { updateRow(idx, { status: 'update' }); totalUpdated++; });
+  setProgress({ message: `Atualizando... ${Math.min(i + BULK, updates.length)}/${updates.length}`, percent: 45 + Math.floor((Math.min(i + BULK, updates.length) / Math.max(updates.length, 1)) * 30) });
+  flushRows();
+  await yieldToMain();
     }
 
     // 7. MESMA DATA BASE — atualizar sequencialmente
