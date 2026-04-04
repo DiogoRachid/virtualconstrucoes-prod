@@ -317,7 +317,24 @@ const auth = {
   },
 };
 
+// ─── Adicionar método subscribe às entidades (stub — sem realtime) ────────────
+// O Base44 SDK original tem subscribe(); nosso cliente usa polling simples.
+TABLE_NAMES.forEach(name => {
+  entities[name].subscribe = (callback) => {
+    // Stub: não faz nada, retorna função de cleanup vazia
+    return () => {};
+  };
+});
+
+// ─── appLogs stub (usado pelo NavigationTracker) ──────────────────────────────
+const appLogs = {
+  async logUserInApp(pageName) {
+    // Stub: no Base44 original registrava navegação; aqui ignoramos silenciosamente
+    return null;
+  }
+};
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-export const base44 = { entities, auth };
+export const base44 = { entities, auth, appLogs };
 export default base44;
