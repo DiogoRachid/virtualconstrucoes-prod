@@ -265,6 +265,7 @@ export default function TableImport() {
         flushRows();
         await yieldToMain();
         }
+        }
 
     // 7. MESMA DATA BASE — atualizar sequencialmente
     setProgress({ message: `Re-importando ${sameBases.length} insumos...`, percent: 75 });
