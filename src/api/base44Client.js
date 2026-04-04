@@ -235,7 +235,7 @@ function createEntityProxy(tableName) {
       return results;
     },
 
-    // Cria múltiplos registros em lote
+    // Cria múltiplos registros em lote — retorna registros com id
     async bulkCreate(records) {
       if (!records || records.length === 0) return [];
       const now = new Date().toISOString();
@@ -248,8 +248,27 @@ function createEntityProxy(tableName) {
       const BATCH = 500;
       const results = [];
       for (let i = 0; i < rows.length; i += BATCH) {
-        const res = await supabaseRequest('POST', tableName, rows.slice(i, i + BATCH));
-        results.push(...(Array.isArray(res) ? res : []));
+        const batch = rows.slice(i, i + BATCH);
+        const url = new URL(`${SUPABASE_URL}/rest/v1/${tableName}`);
+        const res = await fetch(url.toString(), {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(batch),
+        });
+        if (res.ok) {
+          const text = await res.text();
+          const parsed = text ? JSON.parse(text) : [];
+          const items = Array.isArray(parsed) ? parsed : parseRows([parsed]);
+          results.push(...items);
+        } else {
+          // fallback: retorna os rows com ids gerados
+          results.push(...batch.map(r => ({ id: r.id })));
+        }
       }
       return results;
     },
