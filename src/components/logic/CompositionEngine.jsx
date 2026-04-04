@@ -1,6 +1,5 @@
 import { base44 } from '@/api/base44Client';
 
-// Cache global
 let cachedInputs = null;
 let cachedServices = null;
 let cacheTime = null;
@@ -151,7 +150,12 @@ const topoSort = (serviceIds, allItemsMap) => {
   return order;
 };
 
-// ─── RECÁLCULO EM LOTE OTIMIZADO ─────────────────────────────────────────────
+// Deduplica array de objetos por id
+const dedup = (arr) => {
+  const seen = new Map();
+  for (const r of arr) seen.set(r.id, r);
+  return [...seen.values()];
+};
 
 export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   clearCache();
@@ -159,7 +163,6 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   const allItemsMap = await getAllItemsMap();
 
   const allServiceIds = new Set(serviceMap.keys());
-  const inputSet = new Set(serviceIds);
   let expanded;
   if (serviceIds.length >= allServiceIds.size) {
     expanded = [...allServiceIds];
@@ -169,14 +172,12 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
 
   const ordered = topoSort(expanded, allItemsMap);
 
-  // Pré-carregar histórico
   const allHistory = await fetchAll(base44.entities.ServicePriceHistory);
   const historySet = new Set(allHistory.map(h => `${h.servico_id}|${h.data_base}`));
 
-  // ── Calcular todos os custos em memória (sem chamadas HTTP) ──
-  const serviceUpdates = [];      // { id, custo_material, custo_mao_obra, custo_total, nivel_max_dependencia, data_base }
-  const itemUpdates = [];         // { id, custo_unitario_snapshot, custo_total_item }
-  const historyCreates = [];      // registros de histórico a criar
+  const serviceUpdates = [];
+  const itemUpdatesMap = new Map(); // usa Map para deduplicar por id automaticamente
+  const historyCreates = [];
 
   for (let i = 0; i < ordered.length; i++) {
     if (onProgress) onProgress(i, ordered.length);
@@ -218,14 +219,14 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
       const totalItem = item.quantidade * unitCost;
       if (Math.abs((item.custo_unitario_snapshot || 0) - unitCost) > 0.0001 ||
           Math.abs((item.custo_total_item || 0) - totalItem) > 0.0001) {
-        itemUpdates.push({ id: item.id, custo_unitario_snapshot: unitCost, custo_total_item: totalItem });
+        // Map garante deduplicação por id
+        itemUpdatesMap.set(item.id, { id: item.id, custo_unitario_snapshot: unitCost, custo_total_item: totalItem });
       }
     }
 
     const custoTotal = custoMaterial + custoMaoObra;
-
-    // Histórico
     const currentService = serviceMap.get(serviceId);
+
     if (currentService && currentService.data_base && currentService.custo_total > 0) {
       const key = `${serviceId}|${currentService.data_base}`;
       if (!historySet.has(key)) {
@@ -252,7 +253,6 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
       data_base: dataBaseStr,
     });
 
-    // Atualizar cache local para que pais usem valores corretos
     if (currentService) {
       currentService.custo_material = custoMaterial;
       currentService.custo_mao_obra = custoMaoObra;
@@ -264,22 +264,23 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
     if (onProgress) onProgress(i + 1, ordered.length);
   }
 
-  // ── Enviar todas as atualizações em lote ──
   if (onProgress) onProgress(ordered.length, ordered.length);
 
   const BATCH = 500;
 
-  // Atualizar ServiceItems em lote
-  for (let i = 0; i < itemUpdates.length; i += BATCH) {
-    await base44.entities.ServiceItem.bulkUpdate(itemUpdates.slice(i, i + BATCH));
+  // ServiceItems — já deduplicados pelo Map
+  const uniqueItemUpdates = [...itemUpdatesMap.values()];
+  for (let i = 0; i < uniqueItemUpdates.length; i += BATCH) {
+    await base44.entities.ServiceItem.bulkUpdate(uniqueItemUpdates.slice(i, i + BATCH));
   }
 
-  // Atualizar Services em lote
-  for (let i = 0; i < serviceUpdates.length; i += BATCH) {
-    await base44.entities.Service.bulkUpdate(serviceUpdates.slice(i, i + BATCH));
+  // Services — deduplicar por segurança
+  const uniqueServiceUpdates = dedup(serviceUpdates);
+  for (let i = 0; i < uniqueServiceUpdates.length; i += BATCH) {
+    await base44.entities.Service.bulkUpdate(uniqueServiceUpdates.slice(i, i + BATCH));
   }
 
-  // Criar históricos em lote
+  // Históricos
   if (historyCreates.length > 0) {
     for (let i = 0; i < historyCreates.length; i += BATCH) {
       await base44.entities.ServicePriceHistory.bulkCreate(historyCreates.slice(i, i + BATCH));
@@ -290,7 +291,6 @@ export const recalculateMultipleServices = async (serviceIds, onProgress) => {
   return serviceUpdates.map(s => ({ serviceId: s.id, success: true, ...s }));
 };
 
-// Versão individual (usada em edições pontuais)
 const recalculateServiceFast = async (serviceId, inputMap, serviceMap, allItemsMap, historySet) => {
   const items = allItemsMap.get(serviceId) || [];
   let custoMaterial = 0;
