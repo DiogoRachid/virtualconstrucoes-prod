@@ -8,6 +8,20 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
+function parseRows(rows) {
+  return rows.map(row => {
+    const clean = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === 'string' && (v.startsWith('[') || v.startsWith('{'))) {
+        try { clean[k] = JSON.parse(v); } catch { clean[k] = v; }
+      } else {
+        clean[k] = v;
+      }
+    }
+    return clean;
+  });
+}
+
 async function supabaseRequest(method, path, body = null, params = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
   Object.entries(params).forEach(([k, v]) => {
@@ -36,18 +50,24 @@ async function supabaseRequest(method, path, body = null, params = {}) {
   if (!text) return [];
   const parsed = JSON.parse(text);
   const rows = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' && !parsed.code ? [parsed] : []);
-  // Auto-parse JSON strings back to arrays/objects (stored as strings in Supabase)
-  return rows.map(row => {
-    const clean = {};
-    for (const [k, v] of Object.entries(row)) {
-      if (typeof v === 'string' && (v.startsWith('[') || v.startsWith('{'))) {
-        try { clean[k] = JSON.parse(v); } catch { clean[k] = v; }
-      } else {
-        clean[k] = v;
-      }
-    }
-    return clean;
-  });
+  return parseRows(rows);
+}
+
+// Busca todos os registros de uma tabela usando paginação automática
+async function supabaseRequestAll(path, params = {}) {
+  const PAGE_SIZE = 1000;
+  let allRows = [];
+  let offset = 0;
+
+  while (true) {
+    const pageParams = { ...params, limit: PAGE_SIZE, offset };
+    const rows = await supabaseRequest('GET', path, null, pageParams);
+    allRows = allRows.concat(rows);
+    if (rows.length < PAGE_SIZE) break; // última página
+    offset += PAGE_SIZE;
+  }
+
+  return allRows;
 }
 
 // ─── Converter filtros Base44 → PostgREST ─────────────────────────────────────
@@ -99,21 +119,25 @@ function createEntityProxy(tableName) {
     // list(options) ou list(orderStr) ou list(orderStr, limit)
     async list(optionsOrOrder = {}, limit = null) {
       const params = { select: '*' };
+      let hasExplicitLimit = false;
 
       if (typeof optionsOrOrder === 'string') {
-        // Base44 style: list('-data') ou list('-data', 50)
         const order = parseOrder(optionsOrOrder);
         if (order) params.order = order;
-        if (limit) params.limit = limit;
+        if (limit) { params.limit = limit; hasExplicitLimit = true; }
       } else {
         const options = optionsOrOrder || {};
-        if (options.limit) params.limit = options.limit;
+        if (options.limit) { params.limit = options.limit; hasExplicitLimit = true; }
         if (options.offset) params.offset = options.offset;
         if (options.order_by) {
           params.order = parseOrder(options.order_by) || options.order_by;
         }
       }
 
+      // Sem limite explícito: busca todos usando paginação automática
+      if (!hasExplicitLimit) {
+        return await supabaseRequestAll(tableName, params);
+      }
       const result = await supabaseRequest('GET', tableName, null, params);
       return Array.isArray(result) ? result : [];
     },
@@ -121,21 +145,25 @@ function createEntityProxy(tableName) {
     // filter(filters, orderOrOptions, limit)
     async filter(filters = {}, orderOrOptions = {}, limit = null) {
       const params = buildFilterParams(filters);
+      let hasExplicitLimit = false;
 
       if (typeof orderOrOptions === 'string') {
-        // Base44 style: filter({...}, 'data_vencimento', 1000)
         const order = parseOrder(orderOrOptions);
         if (order) params.order = order;
-        if (limit) params.limit = limit;
+        if (limit) { params.limit = limit; hasExplicitLimit = true; }
       } else {
         const options = orderOrOptions || {};
-        if (options.limit) params.limit = options.limit;
+        if (options.limit) { params.limit = options.limit; hasExplicitLimit = true; }
         if (options.offset) params.offset = options.offset;
         if (options.order_by) {
           params.order = parseOrder(options.order_by) || options.order_by;
         }
       }
 
+      // Sem limite explícito: busca todos usando paginação automática
+      if (!hasExplicitLimit) {
+        return await supabaseRequestAll(tableName, params);
+      }
       const result = await supabaseRequest('GET', tableName, null, params);
       return Array.isArray(result) ? result : [];
     },
