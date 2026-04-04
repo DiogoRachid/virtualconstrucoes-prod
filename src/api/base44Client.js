@@ -1,16 +1,11 @@
 /**
  * base44Client.js — Substituto do SDK Base44 usando Supabase
- * Compatível com: entities, auth.getSession, auth.onAuthStateChange, auth.signOut
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('[base44Client] VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não configurados.');
-}
-
-// ─── HTTP helper ─────────────────────────────────────────────────────────────
+// ─── HTTP helper ──────────────────────────────────────────────────────────────
 
 async function supabaseRequest(method, path, body = null, params = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -35,7 +30,12 @@ async function supabaseRequest(method, path, body = null, params = {}) {
   }
 
   const text = await res.text();
-  return text ? JSON.parse(text) : [];
+  if (!text) return [];
+  const parsed = JSON.parse(text);
+  // Garante sempre retornar array para listagens
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object') return [parsed];
+  return [];
 }
 
 // ─── Filter params ────────────────────────────────────────────────────────────
@@ -66,7 +66,8 @@ function createEntityProxy(tableName) {
         const [col, dir] = options.order_by.split(' ');
         params.order = `${col}.${dir || 'asc'}`;
       }
-      return await supabaseRequest('GET', tableName, null, params);
+      const result = await supabaseRequest('GET', tableName, null, params);
+      return Array.isArray(result) ? result : [];
     },
 
     async filter(filters = {}, options = {}) {
@@ -77,7 +78,8 @@ function createEntityProxy(tableName) {
         const [col, dir] = options.order_by.split(' ');
         params.order = `${col}.${dir || 'asc'}`;
       }
-      return await supabaseRequest('GET', tableName, null, params);
+      const result = await supabaseRequest('GET', tableName, null, params);
+      return Array.isArray(result) ? result : [];
     },
 
     async get(id) {
@@ -86,7 +88,7 @@ function createEntityProxy(tableName) {
         id: `eq.${id}`,
         limit: 1,
       });
-      return results[0] || null;
+      return Array.isArray(results) ? (results[0] || null) : null;
     },
 
     async create(data) {
@@ -135,30 +137,28 @@ TABLE_NAMES.forEach(name => {
   entities[name] = createEntityProxy(name);
 });
 
-// ─── Auth stub — sistema usa sessionStorage, não auth do Supabase ─────────────
-// Imita a interface do base44 SDK: getSession, onAuthStateChange, signOut
+// ─── Auth stub ────────────────────────────────────────────────────────────────
 
 const SESSION_KEY = 'portal_admin_auth';
-
 const authListeners = [];
 
 const auth = {
   async getSession() {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (raw) {
-      const user = JSON.parse(raw);
-      return { data: { session: { user } } };
+      try {
+        const user = JSON.parse(raw);
+        return { data: { session: { user } } };
+      } catch(e) {}
     }
     return { data: { session: null } };
   },
 
   onAuthStateChange(callback) {
     authListeners.push(callback);
-    // Dispara imediatamente com estado atual
     const raw = sessionStorage.getItem(SESSION_KEY);
     const session = raw ? { user: JSON.parse(raw) } : null;
     setTimeout(() => callback('INITIAL_SESSION', session), 0);
-
     const subscription = {
       unsubscribe() {
         const idx = authListeners.indexOf(callback);
