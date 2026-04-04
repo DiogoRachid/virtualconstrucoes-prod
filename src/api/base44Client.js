@@ -235,7 +235,7 @@ function createEntityProxy(tableName) {
       return results;
     },
 
-    // Cria múltiplos registros em lote — retorna registros com id
+    // Cria múltiplos registros em lote — usa upsert para evitar conflitos
     async bulkCreate(records) {
       if (!records || records.length === 0) return [];
       const now = new Date().toISOString();
@@ -250,24 +250,46 @@ function createEntityProxy(tableName) {
       for (let i = 0; i < rows.length; i += BATCH) {
         const batch = rows.slice(i, i + BATCH);
         const url = new URL(`${SUPABASE_URL}/rest/v1/${tableName}`);
+        url.searchParams.set('on_conflict', 'id');
         const res = await fetch(url.toString(), {
           method: 'POST',
           headers: {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
+            'Prefer': 'resolution=merge-duplicates,return=representation',
           },
           body: JSON.stringify(batch),
         });
         if (res.ok) {
           const text = await res.text();
           const parsed = text ? JSON.parse(text) : [];
-          const items = Array.isArray(parsed) ? parsed : parseRows([parsed]);
-          results.push(...items);
+          results.push(...(Array.isArray(parsed) ? parsed : [parsed]));
         } else {
-          // fallback: retorna os rows com ids gerados
-          results.push(...batch.map(r => ({ id: r.id })));
+          const errText = await res.text().catch(() => '');
+          console.error(`[bulkCreate] ${tableName} lote ${i}-${i+BATCH} erro ${res.status}:`, errText);
+          // Tentar registro por registro como fallback
+          for (const row of batch) {
+            try {
+              const r2 = await fetch(`${SUPABASE_URL}/rest/v1/${tableName}?on_conflict=id`, {
+                method: 'POST',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'resolution=merge-duplicates,return=representation',
+                },
+                body: JSON.stringify(row),
+              });
+              if (r2.ok) {
+                const t = await r2.text();
+                const p = t ? JSON.parse(t) : null;
+                if (p) results.push(Array.isArray(p) ? p[0] : p);
+              }
+            } catch(e) {
+              console.error(`[bulkCreate] ${tableName} fallback erro:`, e);
+            }
+          }
         }
       }
       return results;
