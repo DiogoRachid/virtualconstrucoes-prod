@@ -253,18 +253,18 @@ export default function TableImport() {
       }
 
       // Atualizar em bulk (muito mais rápido)
-const updatePayloads = updates.map(({ existing, row }) => ({
-  id: existing.id,
-  descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
-  categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
-}));
-for (let i = 0; i < updatePayloads.length; i += BULK) {
-  await withRetry(() => base44.entities.Input.bulkUpdate(updatePayloads.slice(i, i + BULK)));
-  updates.slice(i, i + BULK).forEach(({ idx }) => { updateRow(idx, { status: 'update' }); totalUpdated++; });
-  setProgress({ message: `Atualizando... ${Math.min(i + BULK, updates.length)}/${updates.length}`, percent: 45 + Math.floor((Math.min(i + BULK, updates.length) / Math.max(updates.length, 1)) * 30) });
-  flushRows();
-  await yieldToMain();
-    }
+      const updatePayloads = updates.map(({ existing, row }) => ({
+        id: existing.id,
+        descricao: row.descricao, unidade: row.unidade, valor_unitario: row.valor_unitario,
+        categoria: row.categoria, fonte: row.fonte, data_base: row.data_base,
+      }));
+      for (let i = 0; i < updatePayloads.length; i += BULK) {
+        await withRetry(() => base44.entities.Input.bulkUpdate(updatePayloads.slice(i, i + BULK)));
+        updates.slice(i, i + BULK).forEach(({ idx }) => { updateRow(idx, { status: 'update' }); totalUpdated++; });
+        setProgress({ message: `Atualizando... ${Math.min(i + BULK, updates.length)}/${updates.length}`, percent: 45 + Math.floor((Math.min(i + BULK, updates.length) / Math.max(updates.length, 1)) * 30) });
+        flushRows();
+        await yieldToMain();
+        }
 
     // 7. MESMA DATA BASE — atualizar sequencialmente
     setProgress({ message: `Re-importando ${sameBases.length} insumos...`, percent: 75 });
