@@ -203,6 +203,56 @@ function createEntityProxy(tableName) {
       await supabaseRequest('DELETE', tableName, null, { id: `eq.${id}` });
       return { success: true };
     },
+
+    // Atualiza múltiplos registros em lote via upsert (muito mais rápido que update() individual)
+    async bulkUpdate(records) {
+      if (!records || records.length === 0) return [];
+      const now = new Date().toISOString();
+      const rows = records.map(r => ({ ...r, updated_date: now }));
+      const BATCH = 500;
+      const results = [];
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        // Usa upsert com merge-duplicates para atualizar por id
+        const url = new URL(`${SUPABASE_URL}/rest/v1/${tableName}`);
+        url.searchParams.set('on_conflict', 'id');
+        const res = await fetch(url.toString(), {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
+          },
+          body: JSON.stringify(batch),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('bulkUpdate error:', err);
+        }
+        results.push(...batch.map(r => ({ id: r.id })));
+      }
+      return results;
+    },
+
+    // Cria múltiplos registros em lote
+    async bulkCreate(records) {
+      if (!records || records.length === 0) return [];
+      const now = new Date().toISOString();
+      const rows = records.map(r => ({
+        ...r,
+        id: r.id || crypto.randomUUID().replace(/-/g, '').substring(0, 24),
+        created_date: r.created_date || now,
+        updated_date: now,
+      }));
+      const BATCH = 500;
+      const results = [];
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const res = await supabaseRequest('POST', tableName, rows.slice(i, i + BATCH));
+        results.push(...(Array.isArray(res) ? res : []));
+      }
+      return results;
+    },
   };
 }
 
