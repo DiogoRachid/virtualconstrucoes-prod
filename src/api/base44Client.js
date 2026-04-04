@@ -6,6 +6,20 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// ─── Campos internos da UI que nunca devem ser enviados ao Supabase ─────────────
+const INTERNAL_FIELDS = new Set([
+  'action', 'status', 'errorMsg', '_isHistorico', '_selected',
+  'statusMsg', 'error', '_local', '_dirty', '_new',
+]);
+
+function sanitizeRecord(record) {
+  const clean = {};
+  for (const [k, v] of Object.entries(record)) {
+    if (!INTERNAL_FIELDS.has(k)) clean[k] = v;
+  }
+  return clean;
+}
+
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
 function parseRows(rows) {
@@ -181,6 +195,7 @@ function createEntityProxy(tableName) {
     },
 
     async create(data) {
+      data = sanitizeRecord(data);
       if (!data.id) {
         data.id = crypto.randomUUID().replace(/-/g, '').substring(0, 24);
       }
@@ -191,6 +206,7 @@ function createEntityProxy(tableName) {
     },
 
     async update(id, data) {
+      data = sanitizeRecord(data);
       data.updated_date = new Date().toISOString();
       const results = await supabaseRequest('PATCH', tableName, data, {
         id: `eq.${id}`,
@@ -208,7 +224,7 @@ function createEntityProxy(tableName) {
     async bulkUpdate(records) {
       if (!records || records.length === 0) return [];
       const now = new Date().toISOString();
-      const rows = records.map(r => ({ ...r, updated_date: now }));
+      const rows = records.map(r => ({ ...sanitizeRecord(r), updated_date: now }));
       const BATCH = 500;
       const results = [];
       for (let i = 0; i < rows.length; i += BATCH) {
@@ -240,7 +256,7 @@ function createEntityProxy(tableName) {
       if (!records || records.length === 0) return [];
       const now = new Date().toISOString();
       const rows = records.map(r => ({
-        ...r,
+        ...sanitizeRecord(r),
         id: r.id || crypto.randomUUID().replace(/-/g, '').substring(0, 24),
         created_date: r.created_date || now,
         updated_date: now,
