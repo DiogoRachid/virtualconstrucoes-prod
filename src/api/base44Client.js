@@ -269,6 +269,7 @@ const TABLE_NAMES = [
   'MaterialRequisition', 'MaterialRequisitionItem', 'InputPurchaseHistory',
   'CompanySettings', 'VersionHistory', 'ServiceMonthlyDistribution',
   'ImportLog', 'CompositionStaging', 'Administrador', 'Colaborador',
+  'ServicePriceHistory', 'InputPriceHistory',
 ];
 
 const entities = {};
