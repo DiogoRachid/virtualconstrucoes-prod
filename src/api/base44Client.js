@@ -315,6 +315,10 @@ const auth = {
     const raw = sessionStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   },
+  async me() {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  },
 };
 
 // ─── Adicionar método subscribe às entidades (stub — sem realtime) ────────────
