@@ -117,14 +117,17 @@ function parseOrder(orderStr) {
 function createEntityProxy(tableName) {
   return {
     // list(options) ou list(orderStr) ou list(orderStr, limit)
-    async list(optionsOrOrder = {}, limit = null) {
+    // list(order?, limit?, offset?) — compatível com Base44 SDK
+    async list(optionsOrOrder = {}, limit = null, offset = null) {
       const params = { select: '*' };
       let hasExplicitLimit = false;
 
       if (typeof optionsOrOrder === 'string') {
+        // Base44 style: list('created_date', 1000, 0)
         const order = parseOrder(optionsOrOrder);
         if (order) params.order = order;
         if (limit) { params.limit = limit; hasExplicitLimit = true; }
+        if (offset) params.offset = offset;
       } else {
         const options = optionsOrOrder || {};
         if (options.limit) { params.limit = options.limit; hasExplicitLimit = true; }
