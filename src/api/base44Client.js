@@ -35,9 +35,19 @@ async function supabaseRequest(method, path, body = null, params = {}) {
   const text = await res.text();
   if (!text) return [];
   const parsed = JSON.parse(text);
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed && typeof parsed === 'object' && !parsed.code) return [parsed];
-  return [];
+  const rows = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' && !parsed.code ? [parsed] : []);
+  // Auto-parse JSON strings back to arrays/objects (stored as strings in Supabase)
+  return rows.map(row => {
+    const clean = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === 'string' && (v.startsWith('[') || v.startsWith('{'))) {
+        try { clean[k] = JSON.parse(v); } catch { clean[k] = v; }
+      } else {
+        clean[k] = v;
+      }
+    }
+    return clean;
+  });
 }
 
 // ─── Converter filtros Base44 → PostgREST ─────────────────────────────────────
